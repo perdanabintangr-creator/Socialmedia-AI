@@ -18,6 +18,8 @@ export default async function Dashboard() {
     { done: config.hasAI, label: "Hubungkan AI (ANTHROPIC_API_KEY)", hint: "Tanpa ini ide & konten masih contoh (mode demo)." },
     { done: config.hasSupabase, label: "Hubungkan database (Supabase)", hint: "Tanpa ini data disimpan lokal di folder .data." },
     { done: config.hasPublisher, label: "Hubungkan Instagram & TikTok (AYRSHARE_API_KEY)", hint: "Tanpa ini desain final bisa diunduh, tapi belum auto-post." },
+    { done: Boolean(config.imageProvider || config.hasStock), label: "Hubungkan sumber foto (AI image / Pexels)", hint: "Tanpa ini, foto hanya dari library foto brand; slide lain memakai versi grafis." },
+    { done: brand.assets.length > 0, label: "Upload foto brand (produk, tim, kantor)", href: "/brand" },
     { done: Boolean(brand.description && brand.audience), label: "Lengkapi Brand Kit", hint: "Deskripsi brand & target audiens.", href: "/brand" },
     { done: Boolean(brand.logoUrl), label: "Upload logo", href: "/brand" },
     { done: brand.exampleUrls.length > 0, label: "Upload contoh post yang disukai", href: "/brand" },

@@ -1,7 +1,22 @@
 /* eslint-disable @next/next/no-img-element, jsx-a11y/alt-text */
-import type { Brand, Slide, TemplateKey } from "./types";
+import type { Brand, Slide, SlideLayout, TemplateKey } from "./types";
+import { Icon } from "./icons";
 
 export const CANVAS = { width: 1080, height: 1350 }; // 4:5, aman untuk IG feed & TikTok photo
+const PAD = 84;
+
+/** Ukuran kotak foto per layout — renderer memotong foto pas di ukuran ini. */
+export const IMAGE_BOX: Partial<Record<SlideLayout, { w: number; h: number }>> = {
+  cover_photo: { w: 1080, h: 1350 },
+  cover_split: { w: 1080, h: 740 },
+  cover_type: { w: 420, h: 540 },
+  point_photo: { w: 912, h: 500 },
+  quote: { w: 168, h: 168 },
+  cta: { w: 1080, h: 1350 },
+};
+
+export type Img = { src: string; w: number; h: number };
+export type LogoImg = { src: string; width: number; height: number };
 
 // ---------------------------------------------------------------- warna
 
@@ -22,12 +37,11 @@ function contrast(a: string, b: string) {
   const [l1, l2] = [luminance(a), luminance(b)].sort((x, y) => y - x);
   return (l1 + 0.05) / (l2 + 0.05);
 }
-/** Pilih warna teks yang terbaca di atas `bg`. */
 function readableOn(bg: string, preferred: string) {
   if (contrast(bg, preferred) >= 4.5) return preferred;
   return contrast(bg, "#FFFFFF") >= contrast(bg, "#111111") ? "#FFFFFF" : "#111111";
 }
-function alpha(hex: string, a: number) {
+export function alpha(hex: string, a: number) {
   const [r, g, b] = hexToRgb(hex);
   return `rgba(${r},${g},${b},${a})`;
 }
@@ -36,44 +50,205 @@ interface Theme {
   bg: string;
   fg: string;
   muted: string;
-  accent: string; // warna aksen yang terbaca di atas bg
+  accent: string; // aksen yang terbaca di atas bg
   pillBg: string;
   pillFg: string;
+  surface: string; // latar kartu
+  line: string;
   dark: boolean;
+  hl: "marker" | "color";
 }
 
-function themeFor(brand: Brand, template: TemplateKey, layout: Slide["layout"]): Theme {
+function makeTheme(brand: Brand, bg: string, preferFg: string): Theme {
   const c = brand.colors;
-  const bold = template === "bold" || (template === "mix" && (layout === "cover" || layout === "cta"));
-  const bg = bold ? c.primary : c.background;
-  const fg = readableOn(bg, bold ? "#FFFFFF" : c.text);
-  const accentCandidates = bold ? [c.accent, c.secondary] : [c.secondary, c.primary, c.accent];
-  const accent = accentCandidates.find((x) => contrast(bg, x) >= 3) ?? fg;
-  const pillBg = bold ? c.accent : c.primary;
+  const fg = readableOn(bg, preferFg);
+  const dark = luminance(bg) < 0.35;
+  const accent = [dark ? c.accent : c.secondary, c.accent, c.secondary, c.primary].find((x) => contrast(bg, x) >= 3) ?? fg;
+  const pillBg = [c.accent, c.secondary, c.primary].find((x) => contrast(bg, x) >= 1.6) ?? accent;
   return {
     bg,
     fg,
-    muted: alpha(fg === "#FFFFFF" ? "#FFFFFF" : fg, 0.72),
+    muted: alpha(fg, 0.74),
     accent,
     pillBg,
     pillFg: readableOn(pillBg, "#FFFFFF"),
-    dark: luminance(bg) < 0.4,
+    surface: dark ? alpha("#FFFFFF", 0.08) : "#FFFFFF",
+    line: alpha(fg, dark ? 0.18 : 0.12),
+    dark,
+    hl: dark ? "color" : "marker",
   };
+}
+
+function themeFor(brand: Brand, template: TemplateKey, layout: SlideLayout, index: number, hasPhotoBg: boolean): Theme {
+  const c = brand.colors;
+  if (hasPhotoBg) return makeTheme(brand, "#0E0F14", "#FFFFFF");
+  if (layout === "cover_split") return makeTheme(brand, c.primary, "#FFFFFF"); // panel bawah selalu warna utama
+  const isBookend = layout.startsWith("cover") || layout === "cta";
+  if (template === "bold") {
+    const bg = isBookend || index % 2 === 0 ? c.primary : c.secondary;
+    return makeTheme(brand, bg, "#FFFFFF");
+  }
+  if (template === "clean") {
+    return layout === "cta" ? makeTheme(brand, c.primary, "#FFFFFF") : makeTheme(brand, c.background, c.text);
+  }
+  return isBookend ? makeTheme(brand, c.primary, "#FFFFFF") : makeTheme(brand, c.background, c.text);
 }
 
 // ---------------------------------------------------------------- teks
 
 const EMOJI = /[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu;
-const clean = (s: string) =>
+export const clean = (s: string) =>
   (s || "").replace(/[→➡⇒]/g, "›").replace(/[←⬅]/g, "‹").replace(EMOJI, "").trim();
+const plain = (s: string) => clean(s).replace(/\*/g, "");
 
 function fit(text: string, max: number, min: number, idealChars: number) {
-  const len = Math.max(text.length, 1);
+  const len = Math.max(plain(text).length, 1);
   if (len <= idealChars) return max;
   return Math.max(min, Math.round(max * Math.sqrt(idealChars / len)));
 }
 
-// ---------------------------------------------------------------- komponen
+/** Teks dengan dukungan *highlight*. Dirender per kata agar wrap rapi di satori. */
+function Rich({
+  text,
+  size,
+  t,
+  weight = 800,
+  family = "Heading",
+  lineHeight = 1.08,
+  color,
+  letterSpacing,
+}: {
+  text: string;
+  size: number;
+  t: Theme;
+  weight?: number;
+  family?: string;
+  lineHeight?: number;
+  color?: string;
+  letterSpacing?: number;
+}) {
+  const words: { w: string; hl: boolean }[] = [];
+  clean(text)
+    .split(/(\*[^*]+\*)/)
+    .filter(Boolean)
+    .forEach((seg) => {
+      const hl = seg.startsWith("*") && seg.endsWith("*") && seg.length > 2;
+      seg
+        .replace(/\*/g, "")
+        .split(/\s+/)
+        .filter(Boolean)
+        .forEach((w) => {
+          // Tanda baca menempel ke kata sebelumnya ("sempurna." bukan "sempurna .")
+          if (/^[.,!?:;)%]+$/.test(w) && words.length) words[words.length - 1].w += w;
+          else words.push({ w, hl });
+        });
+    });
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        width: "100%",
+        fontFamily: family,
+        fontWeight: weight,
+        fontSize: size,
+        lineHeight,
+        letterSpacing: letterSpacing ?? -size * 0.02,
+        color: color ?? t.fg,
+      }}
+    >
+      {words.map((x, i) => (
+        <span
+          key={i}
+          style={{
+            marginRight: size * 0.24,
+            ...(x.hl
+              ? t.hl === "color"
+                ? { color: t.accent }
+                : { backgroundImage: `linear-gradient(180deg, transparent 58%, ${alpha(t.pillBg, 0.55)} 58%)` }
+              : {}),
+          }}
+        >
+          {x.w}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function Text({ text, size, color, weight = 500, lineHeight = 1.4, mt = 0 }: { text: string; size: number; color: string; weight?: number; lineHeight?: number; mt?: number }) {
+  if (!plain(text)) return null;
+  return <div style={{ fontSize: size, color, fontWeight: weight, lineHeight, marginTop: mt }}>{plain(text)}</div>;
+}
+
+function Sticker({ t, text, rotate = -3, size = 30 }: { t: Theme; text: string; rotate?: number; size?: number }) {
+  if (!plain(text)) return null;
+  return (
+    <div style={{ display: "flex", marginBottom: 32 }}>
+      <div
+        style={{
+          background: t.pillBg,
+          color: t.pillFg,
+          fontSize: size,
+          fontWeight: 700,
+          padding: "12px 26px",
+          borderRadius: 9999,
+          textTransform: "uppercase",
+          letterSpacing: 2,
+          transform: `rotate(${rotate}deg)`,
+        }}
+      >
+        {plain(text)}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- dekorasi
+
+function SparkleShape({ size, color, style }: { size: number; color: string; style: React.CSSProperties }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" style={{ position: "absolute", ...style }}>
+      <path d="M50 0 C55 35 65 45 100 50 C65 55 55 65 50 100 C45 65 35 55 0 50 C35 45 45 35 50 0 Z" fill={color} />
+    </svg>
+  );
+}
+
+function DotGrid({ color, style }: { color: string; style: React.CSSProperties }) {
+  const dots = [];
+  for (let r = 0; r < 6; r++) for (let c = 0; c < 6; c++) dots.push(<circle key={`${r}-${c}`} cx={8 + c * 28} cy={8 + r * 28} r={4} fill={color} />);
+  return (
+    <svg width={160} height={160} viewBox="0 0 160 160" style={{ position: "absolute", ...style }}>
+      {dots}
+    </svg>
+  );
+}
+
+function Decor({ t, template, layout }: { t: Theme; template: TemplateKey; layout: SlideLayout }) {
+  if (layout === "cover_photo" || layout === "cover_split") return null;
+  if (template === "bold") {
+    return (
+      <>
+        <div style={{ position: "absolute", right: -220, bottom: -220, width: 620, height: 620, borderRadius: 9999, background: alpha("#FFFFFF", t.dark ? 0.06 : 0.25) }} />
+        <SparkleShape size={110} color={t.pillBg} style={{ right: 96, top: 150 }} />
+        <SparkleShape size={46} color={alpha(t.fg, 0.5)} style={{ right: 210, top: 260 }} />
+      </>
+    );
+  }
+  if (template === "clean") {
+    return t.dark ? null : <div style={{ position: "absolute", right: -160, bottom: -160, width: 420, height: 420, borderRadius: 9999, border: `48px solid ${alpha(t.accent, 0.08)}` }} />;
+  }
+  return t.dark ? (
+    <>
+      <div style={{ position: "absolute", right: -200, top: -200, width: 560, height: 560, borderRadius: 9999, background: alpha("#FFFFFF", 0.05) }} />
+      <SparkleShape size={70} color={t.pillBg} style={{ right: 110, top: 170 }} />
+    </>
+  ) : (
+    <DotGrid color={alpha(t.accent, 0.35)} style={{ right: 60, top: 140 }} />
+  );
+}
+
+// ---------------------------------------------------------------- slide
 
 export interface SlideProps {
   brand: Brand;
@@ -82,18 +257,41 @@ export interface SlideProps {
   index: number;
   total: number;
   logos: { onDark: LogoImg | null; onLight: LogoImg | null };
+  img: Img | null;
 }
 
-export type LogoImg = { src: string; width: number; height: number };
+/** Layout efektif: layout foto tanpa foto → varian grafis. */
+export function effectiveLayout(layout: SlideLayout, hasImg: boolean): SlideLayout {
+  if (hasImg) return layout;
+  if (layout === "cover_photo" || layout === "cover_split") return "cover_type";
+  if (layout === "point_photo") return "point_icon";
+  return layout;
+}
 
-export function SlideView({ brand, slide, template, index, total, logos }: SlideProps) {
-  const t = themeFor(brand, template, slide.layout);
-  const logo = t.dark ? logos.onDark ?? logos.onLight : logos.onLight ?? logos.onDark;
-  const headline = clean(slide.headline);
-  const body = clean(slide.body);
-  const kicker = clean(slide.kicker);
-  const stat = clean(slide.stat);
+export function SlideView({ brand, slide, template, index, total, logos, img }: SlideProps) {
+  const layout = effectiveLayout(slide.layout, Boolean(img));
+  const photoBg = Boolean(img) && (layout === "cover_photo" || layout === "cta");
+  const t = themeFor(brand, template, layout, index, photoBg);
+  const headerDark = t.dark || layout === "cover_split";
+  const logo = headerDark ? logos.onDark ?? logos.onLight : logos.onLight ?? logos.onDark;
+  const headerFg = headerDark ? "#FFFFFF" : t.fg;
   const isLast = index === total - 1;
+
+  const body = (() => {
+    switch (layout) {
+      case "cover_photo": return <CoverPhoto t={t} s={slide} img={img!} brand={brand} />;
+      case "cover_split": return <CoverSplit s={slide} img={img!} brand={brand} />;
+      case "cover_type": return <CoverType t={t} s={slide} img={img} />;
+      case "point_photo": return <PointPhoto t={t} s={slide} img={img!} index={index} />;
+      case "point_icon": return <PointIcon t={t} s={slide} index={index} />;
+      case "list": return <List t={t} s={slide} />;
+      case "steps": return <Steps t={t} s={slide} />;
+      case "compare": return <Compare t={t} s={slide} brand={brand} />;
+      case "stat": return <Stat t={t} s={slide} />;
+      case "quote": return <QuoteSlide t={t} s={slide} img={img} />;
+      case "cta": return <Cta t={t} s={slide} img={img} brand={brand} />;
+    }
+  })();
 
   return (
     <div
@@ -101,255 +299,343 @@ export function SlideView({ brand, slide, template, index, total, logos }: Slide
         width: CANVAS.width,
         height: CANVAS.height,
         display: "flex",
-        flexDirection: "column",
+        position: "relative",
         background: t.bg,
         color: t.fg,
         fontFamily: "Body",
-        padding: "72px 84px",
-        position: "relative",
+        overflow: "hidden",
       }}
     >
-      {/* dekorasi */}
-      <div
-        style={{
-          position: "absolute",
-          right: -180,
-          top: -180,
-          width: 520,
-          height: 520,
-          borderRadius: 9999,
-          background: t.dark ? alpha("#FFFFFF", 0.06) : alpha(t.accent, 0.1),
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          left: 0,
-          bottom: 0,
-          width: CANVAS.width,
-          height: 14,
-          background: t.accent,
-        }}
-      />
+      <Decor t={t} template={template} layout={layout} />
+      {body}
 
       {/* header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ position: "absolute", left: PAD, right: PAD, top: 64, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         {logo ? (
           <img src={logo.src} width={logo.width} height={logo.height} />
         ) : (
-          <div style={{ fontFamily: "Heading", fontWeight: 800, fontSize: 40, letterSpacing: -1 }}>
-            {brand.name}
-          </div>
+          <div style={{ fontFamily: "Heading", fontWeight: 800, fontSize: 38, letterSpacing: -1, color: headerFg }}>{brand.name}</div>
         )}
         {total > 1 ? (
-          <div style={{ fontSize: 28, color: t.muted, fontWeight: 500 }}>
-            {`${index + 1}/${total}`}
+          <div style={{ display: "flex", fontSize: 26, fontWeight: 700, color: headerFg, opacity: 0.8, letterSpacing: 2 }}>
+            {`${String(index + 1).padStart(2, "0")} / ${String(total).padStart(2, "0")}`}
           </div>
         ) : (
           <div />
         )}
       </div>
 
-      {/* isi */}
-      <div style={{ display: "flex", flexDirection: "column", flex: 1, justifyContent: "center" }}>
-        {slide.layout === "cover" && (
-          <Cover t={t} kicker={kicker} headline={headline} body={body} />
-        )}
-        {slide.layout === "point" && (
-          <Point t={t} kicker={kicker} headline={headline} body={body} />
-        )}
-        {slide.layout === "stat" && (
-          <Stat t={t} kicker={kicker} headline={headline} body={body} stat={stat} />
-        )}
-        {slide.layout === "quote" && <Quote t={t} headline={headline} body={body} />}
-        {slide.layout === "cta" && <Cta t={t} headline={headline} body={body} />}
-      </div>
-
       {/* footer */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 28, color: t.muted }}>
-        <div>{brand.handle}</div>
+      <div style={{ position: "absolute", left: PAD, right: PAD, bottom: 56, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 26, color: t.muted }}>
+        <div style={{ fontWeight: 600 }}>{brand.handle}</div>
         {total > 1 && !isLast ? (
-          <div style={{ display: "flex", fontWeight: 700, color: t.accent }}>Geser ›</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 700, color: t.accent }}>
+            Geser <Icon name="ArrowRight" size={30} color={t.accent} strokeWidth={2.6} />
+          </div>
         ) : (
-          <div>{brand.website}</div>
+          <div style={{ fontWeight: 600 }}>{brand.website}</div>
         )}
       </div>
     </div>
   );
 }
 
-type Part = { t: Theme; kicker?: string; headline: string; body: string };
+type P = { t: Theme; s: Slide };
+const INNER = CANVAS.width - PAD * 2;
+const content: React.CSSProperties = {
+  position: "absolute",
+  left: PAD,
+  width: INNER,
+  top: 170,
+  bottom: 140,
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "center",
+};
 
-function Kicker({ t, text }: { t: Theme; text: string }) {
-  if (!text) return null;
+// ---------------------------------------------------------------- layouts
+
+function CoverPhoto({ t, s, img, brand }: P & { img: Img; brand: Brand }) {
+  const p = brand.colors.primary;
   return (
-    <div style={{ display: "flex", marginBottom: 36 }}>
+    <>
+      <img src={img.src} width={img.w} height={img.h} style={{ position: "absolute", left: 0, top: 0 }} />
       <div
         style={{
-          background: t.pillBg,
-          color: t.pillFg,
-          fontSize: 30,
-          fontWeight: 700,
-          padding: "12px 28px",
-          borderRadius: 9999,
-          textTransform: "uppercase",
-          letterSpacing: 2,
+          position: "absolute",
+          left: 0,
+          top: 0,
+          width: CANVAS.width,
+          height: CANVAS.height,
+          backgroundImage: `linear-gradient(180deg, ${alpha("#000000", 0.45)} 0%, ${alpha("#000000", 0)} 22%, ${alpha(p, 0.35)} 48%, ${alpha(p, 0.92)} 74%, ${p} 100%)`,
         }}
-      >
-        {text}
+      />
+      <div style={{ ...content, justifyContent: "flex-end", bottom: 150 }}>
+        <Sticker t={t} text={s.kicker} />
+        <Rich t={t} text={s.headline} size={fit(s.headline, 112, 68, 30)} color="#FFFFFF" />
+        <Text text={s.body} size={fit(s.body, 38, 30, 80)} color={alpha("#FFFFFF", 0.85)} mt={28} />
       </div>
-    </div>
+    </>
   );
 }
 
-function Cover({ t, kicker, headline, body }: Part) {
+function CoverSplit({ s, img, brand }: { s: Slide; img: Img; brand: Brand }) {
+  const panel = makeTheme(brand, brand.colors.primary, "#FFFFFF");
   return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
-      <Kicker t={t} text={kicker ?? ""} />
-      <div
-        style={{
-          fontFamily: "Heading",
-          fontWeight: 800,
-          fontSize: fit(headline, 112, 64, 34),
-          lineHeight: 1.05,
-          letterSpacing: -2,
-        }}
-      >
-        {headline}
+    <>
+      <img src={img.src} width={img.w} height={img.h} style={{ position: "absolute", left: 0, top: 0 }} />
+      <div style={{ position: "absolute", left: 0, top: 0, width: CANVAS.width, height: 240, backgroundImage: `linear-gradient(180deg, ${alpha("#000000", 0.5)}, ${alpha("#000000", 0)})` }} />
+      <div style={{ position: "absolute", left: 0, top: img.h, width: CANVAS.width, height: CANVAS.height - img.h, background: panel.bg }} />
+      <div style={{ position: "absolute", left: PAD, width: INNER, top: img.h - 36, bottom: 130, display: "flex", flexDirection: "column" }}>
+        {plain(s.kicker) ? <Sticker t={panel} text={s.kicker} rotate={-2} /> : <div style={{ height: 76 }} />}
+        <Rich t={panel} text={s.headline} size={fit(s.headline, 92, 58, 34)} />
+        <Text text={s.body} size={fit(s.body, 34, 28, 70)} color={panel.muted} mt={22} />
       </div>
-      {body ? (
-        <div style={{ fontSize: fit(body, 40, 30, 80), marginTop: 40, color: t.muted, lineHeight: 1.35 }}>
-          {body}
-        </div>
-      ) : null}
-    </div>
+    </>
   );
 }
 
-function Point({ t, kicker, headline, body }: Part) {
+function CoverType({ t, s, img }: P & { img: Img | null }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
-      {kicker ? (
-        <div style={{ fontFamily: "Heading", fontWeight: 800, fontSize: 44, color: t.accent, marginBottom: 24 }}>
-          {kicker}
-        </div>
-      ) : null}
-      <div
-        style={{
-          fontFamily: "Heading",
-          fontWeight: 800,
-          fontSize: fit(headline, 84, 56, 40),
-          lineHeight: 1.1,
-          letterSpacing: -1.5,
-        }}
-      >
-        {headline}
-      </div>
-      <div style={{ width: 120, height: 10, background: t.accent, borderRadius: 9999, margin: "44px 0" }} />
-      {body ? (
-        <div style={{ fontSize: fit(body, 44, 32, 110), lineHeight: 1.4, color: t.muted }}>{body}</div>
-      ) : null}
-    </div>
-  );
-}
-
-function Stat({ t, kicker, headline, body, stat }: Part & { stat: string }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
-      <Kicker t={t} text={kicker ?? ""} />
-      <div
-        style={{
-          fontFamily: "Heading",
-          fontWeight: 800,
-          fontSize: fit(stat || "—", 240, 120, 5),
-          lineHeight: 1,
-          color: t.accent,
-          letterSpacing: -6,
-        }}
-      >
-        {stat || "—"}
-      </div>
-      <div
-        style={{
-          fontFamily: "Heading",
-          fontWeight: 700,
-          fontSize: fit(headline, 68, 48, 50),
-          lineHeight: 1.15,
-          marginTop: 32,
-        }}
-      >
-        {headline}
-      </div>
-      {body ? (
-        <div style={{ fontSize: fit(body, 40, 30, 110), lineHeight: 1.4, color: t.muted, marginTop: 28 }}>
-          {body}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function Quote({ t, headline, body }: Part) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
-      <div style={{ fontFamily: "Heading", fontWeight: 800, fontSize: 240, lineHeight: 0.8, color: t.accent, height: 150 }}>
-        “
-      </div>
-      <div
-        style={{
-          fontFamily: "Heading",
-          fontWeight: 700,
-          fontSize: fit(headline, 80, 52, 60),
-          lineHeight: 1.2,
-          letterSpacing: -1,
-        }}
-      >
-        {headline}
-      </div>
-      {body ? (
-        <div style={{ fontSize: 36, marginTop: 44, color: t.muted, fontWeight: 500 }}>{`— ${body}`}</div>
-      ) : null}
-    </div>
-  );
-}
-
-function Cta({ t, headline, body }: Part) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-      <div
-        style={{
-          fontFamily: "Heading",
-          fontWeight: 800,
-          fontSize: fit(headline, 100, 60, 36),
-          lineHeight: 1.08,
-          letterSpacing: -2,
-        }}
-      >
-        {headline}
-      </div>
-      {body ? (
+    <div style={{ ...content, justifyContent: img ? "flex-end" : "center" }}>
+      {img ? (
         <div
           style={{
+            position: "absolute",
+            right: -20,
+            top: 0,
             display: "flex",
-            marginTop: 56,
-            background: t.pillBg,
-            color: t.pillFg,
-            fontSize: 40,
-            fontWeight: 700,
-            padding: "22px 44px",
-            borderRadius: 9999,
+            borderRadius: "210px 210px 28px 28px",
+            overflow: "hidden",
+            border: `10px solid ${t.pillBg}`,
           }}
         >
-          {body}
+          <img src={img.src} width={img.w} height={img.h} />
         </div>
       ) : null}
-      <div style={{ display: "flex", gap: 28, marginTop: 64, fontSize: 30, color: t.muted }}>
-        <div>Like</div>
-        <div>•</div>
-        <div>Share</div>
-        <div>•</div>
-        <div>Save</div>
+      <Sticker t={t} text={s.kicker} rotate={-4} />
+      <div style={{ display: "flex", width: img ? INNER : 900 }}>
+        <Rich t={t} text={s.headline} size={fit(s.headline, img ? 92 : 120, img ? 60 : 70, img ? 30 : 30)} lineHeight={1.04} />
+      </div>
+      <div style={{ display: "flex", width: 820 }}>
+        <Text text={s.body} size={fit(s.body, 36, 28, 80)} color={t.muted} mt={28} />
       </div>
     </div>
+  );
+}
+
+function NumberTag({ t, n, kicker }: { t: Theme; n: number; kicker: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 18, marginBottom: 26 }}>
+      <div style={{ fontFamily: "Heading", fontWeight: 800, fontSize: 64, color: t.accent, letterSpacing: -2 }}>
+        {String(n).padStart(2, "0")}
+      </div>
+      {plain(kicker) ? (
+        <div style={{ fontSize: 28, fontWeight: 700, textTransform: "uppercase", letterSpacing: 2, color: t.muted }}>{plain(kicker)}</div>
+      ) : null}
+    </div>
+  );
+}
+
+function PointPhoto({ t, s, img, index }: P & { img: Img; index: number }) {
+  return (
+    <div style={{ ...content, top: 160, justifyContent: "flex-start" }}>
+      <div style={{ display: "flex", borderRadius: 32, overflow: "hidden", marginBottom: 40, boxShadow: `0 20px 50px ${alpha("#000000", 0.18)}` }}>
+        <img src={img.src} width={img.w} height={img.h} />
+      </div>
+      <NumberTag t={t} n={index} kicker={s.kicker} />
+      <Rich t={t} text={s.headline} size={fit(s.headline, 70, 50, 40)} lineHeight={1.12} />
+      <Text text={s.body} size={fit(s.body, 34, 28, 100)} color={t.muted} mt={20} />
+    </div>
+  );
+}
+
+function PointIcon({ t, s, index }: P & { index: number }) {
+  return (
+    <div style={content}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 200, height: 200, borderRadius: 56, background: t.pillBg, marginBottom: 48, transform: "rotate(-6deg)" }}>
+        <Icon name={s.icon || "Lightbulb"} size={110} color={t.pillFg} strokeWidth={1.8} />
+      </div>
+      <NumberTag t={t} n={index} kicker={s.kicker} />
+      <Rich t={t} text={s.headline} size={fit(s.headline, 84, 56, 40)} lineHeight={1.1} />
+      <div style={{ width: 120, height: 10, background: t.accent, borderRadius: 9999, margin: "40px 0 36px" }} />
+      <Text text={s.body} size={fit(s.body, 40, 30, 110)} color={t.muted} />
+    </div>
+  );
+}
+
+function List({ t, s }: P) {
+  const items = s.items.slice(0, 5);
+  const size = items.length > 4 ? 36 : 40;
+  return (
+    <div style={content}>
+      <Sticker t={t} text={s.kicker} rotate={0} size={26} />
+      <Rich t={t} text={s.headline} size={fit(s.headline, 84, 56, 34)} lineHeight={1.08} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 52 }}>
+        {items.map((it, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 26, background: t.surface, borderRadius: 28, padding: "30px 32px", border: `2px solid ${t.line}` }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 64, height: 64, borderRadius: 9999, background: t.pillBg, flexShrink: 0 }}>
+              <Icon name="Check" size={34} color={t.pillFg} strokeWidth={3} />
+            </div>
+            <div style={{ display: "flex", flex: 1, fontSize: size, fontWeight: 600, lineHeight: 1.3, color: t.fg }}>{plain(it)}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Steps({ t, s }: P) {
+  const items = s.items.slice(0, 4);
+  return (
+    <div style={content}>
+      <Sticker t={t} text={s.kicker} rotate={0} size={26} />
+      <Rich t={t} text={s.headline} size={fit(s.headline, 84, 56, 34)} lineHeight={1.08} />
+      <div style={{ display: "flex", flexDirection: "column", marginTop: 56 }}>
+        {items.map((it, i) => (
+          <div key={i} style={{ display: "flex", gap: 30 }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 88, height: 88, borderRadius: 9999, background: i === 0 ? t.pillBg : t.surface, border: `4px solid ${t.pillBg}`, fontFamily: "Heading", fontWeight: 800, fontSize: 40, color: i === 0 ? t.pillFg : t.fg }}>
+                {i + 1}
+              </div>
+              {i < items.length - 1 ? <div style={{ width: 4, height: 66, background: t.line }} /> : null}
+            </div>
+            <div style={{ display: "flex", flex: 1, paddingTop: 18, fontSize: 42, fontWeight: 600, lineHeight: 1.25 }}>{plain(it)}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Compare({ t, s, brand }: P & { brand: Brand }) {
+  const good = makeTheme(brand, brand.colors.primary, "#FFFFFF");
+  const col = (label: string, items: string[], positive: boolean) => (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        flex: 1,
+        borderRadius: 32,
+        padding: "40px 34px",
+        minHeight: 560,
+        background: positive ? good.bg : t.surface,
+        border: positive ? `2px solid ${alpha("#FFFFFF", t.dark ? 0.3 : 0)}` : `2px solid ${t.line}`,
+        color: positive ? good.fg : t.fg,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 26 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 52, height: 52, borderRadius: 9999, background: positive ? good.pillBg : alpha(t.fg, 0.12) }}>
+          <Icon name={positive ? "Check" : "X"} size={32} color={positive ? good.pillFg : t.fg} strokeWidth={3} />
+        </div>
+        <div style={{ fontFamily: "Heading", fontWeight: 800, fontSize: 44 }}>{plain(label) || (positive ? "Benar" : "Salah")}</div>
+      </div>
+      {items.slice(0, 4).map((it, i) => (
+        <div key={i} style={{ display: "flex", fontSize: 36, lineHeight: 1.3, fontWeight: 600, marginTop: i ? 26 : 0, paddingTop: i ? 26 : 0, borderTop: i ? `2px solid ${positive ? alpha(good.fg, 0.18) : t.line}` : "none", opacity: positive ? 1 : 0.85 }}>
+          {plain(it)}
+        </div>
+      ))}
+    </div>
+  );
+  return (
+    <div style={content}>
+      <Rich t={t} text={s.headline} size={fit(s.headline, 84, 56, 30)} lineHeight={1.08} />
+      <div style={{ display: "flex", gap: 24, marginTop: 52 }}>
+        {col(s.labelA, s.items, false)}
+        {col(s.labelB, s.itemsB, true)}
+      </div>
+    </div>
+  );
+}
+
+function Ring({ pct, t }: { pct: number; t: Theme }) {
+  const r = 150;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg width={380} height={380} viewBox="0 0 380 380">
+      <circle cx={190} cy={190} r={r} fill="none" stroke={t.line} strokeWidth={36} />
+      <circle cx={190} cy={190} r={r} fill="none" stroke={t.accent} strokeWidth={36} strokeLinecap="round" strokeDasharray={`${(c * Math.min(pct, 100)) / 100} ${c}`} transform="rotate(-90 190 190)" />
+    </svg>
+  );
+}
+
+function Stat({ t, s }: P) {
+  const stat = plain(s.stat) || "—";
+  const pct = /^(\d{1,3})(?:[.,]\d+)?\s?%$/.exec(stat);
+  return (
+    <div style={content}>
+      <Sticker t={t} text={s.kicker} rotate={0} size={26} />
+      {pct ? (
+        <div style={{ display: "flex", position: "relative", width: 380, height: 380, marginBottom: 40 }}>
+          <Ring pct={Number(pct[1])} t={t} />
+          <div style={{ position: "absolute", left: 0, top: 0, width: 380, height: 380, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Heading", fontWeight: 800, fontSize: 110, letterSpacing: -4 }}>
+            {stat}
+          </div>
+        </div>
+      ) : (
+        <div style={{ fontFamily: "Heading", fontWeight: 800, fontSize: fit(stat, 230, 120, 6), lineHeight: 1, color: t.accent, letterSpacing: -8, marginBottom: 30 }}>{stat}</div>
+      )}
+      <Rich t={t} text={s.headline} size={fit(s.headline, 76, 52, 44)} weight={800} lineHeight={1.12} />
+      <Text text={s.body} size={fit(s.body, 38, 30, 110)} color={t.muted} mt={26} />
+    </div>
+  );
+}
+
+function QuoteSlide({ t, s, img }: P & { img: Img | null }) {
+  return (
+    <div style={content}>
+      <div style={{ display: "flex", marginBottom: 30 }}>
+        <Icon name="Quote" size={130} color={t.accent} strokeWidth={1.6} />
+      </div>
+      <Rich t={t} text={s.headline} size={fit(s.headline, 88, 56, 50)} weight={800} lineHeight={1.15} />
+      {plain(s.body) ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 24, marginTop: 52 }}>
+          {img ? (
+            <div style={{ display: "flex", borderRadius: 9999, overflow: "hidden", border: `5px solid ${t.pillBg}` }}>
+              <img src={img.src} width={img.w} height={img.h} />
+            </div>
+          ) : (
+            <div style={{ width: 64, height: 6, background: t.accent, borderRadius: 9999 }} />
+          )}
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <div style={{ fontSize: 36, fontWeight: 700 }}>{plain(s.body)}</div>
+            {plain(s.kicker) ? <div style={{ fontSize: 28, color: t.muted, marginTop: 6 }}>{plain(s.kicker)}</div> : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Cta({ t, s, img, brand }: P & { img: Img | null; brand: Brand }) {
+  return (
+    <>
+      {img ? (
+        <>
+          <img src={img.src} width={img.w} height={img.h} style={{ position: "absolute", left: 0, top: 0 }} />
+          <div style={{ position: "absolute", left: 0, top: 0, width: CANVAS.width, height: CANVAS.height, background: alpha(brand.colors.primary, 0.82) }} />
+        </>
+      ) : null}
+      <div style={{ ...content, alignItems: "flex-start" }}>
+        <Sticker t={t} text={s.kicker} />
+        <Rich t={t} text={s.headline} size={fit(s.headline, 104, 62, 32)} />
+        <Text text={s.body && s.body !== brand.handle ? s.body : ""} size={36} color={t.muted} mt={28} />
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 56, background: t.pillBg, color: t.pillFg, fontSize: 40, fontWeight: 800, padding: "24px 44px", borderRadius: 9999 }}>
+          {`Follow ${brand.handle}`}
+        </div>
+        <div style={{ display: "flex", gap: 44, marginTop: 64 }}>
+          {[
+            ["Heart", "Like"],
+            ["Send", "Share"],
+            ["Bookmark", "Save"],
+          ].map(([icon, label]) => (
+            <div key={icon} style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 30, fontWeight: 600, color: t.fg }}>
+              <Icon name={icon} size={40} color={t.accent} strokeWidth={2.4} />
+              {label}
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
   );
 }

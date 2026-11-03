@@ -5,12 +5,15 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import sharp from "sharp";
 import { db } from "@/lib/db";
-import { analyzeExamples, generateIdeas, generatePost, revisePost } from "@/lib/ai";
-import { renderSlidesJpeg } from "@/lib/render";
+import { analyzeExamples, generateIdeas, generatePost, reviewDesign, revisePost, type Draft } from "@/lib/ai";
+import { renderSlidePng, renderSlidesJpeg } from "@/lib/render";
+import { sourceImage } from "@/lib/images";
+import { readMedia } from "@/lib/media";
+import { randomUUID } from "crypto";
 import { getPublishStatus, publish } from "@/lib/publisher";
 import { config } from "@/lib/config";
 import { SESSION_COOKIE, sessionToken } from "@/lib/auth";
-import type { Brand, FontKey, Platform, Slide, SlideLayout, TemplateKey } from "@/lib/types";
+import { SLIDE_LAYOUTS, normalizeSlide, type Brand, type FontKey, type ImageSourceMode, type Platform, type Post, type Slide, type SlideLayout, type TemplateKey } from "@/lib/types";
 
 export type ActionState = { error?: string; ok?: string } | undefined;
 
@@ -102,6 +105,22 @@ export async function saveBrandAction(_: ActionState, fd: FormData): Promise<Act
     if (logoAlt instanceof File && logoAlt.size > 0) brand.logoAltUrl = await uploadImage(logoAlt, "brand");
     if (fd.get("removeLogoAlt") === "on") brand.logoAltUrl = null;
 
+    const mode = str(fd, "imageSource") as ImageSourceMode;
+    if (["auto", "ai", "stock", "brand", "none"].includes(mode)) brand.imageSource = mode;
+    brand.imageStyle = str(fd, "imageStyle") || brand.imageStyle;
+    brand.autoReview = fd.get("autoReview") === "on";
+
+    const removeAssets = new Set(fd.getAll("removeAsset").map(String));
+    brand.assets = brand.assets
+      .filter((a) => !removeAssets.has(a.id))
+      .map((a) => ({ ...a, description: fd.has(`asset_${a.id}`) ? str(fd, `asset_${a.id}`) : a.description }));
+    for (const f of fd.getAll("assets")) {
+      if (f instanceof File && f.size > 0) {
+        brand.assets.push({ id: randomUUID().slice(0, 8), url: await uploadImage(f, "assets"), description: f.name.replace(/\.[a-z]+$/i, "").replace(/[-_]+/g, " ") });
+      }
+    }
+    brand.assets = brand.assets.slice(-30);
+
     const removeExamples = new Set(fd.getAll("removeExample").map(String));
     brand.exampleUrls = brand.exampleUrls.filter((u) => !removeExamples.has(u));
     for (const f of fd.getAll("examples")) {
@@ -123,10 +142,8 @@ export async function analyzeExamplesAction(): Promise<ActionState> {
     if (!brand.exampleUrls.length) return { error: "Upload contoh post dulu" };
     const images = await Promise.all(
       brand.exampleUrls.map(async (u) => {
-        const res = await fetch(u);
-        if (!res.ok) throw new Error(`Gagal mengambil ${u}`);
         // Perkecil supaya hemat token.
-        const jpg = await sharp(Buffer.from(await res.arrayBuffer()))
+        const jpg = await sharp(await readMedia(u))
           .resize({ width: 1080, withoutEnlargement: true })
           .jpeg({ quality: 85 })
           .toBuffer();
@@ -134,7 +151,7 @@ export async function analyzeExamplesAction(): Promise<ActionState> {
       }),
     );
     const out = await analyzeExamples(brand, images);
-    await db().saveBrand({ ...brand, styleNotes: out.styleNotes, defaultTemplate: out.suggestedTemplate });
+    await db().saveBrand({ ...brand, styleNotes: out.styleNotes, imageStyle: out.imageStyle, defaultTemplate: out.suggestedTemplate });
     revalidatePath("/brand");
     return { ok: `Analisis selesai. Template disarankan: ${out.suggestedTemplate}` };
   } catch (e) {
@@ -165,17 +182,21 @@ export async function approveIdeaAction(id: string): Promise<ActionState> {
     if (!idea) return { error: "Ide tidak ditemukan" };
     if (idea.post_id) redirect(`/posts/${idea.post_id}`);
     const brand = await db().getBrand();
-    const content = await generatePost(brand, idea);
+    const draft = await generatePost(brand, idea);
+    const tempKey = randomUUID();
+    const slides = await materialize(brand, draft, tempKey);
+    const reviewed = await artDirector(brand, { slides, format: idea.format, caption: draft.caption, template: brand.defaultTemplate }, tempKey);
     const post = await db().createPost({
       idea_id: idea.id,
-      title: content.title || idea.title,
+      title: draft.title || idea.title,
       format: idea.format,
       platforms: ["instagram", "tiktok"],
-      caption: content.caption,
-      hashtags: content.hashtags,
-      slides: content.slides,
+      caption: draft.caption,
+      hashtags: draft.hashtags,
+      slides: reviewed.slides,
       template: brand.defaultTemplate,
       status: "review",
+      design_notes: reviewed.notes,
     });
     await db().updateIdea(id, { status: "approved", post_id: post.id });
     postId = post.id;
@@ -199,7 +220,44 @@ function isRedirect(e: unknown) {
 
 // ------------------------------------------------------------------ konten
 
-const LAYOUTS: SlideLayout[] = ["cover", "point", "stat", "quote", "cta"];
+/** Isi gambar untuk slide yang membutuhkannya (paralel, maks 3 sekaligus). */
+async function materialize(brand: Brand, draft: Pick<Draft, "slides">, key: string): Promise<Slide[]> {
+  const out = draft.slides.map((d) => d.slide);
+  const jobs = draft.slides.map((d, i) => ({ d, i })).filter(({ d }) => d.imageRequest);
+  for (let n = 0; n < jobs.length; n += 3) {
+    await Promise.all(
+      jobs.slice(n, n + 3).map(async ({ d, i }) => {
+        out[i] = { ...out[i], image: await sourceImage(brand, d.imageRequest!, `${key}-${i}`, i) };
+      }),
+    );
+  }
+  return out;
+}
+
+/** AI art director: render → lihat → perbaiki (1 putaran). */
+async function artDirector(
+  brand: Brand,
+  post: Pick<Post, "slides" | "format" | "caption" | "template">,
+  key: string,
+): Promise<{ slides: Slide[]; notes: string | null }> {
+  if (!brand.autoReview || !config.hasAI) return { slides: post.slides, notes: null };
+  try {
+    const renders: string[] = [];
+    for (let i = 0; i < post.slides.length; i++) {
+      const png = await renderSlidePng(brand, post, i);
+      renders.push((await sharp(png).resize(540).jpeg({ quality: 75 }).toBuffer()).toString("base64"));
+    }
+    const review = await reviewDesign(brand, post, renders);
+    if (!review) return { slides: post.slides, notes: null };
+    if (review.verdict === "approve") return { slides: post.slides, notes: review.notes };
+    return { slides: await materialize(brand, review, `${key}-qa`), notes: review.notes };
+  } catch (e) {
+    console.error("Review art director gagal (konten tetap dipakai):", e);
+    return { slides: post.slides, notes: null };
+  }
+}
+
+const LAYOUTS = SLIDE_LAYOUTS as readonly SlideLayout[];
 
 export async function updatePostAction(id: string, _: ActionState, fd: FormData): Promise<ActionState> {
   try {
@@ -207,16 +265,25 @@ export async function updatePostAction(id: string, _: ActionState, fd: FormData)
     if (!post) return { error: "Konten tidak ditemukan" };
     if (!["review", "failed"].includes(post.status)) return { error: "Konten yang sudah di-ACC tidak bisa diedit" };
     const slides: Slide[] = [];
-    post.slides.forEach((_s, i) => {
+    post.slides.forEach((old, i) => {
       if (fd.get(`slide_${i}_delete`) === "on") return;
       const layout = str(fd, `slide_${i}_layout`) as SlideLayout;
-      slides.push({
-        layout: LAYOUTS.includes(layout) ? layout : "point",
-        kicker: str(fd, `slide_${i}_kicker`),
-        headline: str(fd, `slide_${i}_headline`),
-        body: str(fd, `slide_${i}_body`),
-        stat: str(fd, `slide_${i}_stat`),
-      });
+      const itemLines = (k: string) => str(fd, k).split("\n").map((x) => x.trim()).filter(Boolean);
+      slides.push(
+        normalizeSlide({
+          ...old,
+          layout: LAYOUTS.includes(layout) ? layout : old.layout,
+          kicker: str(fd, `slide_${i}_kicker`),
+          headline: str(fd, `slide_${i}_headline`),
+          body: str(fd, `slide_${i}_body`),
+          stat: str(fd, `slide_${i}_stat`),
+          items: itemLines(`slide_${i}_items`),
+          itemsB: itemLines(`slide_${i}_itemsB`),
+          labelA: str(fd, `slide_${i}_labelA`),
+          labelB: str(fd, `slide_${i}_labelB`),
+          icon: str(fd, `slide_${i}_icon`) || old.icon,
+        }),
+      );
     });
     if (!slides.length) return { error: "Minimal harus ada 1 slide" };
     const platforms = fd.getAll("platforms").map(String).filter((p): p is Platform => p === "instagram" || p === "tiktok");
@@ -244,13 +311,84 @@ export async function revisePostAction(id: string, _: ActionState, fd: FormData)
     const post = await db().getPost(id);
     if (!post) return { error: "Konten tidak ditemukan" };
     const brand = await db().getBrand();
-    const out = await revisePost(brand, post, instruction);
-    await db().updatePost(id, { ...out, status: "review", revision_count: post.revision_count + 1 });
+    const draft = await revisePost(brand, post, instruction);
+    const slides = await materialize(brand, draft, `${post.id}-r${post.revision_count + 1}`);
+    await db().updatePost(id, {
+      title: draft.title,
+      caption: draft.caption,
+      hashtags: draft.hashtags,
+      slides,
+      status: "review",
+      revision_count: post.revision_count + 1,
+    });
     revalidatePath(`/posts/${id}`);
     return { ok: "Revisi selesai — cek hasilnya" };
   } catch (e) {
     return fail(e);
   }
+}
+
+async function editableSlide(postId: string, index: number) {
+  const post = await db().getPost(postId);
+  if (!post) throw new Error("Konten tidak ditemukan");
+  if (!["review", "failed"].includes(post.status)) throw new Error("Konten yang sudah di-ACC tidak bisa diedit");
+  const slide = post.slides[index];
+  if (!slide) throw new Error("Slide tidak ditemukan");
+  return { post, slide };
+}
+
+async function saveSlide(post: Post, index: number, slide: Slide) {
+  const slides = post.slides.slice();
+  slides[index] = slide;
+  await db().updatePost(post.id, { slides });
+  revalidatePath(`/posts/${post.id}`);
+}
+
+/** Cari / generate ulang foto untuk satu slide (opsional dengan kata kunci baru). */
+export async function replaceImageAction(postId: string, index: number, _: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const { post, slide } = await editableSlide(postId, index);
+    const brand = await db().getBrand();
+    const custom = str(fd, "query");
+    const req = {
+      assetId: "",
+      query: custom || slide.image?.query || plainHeadline(slide),
+      prompt: custom ? `${custom}. Context: ${plainHeadline(slide)}` : slide.image?.prompt || plainHeadline(slide),
+    };
+    const image = await sourceImage({ ...brand, imageSource: brand.imageSource === "brand" || brand.imageSource === "none" ? "auto" : brand.imageSource }, req, `${post.id}-${index}`, Date.now() % 97);
+    if (!image) return { error: "Tidak ada sumber gambar aktif (isi OPENAI/GEMINI atau PEXELS API key), atau tidak ditemukan." };
+    await saveSlide(post, index, { ...slide, image });
+    return { ok: "Gambar diganti" };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function uploadSlideImageAction(postId: string, index: number, _: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const { post, slide } = await editableSlide(postId, index);
+    const file = fd.get("file");
+    if (!(file instanceof File) || !file.size) return { error: "Pilih file gambar" };
+    const url = await uploadImage(file, `uploads/${post.id}`);
+    await saveSlide(post, index, { ...slide, image: { url, source: "upload", query: "", prompt: "", credit: "" } });
+    return { ok: "Gambar di-upload" };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function removeSlideImageAction(postId: string, index: number): Promise<ActionState> {
+  try {
+    const { post, slide } = await editableSlide(postId, index);
+    await saveSlide(post, index, { ...slide, image: null });
+    return { ok: "Gambar dihapus" };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+function plainHeadline(s: Slide) {
+  return s.headline.replace(/\*/g, "");
 }
 
 export async function rejectPostAction(id: string): Promise<ActionState> {

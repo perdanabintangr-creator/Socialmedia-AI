@@ -39,6 +39,7 @@ create table if not exists public.posts (
   publish_result jsonb,
   error text,
   revision_count int not null default 0,
+  design_notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { db } from "@/lib/db";
+import { config } from "@/lib/config";
 import { ActionForm, Submit } from "@/components/forms";
 import { Card, Field, PageTitle, inputCls } from "@/components/ui";
 import { analyzeExamplesAction, saveBrandAction } from "../actions";
@@ -22,8 +24,12 @@ const COLORS: [keyof Brand["colors"], string, string][] = [
   ["text", "Teks", "Warna teks di latar terang"],
 ];
 
-export default async function BrandPage() {
+const TEMPLATE_LABEL = { mix: "Editorial", bold: "Bold", clean: "Clean" } as const;
+
+export default async function BrandPage({ searchParams }: { searchParams: Promise<{ template?: string }> }) {
   const brand = await db().getBrand();
+  const { template } = await searchParams;
+  const tpl = (["mix", "bold", "clean"] as const).find((x) => x === template) ?? brand.defaultTemplate;
   const v = Date.now();
 
   return (
@@ -31,14 +37,27 @@ export default async function BrandPage() {
       <PageTitle title="Brand Kit" subtitle="Diisi sekali. Semua ide, tulisan, dan desain AI mengikuti pedoman ini." />
 
       <Card>
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="font-semibold">Preview desain dengan brand kit sekarang</h2>
-          <span className="text-xs text-slate-500">Template: {brand.defaultTemplate}</span>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">Preview 11 layout dengan Brand Kit sekarang</h2>
+            <p className="text-xs text-slate-500">
+              {brand.assets.length ? "Foto diambil dari library foto brand." : "Foto contoh abstrak — upload foto brand atau hubungkan AI image / Pexels untuk foto asli."}
+            </p>
+          </div>
+          <div className="flex gap-1">
+            {(["mix", "bold", "clean"] as const).map((k) => (
+              <Link key={k} href={`/brand?template=${k}`} className={`rounded-full px-3 py-1 text-xs font-semibold ${k === tpl ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"}`}>
+                {TEMPLATE_LABEL[k]}{k === brand.defaultTemplate ? " ✓" : ""}
+              </Link>
+            ))}
+          </div>
         </div>
         <div className="mt-3 flex gap-3 overflow-x-auto pb-1">
-          {[0, 1, 2, 3].map((i) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={i} src={`/api/preview/${i}?v=${v}`} alt="" className="aspect-[4/5] w-[200px] shrink-0 rounded-lg bg-slate-100 ring-1 ring-slate-200" />
+          {Array.from({ length: 11 }, (_, i) => (
+            <a key={i} href={`/api/preview/${i}?template=${tpl}`} target="_blank" className="shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/api/preview/${i}?template=${tpl}&v=${v}`} alt="" loading="lazy" className="aspect-[4/5] w-[200px] rounded-lg bg-slate-100 ring-1 ring-slate-200" />
+            </a>
           ))}
         </div>
       </Card>
@@ -89,9 +108,9 @@ export default async function BrandPage() {
             </Field>
             <Field label="Template default">
               <select name="defaultTemplate" defaultValue={brand.defaultTemplate} className={inputCls}>
-                <option value="mix">Mix (cover bold, isi clean)</option>
-                <option value="bold">Bold</option>
-                <option value="clean">Clean</option>
+                <option value="mix">Editorial (cover gelap, isi terang)</option>
+                <option value="bold">Bold (warna penuh + bentuk dekoratif)</option>
+                <option value="clean">Clean (minimalis terang)</option>
               </select>
             </Field>
           </div>
@@ -118,6 +137,53 @@ export default async function BrandPage() {
           <Field label="Catatan gaya (diisi otomatis oleh AI dari contoh post, boleh diedit)">
             <textarea name="styleNotes" rows={5} defaultValue={brand.styleNotes} className={inputCls} />
           </Field>
+        </Card>
+
+        <Card className="space-y-4">
+          <div>
+            <h2 className="font-semibold">Foto & ilustrasi</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Status: AI image {config.imageProvider ? `aktif (${config.imageProvider})` : "belum aktif"} • Stok foto Pexels {config.hasStock ? "aktif" : "belum aktif"}
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Sumber gambar">
+              <select name="imageSource" defaultValue={brand.imageSource} className={inputCls}>
+                <option value="auto">Otomatis (foto brand → AI image → stok foto)</option>
+                <option value="ai">Utamakan AI image</option>
+                <option value="stock">Hanya stok foto</option>
+                <option value="brand">Hanya foto brand sendiri</option>
+                <option value="none">Tanpa foto (grafis saja)</option>
+              </select>
+            </Field>
+            <label className="flex items-start gap-3 rounded-lg bg-slate-50 p-3 text-sm ring-1 ring-slate-200">
+              <input type="checkbox" name="autoReview" defaultChecked={brand.autoReview} className="mt-1" />
+              <span>
+                <span className="font-medium">AI art director review</span>
+                <span className="block text-xs text-slate-500">Setelah desain dibuat, AI melihat hasil render dan memperbaiki teks kepanjangan, layout monoton, atau foto yang kurang relevan sebelum dikirim ke kamu.</span>
+              </span>
+            </label>
+          </div>
+          <Field label="Art direction foto" hint="Pedoman gaya foto/ilustrasi untuk AI image & pemilihan stok foto.">
+            <textarea name="imageStyle" rows={2} defaultValue={brand.imageStyle} className={inputCls} />
+          </Field>
+          <Field label="Library foto brand" hint="Foto produk, tim, kantor, event. AI memilih foto ini bila relevan — foto asli paling meyakinkan. Beri deskripsi singkat tiap foto.">
+            <input type="file" name="assets" multiple accept="image/png,image/jpeg,image/webp" className="text-sm" />
+          </Field>
+          {brand.assets.length > 0 && (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {brand.assets.map((a) => (
+                <div key={a.id} className="flex gap-3 rounded-lg bg-slate-50 p-2 ring-1 ring-slate-200">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={a.url} alt="" className="h-20 w-16 shrink-0 rounded-md object-cover" />
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <textarea name={`asset_${a.id}`} defaultValue={a.description} rows={2} className={`${inputCls} text-xs`} placeholder="Deskripsi foto" />
+                    <label className="flex items-center gap-1 text-xs text-red-600"><input type="checkbox" name="removeAsset" value={a.id} /> hapus</label>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
 
         <div className="sticky bottom-4 flex justify-end">

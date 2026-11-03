@@ -10,14 +10,24 @@ AI yang menjalankan sosmed Marqthink end-to-end: **brief → ide → konten (cop
 | Bagian | Teknologi | File |
 |---|---|---|
 | Dashboard & approval | Next.js 15 (App Router, server actions) | `src/app/` |
-| Otak konten (ide, copy, revisi, analisis contoh post) | Claude API (`claude-opus-5-5`, structured output) | `src/lib/ai.ts` |
-| Desain otomatis | Template brand → PNG (next/og / satori) → JPEG (sharp) | `src/lib/templates.tsx`, `src/lib/render.tsx` |
-| Database + storage gambar | Supabase (Postgres + Storage bucket publik `media`) | `src/lib/db.ts`, `supabase/migrations/` |
+| Otak konten: strategi, copy, art direction, revisi | Claude API (`claude-opus-5-5`, structured output) | `src/lib/ai.ts` |
+| AI art director (review visual otomatis) | Claude vision melihat hasil render lalu memperbaiki | `src/lib/ai.ts` → `reviewDesign` |
+| Desain otomatis | 11 layout × 3 gaya → PNG (next/og / satori) → JPEG (sharp) | `src/lib/templates.tsx`, `src/lib/render.tsx` |
+| Foto & ilustrasi | Foto brand → AI image (Gemini / OpenAI) → stok Pexels | `src/lib/images.ts` |
+| Database + storage | Supabase (Postgres + bucket publik `media`) | `src/lib/db.ts`, `supabase/migrations/` |
 | Posting ke IG & TikTok | Ayrshare API | `src/lib/publisher.ts` |
 
-Desain dibuat dari **template berbasis Brand Kit** (warna, font, logo), bukan gambar AI bebas. Hasilnya selalu on-brand dan tulisannya tidak typo. Ada 5 layout slide (cover, poin, angka, kutipan, CTA) dan 3 gaya template (mix, bold, clean).
+### Sistem visual
 
-Tanpa API key apa pun, aplikasi tetap jalan di **mode demo**: AI memakai contoh konten dan data disimpan di folder `.data/`. Mode ini berguna untuk mencoba alurnya.
+Untuk tiap slide, Claude bertindak sebagai art director: memilih layout, menentukan foto (dari library foto brand, prompt AI image, atau kata kunci stok foto), memilih ikon, dan menandai kata kunci untuk di-highlight. Desain dirender dari template berbasis Brand Kit, jadi warna, font, dan logo selalu konsisten dan teks tidak pernah typo.
+
+- **11 layout:** cover foto penuh, cover foto + panel, cover tipografi + foto berbingkai, poin + foto, poin + ikon, checklist, langkah bernomor, perbandingan (mitos vs fakta), angka + ring chart, kutipan + foto, CTA.
+- **3 gaya:** Editorial (cover gelap, isi terang), Bold (warna penuh + bentuk dekoratif), Clean (minimalis).
+- Layout foto yang tidak mendapat foto otomatis berubah ke varian grafis, jadi tidak pernah ada slide rusak.
+- **AI art director review** (bisa dimatikan di Brand Kit): setelah render, Claude melihat gambarnya dan memperbaiki teks kepanjangan, layout monoton, atau foto yang kurang relevan.
+- Di halaman review, tiap slide bisa **ganti foto** (dengan kata kunci baru), **upload foto sendiri**, atau **hapus foto**.
+
+Tanpa API key apa pun, aplikasi tetap jalan di **mode demo**: AI memakai contoh konten, foto diambil dari library foto brand (atau gambar abstrak), dan data disimpan di `.data/`.
 
 ## Menjalankan lokal
 
@@ -33,11 +43,15 @@ Buka http://localhost:3000. Di mode dev, `ADMIN_PASSWORD` boleh kosong.
 
 1. **Supabase.** Buat project, lalu jalankan `supabase/migrations/0001_social_autopilot.sql` di SQL Editor. Isi `SUPABASE_URL` dan `SUPABASE_SERVICE_ROLE_KEY` (Project Settings → API). Service role key hanya dipakai di server; tabel memakai RLS tanpa policy, jadi tidak bisa diakses publik.
 2. **Claude.** Buat API key di https://platform.claude.com, lalu isi `ANTHROPIC_API_KEY`.
-3. **Ayrshare** (auto-posting):
+3. **Gambar** (minimal satu agar foto otomatis):
+   - **AI image:** isi `GEMINI_API_KEY` (Google AI Studio) atau `OPENAI_API_KEY`. AI image paling bagus untuk visual custom yang on-brand.
+   - **Stok foto:** isi `PEXELS_API_KEY` (gratis di https://www.pexels.com/api/). Dipakai sebagai cadangan atau bila mode "stok" dipilih.
+   - **Foto brand:** upload di Brand Kit → Library foto brand. Foto asli selalu diprioritaskan bila relevan.
+4. **Ayrshare** (auto-posting):
    - Daftar di https://www.ayrshare.com. Pilih paket yang mendukung Instagram + TikTok.
    - Di dashboard Ayrshare, **Social Accounts** → connect **Instagram** (harus akun Business/Creator yang terhubung ke Facebook Page) dan **TikTok**.
    - Salin API key ke `AYRSHARE_API_KEY`.
-4. **Deploy ke Vercel.** Import repo ini, isi semua env dari `.env.example`, lalu deploy. Set `APP_URL` ke domain dashboard.
+5. **Deploy ke Vercel.** Import repo ini, isi semua env dari `.env.example`, lalu deploy. Set `APP_URL` ke domain dashboard.
 
 ## Catatan
 

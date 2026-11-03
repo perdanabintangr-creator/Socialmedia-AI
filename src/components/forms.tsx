@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import type { ActionState } from "@/app/actions";
 
@@ -69,5 +69,18 @@ export function Submit({
       {pending && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />}
       {pending ? pendingText ?? "Memproses…" : children}
     </button>
+  );
+}
+
+/** Panel buka-tutup yang tetap terbuka setelah server action me-refresh halaman. */
+export function Disclosure({ title, children }: { title: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2 text-left font-semibold">
+        <span className={`inline-block transition ${open ? "rotate-90" : ""}`}>▸</span> {title}
+      </button>
+      <div className={open ? "" : "hidden"}>{children}</div>
+    </div>
   );
 }

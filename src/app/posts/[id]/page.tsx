@@ -2,15 +2,34 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { config } from "@/lib/config";
-import { ActionForm, Submit } from "@/components/forms";
+import { ActionForm, Disclosure, Submit } from "@/components/forms";
 import { Card, Field, Pill, StatusBadge, formatWIB, inputCls } from "@/components/ui";
-import { approvePostAction, checkStatusAction, rejectPostAction, revisePostAction, updatePostAction } from "../../actions";
-import type { Post } from "@/lib/types";
+import { approvePostAction, checkStatusAction, rejectPostAction, removeSlideImageAction, replaceImageAction, revisePostAction, updatePostAction, uploadSlideImageAction } from "../../actions";
+import { ICON_NAMES } from "@/lib/icons";
+import { PHOTO_LAYOUTS, SLIDE_LAYOUTS, type Post, type SlideLayout } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
+const LAYOUT_LABEL: Record<SlideLayout, string> = {
+  cover_photo: "Cover • foto penuh",
+  cover_split: "Cover • foto + panel",
+  cover_type: "Cover • tipografi",
+  point_photo: "Poin + foto",
+  point_icon: "Poin + ikon",
+  list: "Checklist",
+  steps: "Langkah",
+  compare: "Perbandingan",
+  stat: "Angka / chart",
+  quote: "Kutipan",
+  cta: "Penutup / CTA",
+};
+
+const SOURCE_LABEL = { ai: "AI image", stock: "Stok foto", brand: "Foto brand", upload: "Upload", demo: "Demo" } as const;
+
 const PRESETS = [
+  "Visualnya kurang wow, buat lebih eye-catching",
+  "Ganti foto cover dengan yang lebih relevan",
   "Buat hook di slide pertama lebih nendang",
   "Bahasanya lebih santai",
   "Lebih singkat, kurangi teks di slide",
@@ -65,6 +84,13 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
             <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{post.caption}</p>
             <p className="mt-3 text-sm text-indigo-600">{post.hashtags.map((h) => `#${h}`).join(" ")}</p>
           </Card>
+          {post.design_notes && (
+            <Card className="bg-indigo-50/60 ring-indigo-200">
+              <h2 className="text-sm font-semibold text-indigo-900">🎨 Catatan AI art director</h2>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-indigo-900/80">{post.design_notes}</p>
+            </Card>
+          )}
+          {editable && <ImagePanel post={post} />}
           {editable && <EditForm post={post} />}
         </div>
 
@@ -146,16 +172,15 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
 function EditForm({ post }: { post: Post }) {
   return (
     <Card>
-      <details>
-        <summary className="cursor-pointer font-semibold">Edit manual (teks, layout, template)</summary>
+      <Disclosure title="Edit manual (teks, layout, ikon, template)">
         <ActionForm action={updatePostAction.bind(null, post.id)} className="mt-4 space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Judul internal"><input name="title" defaultValue={post.title} className={inputCls} /></Field>
             <Field label="Template desain">
               <select name="template" defaultValue={post.template} className={inputCls}>
-                <option value="mix">Mix (cover bold, isi clean)</option>
-                <option value="bold">Bold (semua warna utama)</option>
-                <option value="clean">Clean (latar terang)</option>
+                <option value="mix">Editorial (cover gelap, isi terang)</option>
+                <option value="bold">Bold (warna penuh + bentuk dekoratif)</option>
+                <option value="clean">Clean (minimalis terang)</option>
               </select>
             </Field>
           </div>
@@ -171,24 +196,31 @@ function EditForm({ post }: { post: Post }) {
                 <legend className="text-sm font-semibold">Slide {i + 1}</legend>
                 <label className="flex items-center gap-1 text-xs text-red-600"><input type="checkbox" name={`slide_${i}_delete`} /> hapus</label>
               </div>
-              <div className="grid gap-2 sm:grid-cols-[140px_1fr_120px]">
+              <div className="grid gap-2 sm:grid-cols-3">
                 <select name={`slide_${i}_layout`} defaultValue={s.layout} className={inputCls}>
-                  <option value="cover">Cover</option>
-                  <option value="point">Poin</option>
-                  <option value="stat">Angka</option>
-                  <option value="quote">Kutipan</option>
-                  <option value="cta">CTA</option>
+                  {SLIDE_LAYOUTS.map((l) => <option key={l} value={l}>{LAYOUT_LABEL[l]}</option>)}
                 </select>
-                <input name={`slide_${i}_kicker`} defaultValue={s.kicker} placeholder="Label kecil" className={inputCls} />
+                <input name={`slide_${i}_kicker`} defaultValue={s.kicker} placeholder="Label / sticker" className={inputCls} />
+                <select name={`slide_${i}_icon`} defaultValue={s.icon || "Lightbulb"} className={inputCls}>
+                  {ICON_NAMES.map((n) => <option key={n} value={n}>Ikon: {n}</option>)}
+                </select>
+              </div>
+              <input name={`slide_${i}_headline`} defaultValue={s.headline} placeholder="Judul (pakai *kata* untuk highlight)" className={`${inputCls} mt-2 font-semibold`} />
+              <textarea name={`slide_${i}_body`} defaultValue={s.body} rows={2} placeholder="Teks pendukung" className={`${inputCls} mt-2`} />
+              <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_1fr_120px]">
+                <input name={`slide_${i}_labelA`} defaultValue={s.labelA} placeholder="Label kolom kiri (perbandingan)" className={inputCls} />
+                <input name={`slide_${i}_labelB`} defaultValue={s.labelB} placeholder="Label kolom kanan" className={inputCls} />
                 <input name={`slide_${i}_stat`} defaultValue={s.stat} placeholder="Angka" className={inputCls} />
               </div>
-              <input name={`slide_${i}_headline`} defaultValue={s.headline} placeholder="Judul" className={`${inputCls} mt-2 font-semibold`} />
-              <textarea name={`slide_${i}_body`} defaultValue={s.body} rows={2} placeholder="Teks pendukung" className={`${inputCls} mt-2`} />
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <textarea name={`slide_${i}_items`} defaultValue={s.items.join("\n")} rows={3} placeholder="Item list / langkah / kolom kiri (1 per baris)" className={inputCls} />
+                <textarea name={`slide_${i}_itemsB`} defaultValue={s.itemsB.join("\n")} rows={3} placeholder="Kolom kanan perbandingan (1 per baris)" className={inputCls} />
+              </div>
             </fieldset>
           ))}
           <Submit pendingText="Menyimpan…">Simpan perubahan</Submit>
         </ActionForm>
-      </details>
+      </Disclosure>
     </Card>
   );
 }
@@ -213,5 +245,54 @@ function SendApproved({ post }: { post: Post }) {
         {future ? "Jadwalkan ke Instagram & TikTok" : "Kirim ke Instagram & TikTok sekarang"}
       </Submit>
     </ActionForm>
+  );
+}
+
+function ImagePanel({ post }: { post: Post }) {
+  return (
+    <Card>
+      <h2 className="font-semibold">Gambar per slide</h2>
+      <p className="mt-1 text-xs text-slate-500">Layout bertanda 📷 memakai foto. Tanpa foto, slide otomatis memakai versi grafis.</p>
+      <div className="mt-3 divide-y divide-slate-100">
+        {post.slides.map((s, i) => {
+          const usesPhoto = PHOTO_LAYOUTS.includes(s.layout) || ["cover_type", "quote", "cta"].includes(s.layout);
+          return (
+            <div key={i} className="flex gap-3 py-3">
+              {s.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={s.image.url} alt="" className="h-20 w-16 shrink-0 rounded-md object-cover ring-1 ring-slate-200" />
+              ) : (
+                <div className="grid h-20 w-16 shrink-0 place-items-center rounded-md bg-slate-100 text-xs text-slate-400">{usesPhoto ? "tanpa foto" : "grafis"}</div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium">
+                  {i + 1}. {LAYOUT_LABEL[s.layout]} {PHOTO_LAYOUTS.includes(s.layout) ? "📷" : ""}
+                </div>
+                <div className="truncate text-xs text-slate-500">
+                  {s.image ? `${SOURCE_LABEL[s.image.source]}${s.image.credit ? ` • ${s.image.credit}` : ""}${s.image.query ? ` • “${s.image.query}”` : ""}` : usesPhoto ? "Belum ada foto — slide memakai versi grafis" : "Slide grafis (ikon/teks), tidak butuh foto"}
+                </div>
+                {usesPhoto && (
+                  <div className="mt-2 flex flex-wrap items-start gap-2">
+                    <ActionForm action={replaceImageAction.bind(null, post.id, i)} className="flex items-center gap-1">
+                      <input name="query" placeholder="kata kunci (opsional)" className={`${inputCls} w-44 py-1.5 text-xs`} />
+                      <Submit variant="ghost" pendingText="Mencari…" className="whitespace-nowrap px-2.5 py-1.5 text-xs">Ganti foto</Submit>
+                    </ActionForm>
+                    <ActionForm action={uploadSlideImageAction.bind(null, post.id, i)} className="flex items-center gap-1">
+                      <input type="file" name="file" accept="image/*" className="w-48 text-xs file:mr-2 file:rounded-md file:border-0 file:bg-slate-100 file:px-2 file:py-1.5 file:text-xs" />
+                      <Submit variant="ghost" pendingText="…" className="px-2.5 py-1.5 text-xs">Upload</Submit>
+                    </ActionForm>
+                    {s.image && (
+                      <ActionForm action={removeSlideImageAction.bind(null, post.id, i)}>
+                        <Submit variant="danger" pendingText="…" className="px-2.5 py-1.5 text-xs">Hapus</Submit>
+                      </ActionForm>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
   );
 }

@@ -3,10 +3,9 @@ import { promises as fs } from "fs";
 import path from "path";
 import { ImageResponse } from "next/og";
 import sharp from "sharp";
-import { CANVAS, SlideView, type LogoImg } from "./templates";
-import { LOCAL_MEDIA } from "./db";
-import { config } from "./config";
-import type { Brand, FontKey, Post } from "./types";
+import { CANVAS, IMAGE_BOX, SlideView, effectiveLayout, type Img, type LogoImg } from "./templates";
+import { readMedia } from "./media";
+import type { Brand, FontKey, Post, Slide } from "./types";
 
 const FONT_DIR = path.join(process.cwd(), "assets", "fonts");
 const fontCache = new Map<string, Buffer>();
@@ -30,46 +29,63 @@ async function loadFonts(brand: Brand) {
   ];
 }
 
-const logoCache = new Map<string, LogoImg | null>();
-
-async function loadLogo(url: string | null): Promise<LogoImg | null> {
-  if (!url) return null;
-  if (logoCache.has(url)) return logoCache.get(url)!;
-  try {
-    let buf: Buffer;
-    const localPrefix = `${config.appUrl}/api/media/`;
-    if (url.startsWith(localPrefix)) {
-      buf = await fs.readFile(path.join(LOCAL_MEDIA, url.slice(localPrefix.length)));
-    } else {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`logo ${res.status}`);
-      buf = Buffer.from(await res.arrayBuffer());
-    }
-    // Normalisasi ke PNG (satori paling aman dengan PNG), tinggi 72px @2x.
-    const png = await sharp(buf).resize({ height: 144, withoutEnlargement: false }).png().toBuffer();
-    const meta = await sharp(png).metadata();
-    const height = 72;
-    const width = Math.round(((meta.width ?? 144) / (meta.height ?? 144)) * height);
-    const logo = { src: `data:image/png;base64,${png.toString("base64")}`, width: Math.min(width, 420), height };
-    logoCache.set(url, logo);
-    return logo;
-  } catch (e) {
-    console.error("Gagal memuat logo:", e);
-    logoCache.set(url, null);
-    return null;
+// Cache kecil di memori (logo & foto yang sudah dipotong).
+const cache = new Map<string, Promise<LogoImg | Img | null>>();
+function cached<T extends LogoImg | Img | null>(key: string, fn: () => Promise<T>): Promise<T> {
+  if (!cache.has(key)) {
+    if (cache.size > 200) cache.clear();
+    cache.set(key, fn());
   }
+  return cache.get(key) as Promise<T>;
+}
+
+function loadLogo(url: string | null): Promise<LogoImg | null> {
+  if (!url) return Promise.resolve(null);
+  return cached(`logo:${url}`, async () => {
+    try {
+      const png = await sharp(await readMedia(url)).resize({ height: 144 }).png().toBuffer();
+      const meta = await sharp(png).metadata();
+      const height = 68;
+      const width = Math.round(((meta.width ?? 144) / (meta.height ?? 144)) * height);
+      return { src: `data:image/png;base64,${png.toString("base64")}`, width: Math.min(width, 400), height };
+    } catch (e) {
+      console.error("Gagal memuat logo:", e);
+      return null;
+    }
+  });
+}
+
+/** Potong foto pas ke kotak layout (cover crop, fokus ke bagian paling menarik). */
+function loadSlideImage(slide: Slide): Promise<Img | null> {
+  const box = IMAGE_BOX[slide.layout];
+  const url = slide.image?.url;
+  if (!box || !url) return Promise.resolve(null);
+  return cached(`img:${url}:${box.w}x${box.h}`, async () => {
+    try {
+      const jpg = await sharp(await readMedia(url))
+        .rotate()
+        .resize(box.w, box.h, { fit: "cover", position: sharp.strategy.attention })
+        .jpeg({ quality: 88 })
+        .toBuffer();
+      return { src: `data:image/jpeg;base64,${jpg.toString("base64")}`, w: box.w, h: box.h };
+    } catch (e) {
+      console.error("Gagal memuat gambar slide:", e);
+      return null;
+    }
+  });
 }
 
 /** Render satu slide jadi PNG. */
 export async function renderSlidePng(brand: Brand, post: Pick<Post, "slides" | "template">, index: number) {
   const slide = post.slides[index];
   if (!slide) throw new Error("Slide tidak ditemukan");
-  const [fonts, onDark, onLight] = await Promise.all([
+  const [fonts, onDark, onLight, img] = await Promise.all([
     loadFonts(brand),
     loadLogo(brand.logoUrl),
     loadLogo(brand.logoAltUrl),
+    loadSlideImage(slide),
   ]);
-  const img = new ImageResponse(
+  const res = new ImageResponse(
     <SlideView
       brand={brand}
       slide={slide}
@@ -77,10 +93,11 @@ export async function renderSlidePng(brand: Brand, post: Pick<Post, "slides" | "
       index={index}
       total={post.slides.length}
       logos={{ onDark, onLight }}
+      img={img && effectiveLayout(slide.layout, true) === slide.layout ? img : null}
     />,
     { ...CANVAS, fonts },
   );
-  return Buffer.from(await img.arrayBuffer());
+  return Buffer.from(await res.arrayBuffer());
 }
 
 /** Render semua slide jadi JPEG (Instagram & TikTok photo hanya menerima JPEG/WebP). */
