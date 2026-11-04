@@ -10,7 +10,7 @@ export type FontKey =
 
 export interface Brand {
   name: string;
-  handle: string; // @marqthink
+  handle: string; // @brandkamu
   website: string;
   colors: {
     primary: string;
@@ -137,8 +137,8 @@ export interface Post {
 }
 
 export const DEFAULT_BRAND: Brand = {
-  name: "Marqthink",
-  handle: "@marqthink",
+  name: "Brand Kamu",
+  handle: "@brandkamu",
   website: "",
   colors: {
     primary: "#1B1F3B",

@@ -67,8 +67,8 @@ export default async function BrandPage({ searchParams }: { searchParams: Promis
           <h2 className="font-semibold">Identitas</h2>
           <div className="grid gap-4 md:grid-cols-3">
             <Field label="Nama brand"><input name="name" defaultValue={brand.name} className={inputCls} /></Field>
-            <Field label="Handle sosmed"><input name="handle" defaultValue={brand.handle} className={inputCls} placeholder="@marqthink" /></Field>
-            <Field label="Website"><input name="website" defaultValue={brand.website} className={inputCls} placeholder="marqthink.com" /></Field>
+            <Field label="Handle sosmed"><input name="handle" defaultValue={brand.handle} className={inputCls} placeholder="@brandkamu" /></Field>
+            <Field label="Website"><input name="website" defaultValue={brand.website} className={inputCls} placeholder="brandkamu.com" /></Field>
           </div>
           <Field label="Tentang brand / produk" hint="Apa yang dijual, keunggulan, fitur utama. Makin detail, makin akurat kontennya.">
             <textarea name="description" rows={4} defaultValue={brand.description} className={inputCls} />

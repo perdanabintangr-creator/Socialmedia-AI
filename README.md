@@ -1,6 +1,6 @@
-# Marqthink Social Autopilot
+# Social Media AI
 
-AI yang menjalankan sosmed Marqthink end-to-end: **brief → ide → konten (copy + desain) → posting otomatis ke Instagram & TikTok**. Owner cukup menekan **ACC** di 2 titik:
+Tim agen AI yang menjalankan sosial media brand end-to-end: **brief → ide → konten (copy + desain) → posting otomatis ke Instagram & TikTok**. Owner cukup menekan **ACC** di 2 titik:
 
 1. **ACC ide.** AI mengusulkan ide dari brief mingguan. Setelah di-ACC, AI langsung menulis caption dan menyusun slide.
 2. **ACC konten.** Review desain dan caption, minta revisi ke AI (atau edit manual), lalu ACC. Desain final dirender jadi JPEG 1080×1350 dan dikirim ke Instagram & TikTok, langsung atau terjadwal.

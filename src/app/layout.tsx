@@ -5,7 +5,7 @@ import { config } from "@/lib/config";
 import { logout } from "./actions";
 
 export const metadata: Metadata = {
-  title: "Marqthink Social Autopilot",
+  title: "Social Media AI",
   description: "Brief → ide → konten → posting otomatis, tinggal ACC.",
 };
 
@@ -25,7 +25,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
             <Link href="/" className="flex items-center gap-2 font-bold text-slate-900">
               <span className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600 text-sm text-white">M</span>
-              Social Autopilot
+              Social Media AI
             </Link>
             <nav className="flex flex-1 gap-1 overflow-x-auto text-sm">
               {NAV.map((n) => (

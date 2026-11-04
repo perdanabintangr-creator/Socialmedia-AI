@@ -1,4 +1,4 @@
--- Marqthink Social Autopilot — skema database
+-- Social Media AI — skema database
 -- Semua akses lewat server (service role). RLS aktif tanpa policy = anon/public tidak bisa baca/tulis.
 
 create table if not exists public.brand (
