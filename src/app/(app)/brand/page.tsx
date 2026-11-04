@@ -3,7 +3,7 @@ import Link from "next/link";
 import { config } from "@/lib/config";
 import { ActionForm, Submit } from "@/components/forms";
 import { Card, Field, PageTitle, inputCls } from "@/components/ui";
-import { analyzeExamplesAction, saveBrandAction } from "../actions";
+import { analyzeExamplesAction, saveBrandAction } from "@/app/actions";
 import type { Brand, FontKey } from "@/lib/types";
 
 export const dynamic = "force-dynamic";

@@ -32,7 +32,7 @@ export default async function PostsPage({ searchParams }: { searchParams: Promis
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {posts.map((p) => (
           <Link key={p.id} href={`/posts/${p.id}`}>
-            <Card className="h-full p-3 transition hover:ring-indigo-300">
+            <Card className="h-full p-3 transition hover:ring-brand-300">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={p.media_urls[0] ?? `/api/render/${p.id}/0?v=${encodeURIComponent(p.updated_at)}`} alt="" className="aspect-[4/5] w-full rounded-lg bg-slate-100 object-cover" loading="lazy" />
               <div className="mt-3 flex items-center justify-between gap-2">

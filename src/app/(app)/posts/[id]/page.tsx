@@ -1,10 +1,11 @@
+import { PhonePreview } from "@/components/phone-preview";
 import { publishTarget } from "@/lib/pipeline";
 import { requireWorkspace } from "@/lib/session";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActionForm, Disclosure, Submit } from "@/components/forms";
 import { Card, Field, Pill, StatusBadge, formatWIB, inputCls } from "@/components/ui";
-import { approvePostAction, checkStatusAction, rejectPostAction, removeSlideImageAction, replaceImageAction, revisePostAction, updatePostAction, uploadSlideImageAction } from "../../actions";
+import { approvePostAction, checkStatusAction, rejectPostAction, removeSlideImageAction, replaceImageAction, revisePostAction, updatePostAction, uploadSlideImageAction } from "@/app/actions";
 import { ICON_NAMES } from "@/lib/icons";
 import { PHOTO_LAYOUTS, SLIDE_LAYOUTS, type Post, type SlideLayout } from "@/lib/types";
 
@@ -70,30 +71,19 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
-        {/* Preview */}
-        <div className="space-y-4">
-          <div className="flex snap-x gap-3 overflow-x-auto pb-2">
-            {images.map((src, i) => (
-              <a key={src} href={src} target="_blank" className="w-[260px] shrink-0 snap-start sm:w-[300px]">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={src} alt={`Slide ${i + 1}`} className="aspect-[4/5] w-full rounded-xl bg-slate-200 object-cover shadow-sm ring-1 ring-slate-200" />
-              </a>
-            ))}
-          </div>
-          <Card>
-            <h2 className="text-sm font-semibold text-slate-500">Caption</h2>
-            <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{post.caption}</p>
-            <p className="mt-3 text-sm text-indigo-600">{post.hashtags.map((h) => `#${h}`).join(" ")}</p>
-          </Card>
-          {post.design_notes && (
-            <Card className="bg-indigo-50/60 ring-indigo-200">
-              <h2 className="text-sm font-semibold text-indigo-900">🎨 Catatan AI art director</h2>
-              <p className="mt-1 whitespace-pre-wrap text-sm text-indigo-900/80">{post.design_notes}</p>
-            </Card>
-          )}
-          {editable && <ImagePanel post={post} />}
-          {editable && <EditForm post={post} />}
+      <div className="grid items-start gap-8 lg:grid-cols-[360px_minmax(0,1fr)]">
+        {/* Preview di HP */}
+        <div className="lg:sticky lg:top-8">
+          <PhonePreview
+            images={images}
+            brandName={brand.name}
+            handle={brand.handle}
+            logoUrl={brand.logoUrl}
+            primary={brand.colors.primary}
+            caption={post.caption}
+            hashtags={post.hashtags}
+          />
+          <p className="mt-4 text-center text-xs text-slate-400">Geser gambar untuk melihat semua slide.</p>
         </div>
 
         {/* Panel aksi */}
@@ -121,7 +111,12 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               <Card>
                 <h2 className="font-semibold">Minta revisi ke AI</h2>
                 <ActionForm action={revisePostAction.bind(null, post.id)} className="mt-3 space-y-3" resetOnOk>
-                  <textarea name="instruction" rows={3} className={inputCls} placeholder="Contoh: ganti contoh di slide 3 dengan kasus UMKM kuliner" />
+                  <select name="slide" defaultValue="" aria-label="Bagian yang direvisi" className={inputCls}>
+                    <option value="">Semua slide & caption</option>
+                    {post.slides.map((_, i) => <option key={i} value={String(i + 1)}>Slide {i + 1} saja</option>)}
+                    <option value="caption">Caption saja</option>
+                  </select>
+                  <textarea name="instruction" rows={3} className={inputCls} placeholder="Contoh: hook-nya lebih santai, ganti foto dengan suasana kafe" />
                   <Submit className="w-full" pendingText="AI sedang merevisi…">↻ Revisi</Submit>
                   <div className="flex flex-wrap gap-1.5">
                     {PRESETS.map((p) => (
@@ -148,7 +143,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                 <div className="mt-4">
                   <h3 className="text-sm font-medium">Desain final (JPEG)</h3>
                   <ul className="mt-1 space-y-1 text-sm">
-                    {post.media_urls.map((u, i) => <li key={u}><a href={u} target="_blank" download className="text-indigo-600 hover:underline">Unduh slide {i + 1}</a></li>)}
+                    {post.media_urls.map((u, i) => <li key={u}><a href={u} target="_blank" download className="text-brand-600 hover:underline">Unduh slide {i + 1}</a></li>)}
                   </ul>
                 </div>
               )}
@@ -165,6 +160,14 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               )}
             </Card>
           )}
+          {post.design_notes && (
+            <Card className="bg-brand-50/60 ring-brand-100">
+              <h2 className="text-sm font-bold text-brand-900">Catatan dari Rupa (art director)</h2>
+              <p className="mt-1 text-sm whitespace-pre-wrap text-brand-900/80">{post.design_notes}</p>
+            </Card>
+          )}
+          {editable && <ImagePanel post={post} />}
+          {editable && <EditForm post={post} />}
         </div>
       </div>
     </div>

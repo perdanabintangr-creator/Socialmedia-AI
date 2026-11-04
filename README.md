@@ -1,9 +1,22 @@
-# Social Media AI
+# SosmedAutopilot
 
 Tim agen AI yang menjalankan sosial media brand end-to-end: **brief → ide → konten (copy + desain) → posting otomatis ke Instagram & TikTok**. Owner cukup menekan **ACC** di 2 titik:
 
 1. **ACC ide.** AI mengusulkan ide dari brief mingguan. Setelah di-ACC, AI langsung menulis caption dan menyusun slide.
 2. **ACC konten.** Review desain dan caption, minta revisi ke AI (atau edit manual), lalu ACC. Desain final dirender jadi JPEG 1080×1350 dan dikirim ke Instagram & TikTok, langsung atau terjadwal.
+
+## Halaman untuk customer
+
+| Halaman | Isi |
+|---|---|
+| `/` | Landing page publik: hero, cara kerja, tim AI, contoh hasil (render asli), fitur, harga, FAQ |
+| `/daftar`, `/login`, `/lupa-password` | Akun customer. Pendaftar langsung aktif dan mendapat workspace sendiri |
+| `/onboarding` | 6 langkah: bisnis → audiens & tujuan → gaya bahasa → logo (warna diambil otomatis) & gaya desain → sosmed → ringkasan |
+| `/studio` | Chat dengan tim agen; kartu konten bisa dibuka **di mockup HP** |
+| `/posts/[id]` | Review konten di **mockup Instagram/TikTok** (bisa digeser), ACC & jadwal, revisi per slide atau caption saja |
+| `/posts`, `/ideas`, `/dashboard`, `/brand`, `/pengguna` | Konten, ide, ringkasan, Brand Kit, akun |
+
+Harga di landing page masih **contoh**; ubah di `src/lib/pricing.ts`. Gambar contoh di landing (`public/showcase/`) adalah hasil render asli mesin desain dengan brand fiktif.
 
 ## Studio: ngobrol dengan tim agen AI
 

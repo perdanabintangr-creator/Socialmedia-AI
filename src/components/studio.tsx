@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { Check, Clock, ExternalLink, Loader2, Palette, PenLine, Send, Sparkles, X } from "lucide-react";
+import { Check, Clock, ExternalLink, Loader2, Palette, PenLine, Send, Smartphone, Sparkles, X } from "lucide-react";
+import { PhonePreview } from "./phone-preview";
 import { AGENTS, AGENT_LIST, type AgentId } from "@/lib/agents";
 import type { ChatView, IdeaCard, PostCard, StudioState } from "@/lib/studio-view";
 import { chatApproveIdeaAction, chatApprovePostAction, chatRejectIdeaAction, sendChatAction, type StudioResult } from "@/app/studio-actions";
@@ -101,9 +102,10 @@ export function Studio({ initial }: { initial: StudioState }) {
   };
 
   const working = state.job ? AGENTS[state.job.agent] : null;
+  const [preview, setPreview] = useState<PostCard | null>(null);
 
   return (
-    <div className="grid h-[calc(100dvh-8.5rem)] min-h-[520px] gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+    <div className="grid h-[calc(100dvh-12.5rem)] min-h-[480px] lg:h-[calc(100dvh-5rem)] gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
       {/* Tim */}
       <aside className="hidden flex-col gap-3 lg:flex">
         <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
@@ -158,7 +160,7 @@ export function Studio({ initial }: { initial: StudioState }) {
 
         <div ref={listRef} className="flex-1 space-y-4 overflow-y-auto bg-slate-50/60 px-3 py-4 sm:px-5">
           {state.messages.map((m) => (
-            <Message key={m.id} m={m} postingTime={state.postingTime} disabled={sending || Boolean(state.job)} run={run} onRevise={startRevise} />
+            <Message key={m.id} m={m} postingTime={state.postingTime} disabled={sending || Boolean(state.job)} run={run} onRevise={startRevise} onPreview={setPreview} />
           ))}
           {(working || sending) && (
             <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -202,27 +204,46 @@ export function Studio({ initial }: { initial: StudioState }) {
               rows={1}
               placeholder="Kasih arahan ke tim…"
               aria-label="Pesan untuk tim"
-              className="max-h-40 min-h-[44px] flex-1 resize-none rounded-xl border-0 bg-slate-100 px-4 py-3 text-sm focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              className="max-h-40 min-h-[44px] flex-1 resize-none rounded-xl border-0 bg-slate-100 px-4 py-3 text-sm focus:bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none"
             />
-            <button type="submit" disabled={!text.trim() || sending} aria-label="Kirim" className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-40">
+            <button type="submit" disabled={!text.trim() || sending} aria-label="Kirim" className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-600 text-white hover:bg-brand-500 disabled:opacity-40">
               {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
             </button>
           </form>
         </div>
       </section>
+
+      {preview && (
+        <div role="dialog" aria-modal="true" aria-label="Preview di HP" className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-ink/60 p-4 backdrop-blur-sm" onClick={() => setPreview(null)}>
+          <div className="relative w-full max-w-sm animate-fade-up py-6" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setPreview(null)} aria-label="Tutup" className="absolute -top-1 right-0 grid h-9 w-9 place-items-center rounded-full bg-white text-ink shadow-soft">
+              <X size={18} />
+            </button>
+            <PhonePreview
+              images={preview.media_urls.length ? preview.media_urls : Array.from({ length: preview.slides }, (_, i) => `/api/render/${preview.id}/${i}?v=${encodeURIComponent(preview.version)}`)}
+              brandName={state.brand.name}
+              handle={state.brand.handle}
+              logoUrl={state.brand.logoUrl}
+              primary={state.brand.primary}
+              caption={preview.caption}
+              hashtags={preview.hashtags}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 type Run = (fn: () => Promise<StudioResult>) => void;
 
-function Message({ m, postingTime, disabled, run, onRevise }: { m: ChatView; postingTime: string; disabled: boolean; run: Run; onRevise: (title: string) => void }) {
+function Message({ m, postingTime, disabled, run, onRevise, onPreview }: { m: ChatView; postingTime: string; disabled: boolean; run: Run; onRevise: (title: string) => void; onPreview: (p: PostCard) => void }) {
   if (m.role === "user") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-indigo-600 px-4 py-2.5 text-sm whitespace-pre-wrap text-white shadow-sm">
+        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-brand-600 px-4 py-2.5 text-sm whitespace-pre-wrap text-white shadow-sm">
           {m.text}
-          <div className="mt-1 text-right text-[10px] text-indigo-200">{fmtTime(m.created_at)}</div>
+          <div className="mt-1 text-right text-[10px] text-brand-200">{fmtTime(m.created_at)}</div>
         </div>
       </div>
     );
@@ -239,7 +260,7 @@ function Message({ m, postingTime, disabled, run, onRevise }: { m: ChatView; pos
           {m.text}
         </div>
         {m.ideas && m.ideas.length > 0 && <Ideas ideas={m.ideas} disabled={disabled} run={run} />}
-        {m.post && <PostPreview post={m.post} postingTime={postingTime} disabled={disabled} run={run} onRevise={onRevise} />}
+        {m.post && <PostPreview post={m.post} postingTime={postingTime} disabled={disabled} run={run} onRevise={onRevise} onPreview={onPreview} />}
       </div>
     </div>
   );
@@ -251,7 +272,7 @@ function Ideas({ ideas, disabled, run }: { ideas: IdeaCard[]; disabled: boolean;
       {ideas.map((i) => (
         <div key={i.id} className={`rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-200 ${i.status === "rejected" ? "opacity-50" : ""}`}>
           <div className="flex flex-wrap gap-1.5 text-[11px]">
-            <span className="rounded-full bg-indigo-50 px-2 py-0.5 font-medium text-indigo-700">{i.format === "carousel" ? "Carousel" : "Single post"}</span>
+            <span className="rounded-full bg-brand-50 px-2 py-0.5 font-medium text-brand-700">{i.format === "carousel" ? "Carousel" : "Single post"}</span>
             {i.pillar && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">{i.pillar}</span>}
           </div>
           <div className={`mt-2 text-sm font-semibold leading-snug ${i.status === "rejected" ? "line-through" : ""}`}>{i.title}</div>
@@ -288,13 +309,13 @@ function Ideas({ ideas, disabled, run }: { ideas: IdeaCard[]; disabled: boolean;
 const STATUS_LABEL: Record<PostCard["status"], [string, string]> = {
   review: ["Menunggu ACC", "bg-amber-100 text-amber-800"],
   approved: ["ACC • siap diposting", "bg-sky-100 text-sky-800"],
-  scheduled: ["Terjadwal", "bg-indigo-100 text-indigo-800"],
+  scheduled: ["Terjadwal", "bg-brand-100 text-brand-800"],
   published: ["Terbit", "bg-emerald-100 text-emerald-800"],
   failed: ["Gagal", "bg-red-100 text-red-700"],
   rejected: ["Ditolak", "bg-slate-200 text-slate-600"],
 };
 
-function PostPreview({ post, postingTime, disabled, run, onRevise }: { post: PostCard; postingTime: string; disabled: boolean; run: Run; onRevise: (title: string) => void }) {
+function PostPreview({ post, postingTime, disabled, run, onRevise, onPreview }: { post: PostCard; postingTime: string; disabled: boolean; run: Run; onRevise: (title: string) => void; onPreview: (p: PostCard) => void }) {
   const [when, setWhen] = useState(() => defaultSchedule(postingTime));
   const v = encodeURIComponent(post.version);
   const images = post.media_urls.length ? post.media_urls : Array.from({ length: post.slides }, (_, i) => `/api/render/${post.id}/${i}?v=${v}`);
@@ -335,9 +356,14 @@ function PostPreview({ post, postingTime, disabled, run, onRevise }: { post: Pos
             </button>
           </div>
         )}
-        <Link href={`/posts/${post.id}`} className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:underline">
-          Detail & edit manual <ExternalLink size={12} />
-        </Link>
+        <div className="flex flex-wrap items-center gap-4">
+          <button onClick={() => onPreview(post)} className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600 hover:underline">
+            <Smartphone size={13} /> Lihat di HP
+          </button>
+          <Link href={`/posts/${post.id}`} className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-ink hover:underline">
+            Detail & edit <ExternalLink size={12} />
+          </Link>
+        </div>
       </div>
     </div>
   );

@@ -2,7 +2,7 @@ import { requireWorkspace } from "@/lib/session";
 import Link from "next/link";
 import { ActionForm, Submit } from "@/components/forms";
 import { Card, Field, PageTitle, Pill, inputCls } from "@/components/ui";
-import { approveIdeaAction, generateIdeasAction, rejectIdeaAction } from "../actions";
+import { approveIdeaAction, generateIdeasAction, rejectIdeaAction } from "@/app/actions";
 import type { Idea } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -49,7 +49,7 @@ export default async function IdeasPage() {
                 <li key={i.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
                   <span className={`truncate ${i.status === "rejected" ? "text-slate-400 line-through" : ""}`}>{i.title}</span>
                   {i.post_id ? (
-                    <Link href={`/posts/${i.post_id}`} className="shrink-0 font-medium text-indigo-600">Lihat konten</Link>
+                    <Link href={`/posts/${i.post_id}`} className="shrink-0 font-medium text-brand-600">Lihat konten</Link>
                   ) : (
                     <span className="shrink-0 text-xs text-slate-400">{i.status === "rejected" ? "Ditolak" : "ACC"}</span>
                   )}

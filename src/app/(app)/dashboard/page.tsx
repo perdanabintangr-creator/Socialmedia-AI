@@ -32,14 +32,14 @@ export default async function Dashboard() {
   const steps = [
     { n: pendingIdeas.length, label: "Ide menunggu ACC", href: "/ideas", cls: "text-amber-600" },
     { n: review.length, label: "Konten menunggu ACC", href: "/posts?status=review", cls: "text-amber-600" },
-    { n: upcoming.length, label: "Siap / terjadwal", href: "/posts?status=scheduled", cls: "text-indigo-600" },
+    { n: upcoming.length, label: "Siap / terjadwal", href: "/posts?status=scheduled", cls: "text-brand-600" },
     { n: published.length, label: "Sudah terbit", href: "/posts?status=published", cls: "text-emerald-600" },
   ];
 
   return (
     <div className="space-y-6">
       <PageTitle title={`Halo, tim ${brand.name} 👋`} subtitle="AI menyiapkan ide, menulis, mendesain, dan memposting. Tugas kamu: ACC.">
-        <Link href="/" className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
+        <Link href="/studio" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500">
           Buka Studio (chat tim)
         </Link>
       </PageTitle>
@@ -47,7 +47,7 @@ export default async function Dashboard() {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {steps.map((s, i) => (
           <Link key={s.label} href={s.href}>
-            <Card className="h-full transition hover:ring-indigo-300">
+            <Card className="h-full transition hover:ring-brand-300">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Langkah {i + 1}</div>
               <div className={`mt-1 text-3xl font-bold ${s.cls}`}>{s.n}</div>
               <div className="text-sm text-slate-600">{s.label}</div>
@@ -66,7 +66,7 @@ export default async function Dashboard() {
                   {s.done ? "✓" : ""}
                 </span>
                 <span>
-                  {s.href && !s.done ? <Link href={s.href} className="font-medium text-indigo-600 hover:underline">{s.label}</Link> : <span className="font-medium">{s.label}</span>}
+                  {s.href && !s.done ? <Link href={s.href} className="font-medium text-brand-600 hover:underline">{s.label}</Link> : <span className="font-medium">{s.label}</span>}
                   {s.hint && !s.done && <span className="block text-xs text-slate-500">{s.hint}</span>}
                 </span>
               </li>
@@ -82,13 +82,13 @@ export default async function Dashboard() {
             {pendingIdeas.slice(0, 5).map((i) => (
               <li key={i.id} className="flex items-center justify-between gap-3 py-2 text-sm">
                 <span className="truncate">💡 {i.title}</span>
-                <Link href="/ideas" className="shrink-0 font-medium text-indigo-600">Review</Link>
+                <Link href="/ideas" className="shrink-0 font-medium text-brand-600">Review</Link>
               </li>
             ))}
             {review.slice(0, 5).map((p) => (
               <li key={p.id} className="flex items-center justify-between gap-3 py-2 text-sm">
                 <span className="truncate">🎨 {p.title}</span>
-                <Link href={`/posts/${p.id}`} className="shrink-0 font-medium text-indigo-600">Review</Link>
+                <Link href={`/posts/${p.id}`} className="shrink-0 font-medium text-brand-600">Review</Link>
               </li>
             ))}
             {!pendingIdeas.length && !review.length && <li className="py-2 text-sm text-slate-500">Tidak ada yang menunggu. Minta ide baru untuk mulai.</li>}

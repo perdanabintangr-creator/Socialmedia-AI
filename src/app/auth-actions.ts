@@ -41,7 +41,7 @@ export async function loginAction(_: ActionState, fd: FormData): Promise<ActionS
 
   await accounts().updateUser(user.id, { last_login_at: new Date().toISOString() });
   await startSession(user.id);
-  redirect("/");
+  redirect("/studio");
 }
 
 export async function registerAction(_: ActionState, fd: FormData): Promise<ActionState> {
@@ -62,7 +62,7 @@ export async function registerAction(_: ActionState, fd: FormData): Promise<Acti
     return { error: "Server belum tersambung ke database. Coba lagi nanti." };
   }
 
-  // Pengguna pertama otomatis jadi admin aktif; berikutnya menunggu persetujuan admin.
+  // Pendaftar pertama = owner aplikasi (admin). Semua pendaftar langsung aktif.
   const first = (await accounts().countUsers()) === 0;
   try {
     // Setiap klien mendapat workspace sendiri: brand kit, chat, ide, konten, dan file terpisah.
@@ -72,20 +72,16 @@ export async function registerAction(_: ActionState, fd: FormData): Promise<Acti
       email,
       password_hash: await hashPassword(password),
       role: first ? "admin" : "member",
-      status: first ? "active" : "pending",
+      status: "active",
       workspace_id: ws.id,
     });
     await accounts().setWorkspaceOwner(ws.id, user.id);
     await db(ws.id).saveBrand({ ...DEFAULT_BRAND, name: brandName, handle: "" });
-    if (first) {
-      await startSession(user.id);
-      redirect("/");
-    }
+    await startSession(user.id);
   } catch (e) {
-    if (e && typeof e === "object" && "digest" in e) throw e; // redirect
     return { error: e instanceof Error ? e.message : "Gagal mendaftar" };
   }
-  return { ok: "Pendaftaran berhasil! Akunmu akan aktif setelah disetujui admin." };
+  redirect("/onboarding");
 }
 
 export async function logoutAction() {

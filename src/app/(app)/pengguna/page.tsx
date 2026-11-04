@@ -2,7 +2,7 @@ import { accounts } from "@/lib/db";
 import { publicUser, requireAdmin, requireUser } from "@/lib/session";
 import { ActionForm, Submit } from "@/components/forms";
 import { Card, Field, PageTitle, formatWIB, inputCls } from "@/components/ui";
-import { changePasswordAction, deleteUserAction, setPublishKeyAction, setUserRoleAction, setUserStatusAction } from "../auth-actions";
+import { changePasswordAction, deleteUserAction, setPublishKeyAction, setUserRoleAction, setUserStatusAction } from "@/app/auth-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +58,7 @@ export default async function UsersPage() {
                     <div className="text-sm font-medium">
                       {u.name} {self && <span className="text-xs text-slate-400">(kamu)</span>}
                       {u.workspace_id && wsName.get(u.workspace_id) && (
-                        <span className="ml-2 rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">{wsName.get(u.workspace_id)}</span>
+                        <span className="ml-2 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">{wsName.get(u.workspace_id)}</span>
                       )}
                     </div>
                     <div className="truncate text-xs text-slate-500">

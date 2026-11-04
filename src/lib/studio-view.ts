@@ -30,6 +30,7 @@ export interface StudioState {
   messages: ChatView[];
   job: Job | null;
   postingTime: string;
+  brand: { name: string; handle: string; logoUrl: string | null; primary: string };
 }
 
 export async function studioState(w: WorkspaceRepo, limit = 80): Promise<StudioState> {
@@ -45,6 +46,7 @@ export async function studioState(w: WorkspaceRepo, limit = 80): Promise<StudioS
   return {
     job,
     postingTime: brand.postingTime,
+    brand: { name: brand.name, handle: brand.handle, logoUrl: brand.logoUrl, primary: brand.colors.primary },
     messages: messages.map(({ refs, ...m }) => {
       const view: ChatView = { ...m };
       if (m.kind === "ideas") {

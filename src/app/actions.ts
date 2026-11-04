@@ -225,7 +225,15 @@ export async function updatePostAction(id: string, _: ActionState, fd: FormData)
 export async function revisePostAction(id: string, _: ActionState, fd: FormData): Promise<ActionState> {
   const { w } = await workspaceOrThrow();
   try {
-    const instruction = str(fd, "instruction") || str(fd, "preset");
+    const base = str(fd, "instruction") || str(fd, "preset");
+    const part = str(fd, "slide");
+    const instruction = !base
+      ? ""
+      : part === "caption"
+        ? `Revisi CAPTION saja (slide jangan diubah): ${base}`
+        : /^\d+$/.test(part)
+          ? `Revisi khusus SLIDE ${part} saja, slide lain dan caption biarkan sama: ${base}`
+          : base;
     if (!instruction) return { error: "Tulis dulu revisi yang diinginkan" };
     await revisePostWith(w, id, instruction);
     revalidatePath(`/posts/${id}`);

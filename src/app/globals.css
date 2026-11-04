@@ -1,11 +1,82 @@
 @import "tailwindcss";
 
+/* SosmedAutopilot — design tokens (clean & premium) */
+@theme {
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Aksen utama: iris violet */
+  --color-brand-50: #f4f3ff;
+  --color-brand-100: #ebe8ff;
+  --color-brand-200: #d7d2ff;
+  --color-brand-300: #b8aeff;
+  --color-brand-400: #9585ff;
+  --color-brand-500: #745ffd;
+  --color-brand-600: #5f45f0;
+  --color-brand-700: #4f35d3;
+  --color-brand-800: #412cab;
+  --color-brand-900: #352787;
+
+  /* Netral bertinta dingin */
+  --color-ink: #0f1222;
+  --color-canvas: #f8f8fb;
+  --color-line: #ebebf1;
+
+  --shadow-soft: 0 1px 2px rgb(15 18 34 / 0.04), 0 4px 16px rgb(15 18 34 / 0.05);
+  --shadow-lift: 0 2px 4px rgb(15 18 34 / 0.04), 0 16px 40px rgb(15 18 34 / 0.08);
+
+  --animate-fade-up: fade-up 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
 :root {
   color-scheme: light;
 }
 
 body {
-  background: #f5f6fa;
-  color: #0f172a;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--color-brand-200);
+}
+
+/* Fokus keyboard yang jelas di seluruh aplikasi */
+:where(a, button, input, textarea, select, summary):focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* Item grid boleh menyusut di layar kecil (cegah halaman melebar ke samping) */
+main :where(.grid) > * {
+  min-width: 0;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

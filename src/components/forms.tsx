@@ -51,9 +51,10 @@ export function ActionForm({
 }
 
 const VARIANTS = {
-  primary: "bg-indigo-600 text-white hover:bg-indigo-500",
+  primary: "bg-ink text-white shadow-[0_1px_2px_rgb(15_18_34/0.2)] hover:bg-ink/85",
+  accent: "bg-brand-600 text-white shadow-[0_1px_2px_rgb(95_69_240/0.3)] hover:bg-brand-500",
   approve: "bg-emerald-600 text-white hover:bg-emerald-500",
-  ghost: "bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50",
+  ghost: "bg-white text-slate-700 ring-1 ring-line hover:bg-slate-50",
   danger: "bg-white text-red-600 ring-1 ring-red-200 hover:bg-red-50",
 };
 
@@ -79,7 +80,7 @@ export function Submit({
       name={name}
       value={value}
       disabled={pending}
-      className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition disabled:cursor-wait disabled:opacity-60 ${VARIANTS[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 ${VARIANTS[variant]} ${className}`}
     >
       {pending && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />}
       {pending ? pendingText ?? "Memproses…" : children}

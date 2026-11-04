@@ -38,6 +38,10 @@ export interface Brand {
   imageStyle: string; // art direction untuk foto/ilustrasi
   assets: BrandAsset[]; // foto milik brand (produk, tim, kantor)
   autoReview: boolean; // AI art director mengecek hasil render
+  onboarded: boolean; // sudah menyelesaikan onboarding
+  industry: string; // bidang usaha
+  goals: string[]; // tujuan konten
+  socialRequested: boolean; // klien minta akun sosmed dihubungkan
 }
 
 export type ImageSourceMode = "auto" | "ai" | "stock" | "brand" | "none";
@@ -169,6 +173,10 @@ export const DEFAULT_BRAND: Brand = {
     "Foto lifestyle natural yang realistis, orang Indonesia bila ada manusia, cahaya hangat, komposisi bersih dengan ruang kosong, tidak ada teks di dalam gambar.",
   assets: [],
   autoReview: true,
+  onboarded: false,
+  industry: "",
+  goals: [],
+  socialRequested: false,
 };
 
 export function normalizeSlide(s: Partial<Slide> & { layout?: string }): Slide {

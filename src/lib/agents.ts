@@ -36,7 +36,7 @@ export const AGENTS: Record<AgentId, Agent> = {
     role: "Jadwal & Posting",
     does: "Render final, jadwal, dan posting ke Instagram & TikTok",
     icon: "Send",
-    gradient: "from-sky-400 to-indigo-600",
+    gradient: "from-sky-400 to-brand-600",
     ring: "ring-sky-300",
   },
 };

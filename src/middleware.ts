@@ -1,11 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, hasSessionSecret, verifySession } from "./lib/auth";
 
-const PUBLIC = ["/login", "/daftar", "/api/media/"];
+const PUBLIC = ["/login", "/daftar", "/lupa-password", "/api/media/"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  if (PUBLIC.some((p) => pathname.startsWith(p))) return NextResponse.next();
+  if (pathname === "/" || PUBLIC.some((p) => pathname.startsWith(p))) return NextResponse.next();
 
   if (!hasSessionSecret()) {
     return new NextResponse("SESSION_SECRET belum di-set. Aplikasi dikunci.", { status: 503 });
@@ -25,5 +25,6 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // File statis publik (gambar landing, font, ikon) tidak perlu login.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|showcase/|.*\\.(?:png|jpe?g|webp|svg|ico|woff2?)$).*)"],
 };
