@@ -1,5 +1,5 @@
+import { requireWorkspace } from "@/lib/session";
 import Link from "next/link";
-import { db } from "@/lib/db";
 import { Card, PageTitle, StatusBadge, formatWIB } from "@/components/ui";
 import type { PostStatus } from "@/lib/types";
 
@@ -13,9 +13,10 @@ const TABS: { key: string; label: string; match: PostStatus[] }[] = [
 ];
 
 export default async function PostsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+  const { w } = await requireWorkspace();
   const { status = "all" } = await searchParams;
   const tab = TABS.find((t) => t.key === status) ?? TABS[0];
-  const posts = (await db().listPosts()).filter((p) => tab.match.includes(p.status));
+  const posts = (await w.listPosts()).filter((p) => tab.match.includes(p.status));
 
   return (
     <div>

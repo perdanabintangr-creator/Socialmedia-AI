@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { workspaceOrThrow } from "@/lib/session";
 import { renderSlidePng } from "@/lib/render";
 import { demoImageDataUrl } from "@/lib/images";
 import { normalizeSlide, type Slide, type TemplateKey } from "@/lib/types";
@@ -8,7 +8,12 @@ export const runtime = "nodejs";
 /** Galeri contoh semua layout dengan Brand Kit yang tersimpan. */
 export async function GET(req: Request, ctx: { params: Promise<{ index: string }> }) {
   const { index } = await ctx.params;
-  const brand = await db().getBrand();
+  let brand;
+  try {
+    brand = await (await workspaceOrThrow()).w.getBrand();
+  } catch {
+    return new Response("Unauthorized", { status: 401 });
+  }
   const t = new URL(req.url).searchParams.get("template") as TemplateKey | null;
   const photo = async (n: number) => {
     const url = brand.assets.length ? brand.assets[n % brand.assets.length].url : await demoImageDataUrl(brand, n);

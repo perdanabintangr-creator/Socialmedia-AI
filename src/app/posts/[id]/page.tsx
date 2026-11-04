@@ -1,7 +1,7 @@
+import { publishTarget } from "@/lib/pipeline";
+import { requireWorkspace } from "@/lib/session";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { db } from "@/lib/db";
-import { config } from "@/lib/config";
 import { ActionForm, Disclosure, Submit } from "@/components/forms";
 import { Card, Field, Pill, StatusBadge, formatWIB, inputCls } from "@/components/ui";
 import { approvePostAction, checkStatusAction, rejectPostAction, removeSlideImageAction, replaceImageAction, revisePostAction, updatePostAction, uploadSlideImageAction } from "../../actions";
@@ -44,8 +44,10 @@ function defaultSchedule(time: string) {
 }
 
 export default async function PostPage({ params }: { params: Promise<{ id: string }> }) {
+  const { w } = await requireWorkspace();
+  const target = await publishTarget(w.id);
   const { id } = await params;
-  const [post, brand] = await Promise.all([db().getPost(id), db().getBrand()]);
+  const [post, brand] = await Promise.all([w.getPost(id), w.getBrand()]);
   if (!post) notFound();
   const editable = post.status === "review" || post.status === "failed";
   const v = encodeURIComponent(post.updated_at);
@@ -110,8 +112,8 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                     <input type="radio" name="when" value="now" /> Posting sekarang
                   </label>
                   <Submit variant="approve" className="w-full" pendingText="Merender desain & mengirim…">✓ ACC konten</Submit>
-                  {!config.hasPublisher && (
-                    <p className="text-xs text-slate-500">Auto-posting belum terhubung: desain final akan dibuat & bisa diunduh.</p>
+                  {!target.connected && (
+                    <p className="text-xs text-slate-500">{target.reason} Desain final tetap dibuat & bisa diunduh.</p>
                   )}
                 </ActionForm>
               </Card>
@@ -150,12 +152,12 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                   </ul>
                 </div>
               )}
-              {post.status === "approved" && !config.hasPublisher && (
+              {post.status === "approved" && !target.connected && (
                 <p className="mt-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
-                  Auto-posting belum terhubung. Setelah AYRSHARE_API_KEY diisi, tombol kirim otomatis muncul di sini — atau unduh desain di atas untuk diposting manual.
+                  {target.reason} Setelah terhubung, tombol kirim otomatis muncul di sini. Sementara itu, unduh desain di atas untuk diposting manual.
                 </p>
               )}
-              {post.status === "approved" && config.hasPublisher && <SendApproved post={post} />}
+              {post.status === "approved" && target.connected && <SendApproved post={post} />}
               {post.publish_ref && (
                 <ActionForm action={checkStatusAction.bind(null, post.id)} className="mt-3">
                   <Submit variant="ghost" className="w-full" pendingText="Mengecek…">Cek status di publisher</Submit>

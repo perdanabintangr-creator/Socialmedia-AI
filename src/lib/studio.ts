@@ -1,6 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { db, type NewMessage } from "./db";
+import type { NewMessage, WorkspaceRepo } from "./db";
 import { config } from "./config";
 import { brandSystemPrompt, callStructured } from "./ai";
 import { AGENTS, type AgentId } from "./agents";
@@ -23,10 +23,10 @@ import type { Idea, Job, Post, PostFormat } from "./types";
  * 3. Pekerjaan berat dijalankan di latar belakang (job); tiap agen melapor progres ke chat
  */
 
-const say = (agent: AgentId, text: string, extra: Partial<NewMessage> = {}) =>
-  db().addMessage({ role: "agent", agent, kind: "text", text, refs: [], ...extra });
+const say = (w: WorkspaceRepo, agent: AgentId, text: string, extra: Partial<NewMessage> = {}) =>
+  w.addMessage({ role: "agent", agent, kind: "text", text, refs: [], ...extra });
 
-export const userSays = (text: string) => db().addMessage({ role: "user", agent: null, kind: "text", text, refs: [] });
+export const userSays = (w: WorkspaceRepo, text: string) => w.addMessage({ role: "user", agent: null, kind: "text", text, refs: [] });
 
 const fmtWib = (iso: string | null) =>
   iso
@@ -56,8 +56,8 @@ interface Snapshot {
   published: Post[];
 }
 
-async function snapshot(): Promise<Snapshot> {
-  const [ideas, posts] = await Promise.all([db().listIdeas(), db().listPosts()]);
+async function snapshot(w: WorkspaceRepo): Promise<Snapshot> {
+  const [ideas, posts] = await Promise.all([w.listIdeas(), w.listPosts()]);
   return {
     pendingIdeas: ideas.filter((i) => i.status === "pending").slice(0, 15),
     review: posts.filter((p) => p.status === "review" || p.status === "failed").slice(0, 10),
@@ -69,10 +69,10 @@ async function snapshot(): Promise<Snapshot> {
   };
 }
 
-async function decide(text: string, snap: Snapshot): Promise<DecisionT> {
+async function decide(w: WorkspaceRepo, text: string, snap: Snapshot): Promise<DecisionT> {
   if (!config.hasAI) return demoDecide(text, snap);
-  const brand = await db().getBrand();
-  const history = (await db().listMessages(14))
+  const brand = await w.getBrand();
+  const history = (await w.listMessages(14))
     .map((m) => `${m.role === "user" ? "Owner" : AGENTS[m.agent ?? "kata"].name}: ${m.text}`)
     .join("\n");
   const state = JSON.stringify(
@@ -175,15 +175,15 @@ const FIRST_AGENT: Record<Task["type"], [AgentId, string]> = {
   approve: ["siar", "Siar sedang merender & menjadwalkan…"],
 };
 
-export async function activeJob(): Promise<Job | null> {
-  return db().getActiveJob();
+export async function activeJob(w: WorkspaceRepo): Promise<Job | null> {
+  return w.getActiveJob();
 }
 
 /** Buat job lalu kembalikan fungsi yang menjalankannya (dipanggil lewat after()). */
-export async function startTask(task: Task): Promise<() => Promise<void>> {
+export async function startTask(w: WorkspaceRepo, task: Task): Promise<() => Promise<void>> {
   const [agent, label] = FIRST_AGENT[task.type];
-  const job = await db().createJob({ agent, label });
-  return () => runTask(job, task);
+  const job = await w.createJob({ agent, label });
+  return () => runTask(w, job, task);
 }
 
 const NEXT_LABEL: Partial<Record<AgentId, [AgentId, string]>> = {
@@ -191,48 +191,48 @@ const NEXT_LABEL: Partial<Record<AgentId, [AgentId, string]>> = {
   rupa: ["rupa", "Rupa sedang mengecek hasil render…"],
 };
 
-async function runTask(job: Job, task: Task) {
+async function runTask(w: WorkspaceRepo, job: Job, task: Task) {
   let current: AgentId = job.agent;
   const progress: Progress = async (agent, text) => {
-    await say(agent, text);
+    await say(w, agent, text);
     const next = NEXT_LABEL[agent];
     if (next) {
       current = next[0];
-      await db().updateJob(job.id, { agent: next[0], label: next[1] });
+      await w.updateJob(job.id, { agent: next[0], label: next[1] });
     }
   };
   try {
     switch (task.type) {
       case "ideas": {
-        const ideas = await createIdeas(task.brief, task.count, task.format);
-        await say("kata", `Ini ${ideas.length} ide buat kamu. Pilih yang kamu suka, klik ACC, nanti aku & Rupa langsung kerjakan.`, {
+        const ideas = await createIdeas(w, task.brief, task.count, task.format);
+        await say(w, "kata", `Ini ${ideas.length} ide buat kamu. Pilih yang kamu suka, klik ACC, nanti aku & Rupa langsung kerjakan.`, {
           kind: "ideas",
           refs: ideas.map((i) => i.id),
         });
         break;
       }
       case "create_post": {
-        const [idea] = await createIdeas(task.brief, 1, task.format);
-        await say("kata", `Angle-nya: “${idea.title}” (${idea.format === "carousel" ? "carousel" : "single post"}). Hook: “${idea.hook}”. Aku tulis naskahnya sekarang.`);
-        await deliverPost(await buildPostFromIdea(idea.id, progress));
+        const [idea] = await createIdeas(w, task.brief, 1, task.format);
+        await say(w, "kata", `Angle-nya: “${idea.title}” (${idea.format === "carousel" ? "carousel" : "single post"}). Hook: “${idea.hook}”. Aku tulis naskahnya sekarang.`);
+        await deliverPost(w, await buildPostFromIdea(w, idea.id, progress));
         break;
       }
       case "build_from_idea": {
-        await deliverPost(await buildPostFromIdea(task.ideaId, progress));
+        await deliverPost(w, await buildPostFromIdea(w, task.ideaId, progress));
         break;
       }
       case "revise": {
-        await deliverPost(await revisePostWith(task.postId, task.instruction, progress), true);
+        await deliverPost(w, await revisePostWith(w, task.postId, task.instruction, progress), true);
         break;
       }
       case "approve": {
         current = "siar";
-        const res = await approveAndPublish(task.postId, task.scheduleAt);
+        const res = await approveAndPublish(w, task.postId, task.scheduleAt);
         const when = task.scheduleAt ? fmtWib(task.scheduleAt.toISOString()) : "sekarang";
-        await say(
+        await say(w, 
           "siar",
           res.ok
-            ? config.hasPublisher
+            ? res.post.status === "scheduled" || res.post.status === "published"
               ? `Beres! “${res.post.title}” ${task.scheduleAt ? `terjadwal ${when}` : "sedang diposting"} ke ${res.post.platforms.map((p) => (p === "instagram" ? "Instagram" : "TikTok")).join(" & ")}.`
               : `${res.message}${task.scheduleAt ? ` Jadwal yang kucatat: ${when}.` : ""}`
             : res.message,
@@ -241,61 +241,61 @@ async function runTask(job: Job, task: Task) {
         break;
       }
     }
-    await db().updateJob(job.id, { status: "done" });
+    await w.updateJob(job.id, { status: "done" });
   } catch (e) {
     console.error("Job gagal:", e);
-    await say(current, `Maaf, ada kendala: ${e instanceof Error ? e.message : "terjadi kesalahan"}. Coba ulangi ya.`, { kind: "error" });
-    await db().updateJob(job.id, { status: "error" });
+    await say(w, current, `Maaf, ada kendala: ${e instanceof Error ? e.message : "terjadi kesalahan"}. Coba ulangi ya.`, { kind: "error" });
+    await w.updateJob(job.id, { status: "error" });
   }
 }
 
-async function deliverPost(post: Post, revised = false) {
+async function deliverPost(w: WorkspaceRepo, post: Post, revised = false) {
   const intro = revised ? "Revisi sudah masuk. Cek lagi ya." : `Desain ${post.slides.length > 1 ? `${post.slides.length} slide` : ""} siap!`;
   const notes = post.design_notes ? `\nCatatan dariku: ${post.design_notes}` : "";
-  await say("rupa", `${intro} Kalau sudah oke tinggal ACC, atau ketik revisinya di sini.${notes}`, { kind: "post", refs: [post.id] });
+  await say(w, "rupa", `${intro} Kalau sudah oke tinggal ACC, atau ketik revisinya di sini.${notes}`, { kind: "post", refs: [post.id] });
 }
 
 // ------------------------------------------------------------------ pesan owner
 
 /** Proses pesan owner. Mengembalikan job yang perlu dijalankan di latar belakang (bila ada). */
-export async function handleMessage(text: string): Promise<(() => Promise<void>) | null> {
-  await userSays(text);
-  const running = await activeJob();
+export async function handleMessage(w: WorkspaceRepo, text: string): Promise<(() => Promise<void>) | null> {
+  await userSays(w, text);
+  const running = await activeJob(w);
   if (running) {
-    await say(running.agent, `Sebentar ya, aku masih ${running.label.replace(/^\w+ sedang /, "").replace(/…$/, "")}. Pesanmu kubaca setelah ini selesai.`);
+    await say(w, running.agent, `Sebentar ya, aku masih ${running.label.replace(/^\w+ sedang /, "").replace(/…$/, "")}. Pesanmu kubaca setelah ini selesai.`);
     return null;
   }
-  const snap = await snapshot();
+  const snap = await snapshot(w);
   let d: DecisionT;
   try {
-    d = await decide(text, snap);
+    d = await decide(w, text, snap);
   } catch (e) {
-    await say("kata", `Maaf, aku lagi kesulitan memahami pesan ini (${e instanceof Error ? e.message : "error"}). Coba lagi ya.`, { kind: "error" });
+    await say(w, "kata", `Maaf, aku lagi kesulitan memahami pesan ini (${e instanceof Error ? e.message : "error"}). Coba lagi ya.`, { kind: "error" });
     return null;
   }
   const format = d.format === "auto" ? undefined : d.format;
-  const brand = await db().getBrand();
+  const brand = await w.getBrand();
 
   switch (d.action) {
     case "ideas":
-      await say("kata", d.reply || "Siap, aku cari ide dulu.");
-      return startTask({ type: "ideas", brief: d.brief || text, count: Math.min(10, Math.max(1, Math.round(d.count) || 5)), format });
+      await say(w, "kata", d.reply || "Siap, aku cari ide dulu.");
+      return startTask(w, { type: "ideas", brief: d.brief || text, count: Math.min(10, Math.max(1, Math.round(d.count) || 5)), format });
     case "create_post":
-      await say("kata", d.reply || "Siap, kukerjakan.");
-      return startTask({ type: "create_post", brief: d.brief || text, format });
+      await say(w, "kata", d.reply || "Siap, kukerjakan.");
+      return startTask(w, { type: "create_post", brief: d.brief || text, format });
     case "revise": {
       const post = snap.review.find((p) => p.id === d.targetId) ?? snap.review[0];
       if (!post) {
-        await say("rupa", "Belum ada konten yang menunggu ACC untuk direvisi. Mau kubuatkan konten baru?");
+        await say(w, "rupa", "Belum ada konten yang menunggu ACC untuk direvisi. Mau kubuatkan konten baru?");
         return null;
       }
-      await say(d.speaker, d.reply || "Oke, kami revisi.");
-      return startTask({ type: "revise", postId: post.id, instruction: d.instruction || text });
+      await say(w, d.speaker, d.reply || "Oke, kami revisi.");
+      return startTask(w, { type: "revise", postId: post.id, instruction: d.instruction || text });
     }
     case "approve": {
       const post = snap.review.find((p) => p.id === d.targetId) ?? snap.review[0];
       if (!post) {
-        await say("siar", "Belum ada konten yang menunggu ACC. Kalau ada ide yang kamu suka, klik ACC di kartunya ya.");
+        await say(w, "siar", "Belum ada konten yang menunggu ACC. Kalau ada ide yang kamu suka, klik ACC di kartunya ya.");
         return null;
       }
       let when: Date | null = null;
@@ -303,49 +303,49 @@ export async function handleMessage(text: string): Promise<(() => Promise<void>)
         when = parseWib(d.scheduleAt) ?? parseWib(defaultScheduleWib(brand.postingTime));
         if (when && when.getTime() < Date.now() + 5 * 60_000) when = parseWib(defaultScheduleWib(brand.postingTime));
       }
-      await say("siar", d.reply || "Siap, kuproses.");
-      return startTask({ type: "approve", postId: post.id, scheduleAt: when });
+      await say(w, "siar", d.reply || "Siap, kuproses.");
+      return startTask(w, { type: "approve", postId: post.id, scheduleAt: when });
     }
     case "reject": {
       const post = snap.review.find((p) => p.id === d.targetId);
       const idea = snap.pendingIdeas.find((i) => i.id === d.targetId);
-      if (post) await db().updatePost(post.id, { status: "rejected" });
-      else if (idea) await db().updateIdea(idea.id, { status: "rejected" });
-      await say(d.speaker, d.reply || (post || idea ? "Oke, sudah kubuang." : "Yang mana ya? Sebutkan judulnya."));
+      if (post) await w.updatePost(post.id, { status: "rejected" });
+      else if (idea) await w.updateIdea(idea.id, { status: "rejected" });
+      await say(w, d.speaker, d.reply || (post || idea ? "Oke, sudah kubuang." : "Yang mana ya? Sebutkan judulnya."));
       return null;
     }
     case "status":
-      await say("siar", config.hasAI && d.reply ? d.reply : statusText(snap));
+      await say(w, "siar", config.hasAI && d.reply ? d.reply : statusText(snap));
       return null;
     default:
-      await say(d.speaker, d.reply || "Siap membantu!");
+      await say(w, d.speaker, d.reply || "Siap membantu!");
       return null;
   }
 }
 
 /** Klik tombol di kartu chat. */
-export async function approveIdeaFromChat(ideaId: string) {
-  const idea = await db().getIdea(ideaId);
+export async function approveIdeaFromChat(w: WorkspaceRepo, ideaId: string) {
+  const idea = await w.getIdea(ideaId);
   if (!idea) throw new Error("Ide tidak ditemukan");
-  if (await activeJob()) throw new Error("Tim masih mengerjakan tugas lain, tunggu sebentar ya");
-  await userSays(`ACC ide: “${idea.title}”`);
-  await say("kata", "Mantap, pilihan bagus! Aku tulis naskahnya sekarang.");
-  return startTask({ type: "build_from_idea", ideaId });
+  if (await activeJob(w)) throw new Error("Tim masih mengerjakan tugas lain, tunggu sebentar ya");
+  await userSays(w, `ACC ide: “${idea.title}”`);
+  await say(w, "kata", "Mantap, pilihan bagus! Aku tulis naskahnya sekarang.");
+  return startTask(w, { type: "build_from_idea", ideaId });
 }
 
-export async function approvePostFromChat(postId: string, scheduleAt: Date | null) {
-  const post = await db().getPost(postId);
+export async function approvePostFromChat(w: WorkspaceRepo, postId: string, scheduleAt: Date | null) {
+  const post = await w.getPost(postId);
   if (!post) throw new Error("Konten tidak ditemukan");
-  if (await activeJob()) throw new Error("Tim masih mengerjakan tugas lain, tunggu sebentar ya");
-  await userSays(`ACC “${post.title}” — ${scheduleAt ? `jadwalkan ${fmtWib(scheduleAt.toISOString())}` : "posting sekarang"}`);
-  return startTask({ type: "approve", postId, scheduleAt });
+  if (await activeJob(w)) throw new Error("Tim masih mengerjakan tugas lain, tunggu sebentar ya");
+  await userSays(w, `ACC “${post.title}” — ${scheduleAt ? `jadwalkan ${fmtWib(scheduleAt.toISOString())}` : "posting sekarang"}`);
+  return startTask(w, { type: "approve", postId, scheduleAt });
 }
 
-export async function greetIfEmpty() {
-  const msgs = await db().listMessages(1);
+export async function greetIfEmpty(w: WorkspaceRepo) {
+  const msgs = await w.listMessages(1);
   if (msgs.length) return;
-  const brand = await db().getBrand();
-  await say(
+  const brand = await w.getBrand();
+  await say(w, 
     "kata",
     `Halo tim ${brand.name}! Kami bertiga siap jadi tim kontenmu: aku (Kata) urus ide & naskah, Rupa urus desain, Siar urus jadwal & posting. Mau mulai dari mana? Kasih arahan aja, misalnya “buatkan 5 ide konten minggu ini”.`,
   );

@@ -1,5 +1,5 @@
+import { requireWorkspace } from "@/lib/session";
 import Link from "next/link";
-import { db } from "@/lib/db";
 import { config } from "@/lib/config";
 import { ActionForm, Submit } from "@/components/forms";
 import { Card, Field, PageTitle, inputCls } from "@/components/ui";
@@ -27,7 +27,8 @@ const COLORS: [keyof Brand["colors"], string, string][] = [
 const TEMPLATE_LABEL = { mix: "Editorial", bold: "Bold", clean: "Clean" } as const;
 
 export default async function BrandPage({ searchParams }: { searchParams: Promise<{ template?: string }> }) {
-  const brand = await db().getBrand();
+  const { w } = await requireWorkspace();
+  const brand = await w.getBrand();
   const { template } = await searchParams;
   const tpl = (["mix", "bold", "clean"] as const).find((x) => x === template) ?? brand.defaultTemplate;
   const v = Date.now();

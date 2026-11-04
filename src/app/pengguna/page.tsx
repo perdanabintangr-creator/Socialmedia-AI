@@ -1,8 +1,8 @@
-import { db } from "@/lib/db";
+import { accounts } from "@/lib/db";
 import { publicUser, requireAdmin, requireUser } from "@/lib/session";
 import { ActionForm, Submit } from "@/components/forms";
 import { Card, Field, PageTitle, formatWIB, inputCls } from "@/components/ui";
-import { changePasswordAction, deleteUserAction, setUserRoleAction, setUserStatusAction } from "../auth-actions";
+import { changePasswordAction, deleteUserAction, setPublishKeyAction, setUserRoleAction, setUserStatusAction } from "../auth-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -15,13 +15,16 @@ const STATUS = {
 export default async function UsersPage() {
   const me = await requireUser();
   const isAdmin = me.role === "admin";
-  const users = isAdmin ? (await db().listUsers()).map(publicUser) : [];
+  const [allUsers, workspaces] = isAdmin ? await Promise.all([accounts().listUsers(), accounts().listWorkspaces()]) : [[], []];
+  const users = allUsers.map(publicUser);
+  const wsName = new Map(workspaces.map((x) => [x.id, x.name]));
+  const wsKey = new Map(workspaces.map((x) => [x.id, x.publish_key]));
   if (isAdmin) await requireAdmin();
   const pending = users.filter((u) => u.status === "pending");
 
   return (
     <div className="space-y-6">
-      <PageTitle title="Akun" subtitle={isAdmin ? "Kelola pengguna yang bisa masuk ke Studio." : "Pengaturan akun kamu."} />
+      <PageTitle title={isAdmin ? "Pengguna & klien" : "Akun"} subtitle={isAdmin ? "Setujui klien baru dan kelola akses. Isi konten tiap workspace bersifat pribadi milik klien." : "Pengaturan akun kamu."} />
 
       <Card>
         <h2 className="font-semibold">Akun saya</h2>
@@ -42,7 +45,7 @@ export default async function UsersPage() {
       {isAdmin && (
         <Card className="p-0">
           <div className="flex items-center justify-between px-5 pt-5">
-            <h2 className="font-semibold">Pengguna ({users.length})</h2>
+            <h2 className="font-semibold">Klien & pengguna ({users.length})</h2>
             {pending.length > 0 && <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">{pending.length} menunggu persetujuan</span>}
           </div>
           <ul className="mt-3 divide-y divide-slate-100">
@@ -54,6 +57,9 @@ export default async function UsersPage() {
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium">
                       {u.name} {self && <span className="text-xs text-slate-400">(kamu)</span>}
+                      {u.workspace_id && wsName.get(u.workspace_id) && (
+                        <span className="ml-2 rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">{wsName.get(u.workspace_id)}</span>
+                      )}
                     </div>
                     <div className="truncate text-xs text-slate-500">
                       {u.email} · daftar {formatWIB(u.created_at)}
@@ -62,6 +68,18 @@ export default async function UsersPage() {
                   </div>
                   <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${cls}`}>{label}</span>
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">{u.role === "admin" ? "Admin" : "Anggota"}</span>
+                  {u.workspace_id && u.role !== "admin" && (
+                    <ActionForm action={setPublishKeyAction.bind(null, u.workspace_id)} className="flex w-full items-center gap-1.5 sm:w-auto">
+                      <input
+                        name="publishKey"
+                        defaultValue={wsKey.get(u.workspace_id) ?? ""}
+                        placeholder="Ayrshare Profile Key"
+                        aria-label={`Profile Key sosmed ${u.name}`}
+                        className={`${inputCls} w-full py-1 text-xs sm:w-48`}
+                      />
+                      <Submit variant="ghost" pendingText="…" className="px-2.5 py-1 text-xs">{wsKey.get(u.workspace_id) ? "Ubah" : "Hubungkan sosmed"}</Submit>
+                    </ActionForm>
+                  )}
                   {!self && (
                     <div className="flex flex-wrap gap-1.5">
                       {u.status !== "active" ? (
@@ -77,7 +95,7 @@ export default async function UsersPage() {
                         <Submit variant="ghost" pendingText="…" className="px-2.5 py-1 text-xs">{u.role === "admin" ? "Jadikan anggota" : "Jadikan admin"}</Submit>
                       </ActionForm>
                       <ActionForm action={deleteUserAction.bind(null, u.id)}>
-                        <Submit variant="danger" pendingText="…" className="px-2.5 py-1 text-xs">Hapus</Submit>
+                        <Submit variant="danger" pendingText="…" className="px-2.5 py-1 text-xs">Hapus akun & workspace</Submit>
                       </ActionForm>
                     </div>
                   )}

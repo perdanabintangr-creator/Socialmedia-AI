@@ -3,10 +3,11 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import sharp from "sharp";
-import { db } from "@/lib/db";
+import type { WorkspaceRepo } from "@/lib/db";
+import { workspaceOrThrow } from "@/lib/session";
 import { analyzeExamples } from "@/lib/ai";
 import { sourceImage } from "@/lib/images";
-import { approveAndPublish, buildPostFromIdea, createIdeas, parseWib, revisePostWith } from "@/lib/pipeline";
+import { approveAndPublish, buildPostFromIdea, createIdeas, parseWib, publishTarget, revisePostWith } from "@/lib/pipeline";
 import { readMedia } from "@/lib/media";
 import { randomUUID } from "crypto";
 import { getPublishStatus } from "@/lib/publisher";
@@ -28,19 +29,20 @@ const FONTS: FontKey[] = ["plus-jakarta-sans", "poppins", "montserrat", "inter",
 const TEMPLATES: TemplateKey[] = ["mix", "bold", "clean"];
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
-async function uploadImage(file: File, folder: string) {
+async function uploadImage(w: WorkspaceRepo, file: File, folder: string) {
   if (!file.type.startsWith("image/")) throw new Error(`${file.name} bukan file gambar`);
   const buf = Buffer.from(await file.arrayBuffer());
   const isSvg = file.type === "image/svg+xml";
   // Simpan sebagai PNG agar aman dipakai renderer & AI (SVG di-rasterize).
   const png = await sharp(buf, isSvg ? { density: 300 } : {}).png().toBuffer();
   const key = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.png`;
-  return db().uploadFile(key, png, "image/png");
+  return w.uploadFile(key, png, "image/png");
 }
 
 export async function saveBrandAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const { w } = await workspaceOrThrow();
   try {
-    const current = await db().getBrand();
+    const current = await w.getBrand();
     const color = (k: keyof Brand["colors"]) => {
       const v = str(fd, `color_${k}`);
       return HEX.test(v) ? v : current.colors[k];
@@ -75,10 +77,10 @@ export async function saveBrandAction(_: ActionState, fd: FormData): Promise<Act
     };
 
     const logo = fd.get("logo");
-    if (logo instanceof File && logo.size > 0) brand.logoUrl = await uploadImage(logo, "brand");
+    if (logo instanceof File && logo.size > 0) brand.logoUrl = await uploadImage(w, logo, "brand");
     if (fd.get("removeLogo") === "on") brand.logoUrl = null;
     const logoAlt = fd.get("logoAlt");
-    if (logoAlt instanceof File && logoAlt.size > 0) brand.logoAltUrl = await uploadImage(logoAlt, "brand");
+    if (logoAlt instanceof File && logoAlt.size > 0) brand.logoAltUrl = await uploadImage(w, logoAlt, "brand");
     if (fd.get("removeLogoAlt") === "on") brand.logoAltUrl = null;
 
     const mode = str(fd, "imageSource") as ImageSourceMode;
@@ -92,7 +94,7 @@ export async function saveBrandAction(_: ActionState, fd: FormData): Promise<Act
       .map((a) => ({ ...a, description: fd.has(`asset_${a.id}`) ? str(fd, `asset_${a.id}`) : a.description }));
     for (const f of fd.getAll("assets")) {
       if (f instanceof File && f.size > 0) {
-        brand.assets.push({ id: randomUUID().slice(0, 8), url: await uploadImage(f, "assets"), description: f.name.replace(/\.[a-z]+$/i, "").replace(/[-_]+/g, " ") });
+        brand.assets.push({ id: randomUUID().slice(0, 8), url: await uploadImage(w, f, "assets"), description: f.name.replace(/\.[a-z]+$/i, "").replace(/[-_]+/g, " ") });
       }
     }
     brand.assets = brand.assets.slice(-30);
@@ -100,11 +102,11 @@ export async function saveBrandAction(_: ActionState, fd: FormData): Promise<Act
     const removeExamples = new Set(fd.getAll("removeExample").map(String));
     brand.exampleUrls = brand.exampleUrls.filter((u) => !removeExamples.has(u));
     for (const f of fd.getAll("examples")) {
-      if (f instanceof File && f.size > 0) brand.exampleUrls.push(await uploadImage(f, "examples"));
+      if (f instanceof File && f.size > 0) brand.exampleUrls.push(await uploadImage(w, f, "examples"));
     }
     brand.exampleUrls = brand.exampleUrls.slice(-8);
 
-    await db().saveBrand(brand);
+    await w.saveBrand(brand);
     revalidatePath("/", "layout");
     return { ok: "Brand tersimpan" };
   } catch (e) {
@@ -113,8 +115,9 @@ export async function saveBrandAction(_: ActionState, fd: FormData): Promise<Act
 }
 
 export async function analyzeExamplesAction(): Promise<ActionState> {
+  const { w } = await workspaceOrThrow();
   try {
-    const brand = await db().getBrand();
+    const brand = await w.getBrand();
     if (!brand.exampleUrls.length) return { error: "Upload contoh post dulu" };
     const images = await Promise.all(
       brand.exampleUrls.map(async (u) => {
@@ -127,7 +130,7 @@ export async function analyzeExamplesAction(): Promise<ActionState> {
       }),
     );
     const out = await analyzeExamples(brand, images);
-    await db().saveBrand({ ...brand, styleNotes: out.styleNotes, imageStyle: out.imageStyle, defaultTemplate: out.suggestedTemplate });
+    await w.saveBrand({ ...brand, styleNotes: out.styleNotes, imageStyle: out.imageStyle, defaultTemplate: out.suggestedTemplate });
     revalidatePath("/brand");
     return { ok: `Analisis selesai. Template disarankan: ${out.suggestedTemplate}` };
   } catch (e) {
@@ -138,9 +141,10 @@ export async function analyzeExamplesAction(): Promise<ActionState> {
 // ------------------------------------------------------------------ ide
 
 export async function generateIdeasAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const { w } = await workspaceOrThrow();
   try {
     const count = Math.min(10, Math.max(1, Number(str(fd, "count")) || 6));
-    const ideas = await createIdeas(str(fd, "brief"), count);
+    const ideas = await createIdeas(w, str(fd, "brief"), count);
     revalidatePath("/", "layout");
     return { ok: `${ideas.length} ide baru siap di-review` };
   } catch (e) {
@@ -149,9 +153,10 @@ export async function generateIdeasAction(_: ActionState, fd: FormData): Promise
 }
 
 export async function approveIdeaAction(id: string): Promise<ActionState> {
+  const { w } = await workspaceOrThrow();
   let postId: string;
   try {
-    const post = await buildPostFromIdea(id);
+    const post = await buildPostFromIdea(w, id);
     postId = post.id;
   } catch (e) {
     return fail(e);
@@ -161,7 +166,8 @@ export async function approveIdeaAction(id: string): Promise<ActionState> {
 }
 
 export async function rejectIdeaAction(id: string): Promise<ActionState> {
-  await db().updateIdea(id, { status: "rejected" });
+  const { w } = await workspaceOrThrow();
+  await w.updateIdea(id, { status: "rejected" });
   revalidatePath("/", "layout");
   return { ok: "Ide ditolak" };
 }
@@ -171,8 +177,9 @@ export async function rejectIdeaAction(id: string): Promise<ActionState> {
 const LAYOUTS = SLIDE_LAYOUTS as readonly SlideLayout[];
 
 export async function updatePostAction(id: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  const { w } = await workspaceOrThrow();
   try {
-    const post = await db().getPost(id);
+    const post = await w.getPost(id);
     if (!post) return { error: "Konten tidak ditemukan" };
     if (!["review", "failed"].includes(post.status)) return { error: "Konten yang sudah di-ACC tidak bisa diedit" };
     const slides: Slide[] = [];
@@ -199,7 +206,7 @@ export async function updatePostAction(id: string, _: ActionState, fd: FormData)
     if (!slides.length) return { error: "Minimal harus ada 1 slide" };
     const platforms = fd.getAll("platforms").map(String).filter((p): p is Platform => p === "instagram" || p === "tiktok");
     const template = str(fd, "template") as TemplateKey;
-    await db().updatePost(id, {
+    await w.updatePost(id, {
       title: str(fd, "title") || post.title,
       caption: str(fd, "caption"),
       hashtags: lines(str(fd, "hashtags").replace(/#/g, " ").replace(/\s+/g, ",")),
@@ -216,10 +223,11 @@ export async function updatePostAction(id: string, _: ActionState, fd: FormData)
 }
 
 export async function revisePostAction(id: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  const { w } = await workspaceOrThrow();
   try {
     const instruction = str(fd, "instruction") || str(fd, "preset");
     if (!instruction) return { error: "Tulis dulu revisi yang diinginkan" };
-    await revisePostWith(id, instruction);
+    await revisePostWith(w, id, instruction);
     revalidatePath(`/posts/${id}`);
     return { ok: "Revisi selesai — cek hasilnya" };
   } catch (e) {
@@ -227,8 +235,8 @@ export async function revisePostAction(id: string, _: ActionState, fd: FormData)
   }
 }
 
-async function editableSlide(postId: string, index: number) {
-  const post = await db().getPost(postId);
+async function editableSlide(w: WorkspaceRepo, postId: string, index: number) {
+  const post = await w.getPost(postId);
   if (!post) throw new Error("Konten tidak ditemukan");
   if (!["review", "failed"].includes(post.status)) throw new Error("Konten yang sudah di-ACC tidak bisa diedit");
   const slide = post.slides[index];
@@ -236,27 +244,28 @@ async function editableSlide(postId: string, index: number) {
   return { post, slide };
 }
 
-async function saveSlide(post: Post, index: number, slide: Slide) {
+async function saveSlide(w: WorkspaceRepo, post: Post, index: number, slide: Slide) {
   const slides = post.slides.slice();
   slides[index] = slide;
-  await db().updatePost(post.id, { slides });
+  await w.updatePost(post.id, { slides });
   revalidatePath(`/posts/${post.id}`);
 }
 
 /** Cari / generate ulang foto untuk satu slide (opsional dengan kata kunci baru). */
 export async function replaceImageAction(postId: string, index: number, _: ActionState, fd: FormData): Promise<ActionState> {
+  const { w } = await workspaceOrThrow();
   try {
-    const { post, slide } = await editableSlide(postId, index);
-    const brand = await db().getBrand();
+    const { post, slide } = await editableSlide(w, postId, index);
+    const brand = await w.getBrand();
     const custom = str(fd, "query");
     const req = {
       assetId: "",
       query: custom || slide.image?.query || plainHeadline(slide),
       prompt: custom ? `${custom}. Context: ${plainHeadline(slide)}` : slide.image?.prompt || plainHeadline(slide),
     };
-    const image = await sourceImage({ ...brand, imageSource: brand.imageSource === "brand" || brand.imageSource === "none" ? "auto" : brand.imageSource }, req, `${post.id}-${index}`, Date.now() % 97);
+    const image = await sourceImage(w, { ...brand, imageSource: brand.imageSource === "brand" || brand.imageSource === "none" ? "auto" : brand.imageSource }, req, `${post.id}-${index}`, Date.now() % 97);
     if (!image) return { error: "Tidak ada sumber gambar aktif (isi OPENAI/GEMINI atau PEXELS API key), atau tidak ditemukan." };
-    await saveSlide(post, index, { ...slide, image });
+    await saveSlide(w, post, index, { ...slide, image });
     return { ok: "Gambar diganti" };
   } catch (e) {
     return fail(e);
@@ -264,12 +273,13 @@ export async function replaceImageAction(postId: string, index: number, _: Actio
 }
 
 export async function uploadSlideImageAction(postId: string, index: number, _: ActionState, fd: FormData): Promise<ActionState> {
+  const { w } = await workspaceOrThrow();
   try {
-    const { post, slide } = await editableSlide(postId, index);
+    const { post, slide } = await editableSlide(w, postId, index);
     const file = fd.get("file");
     if (!(file instanceof File) || !file.size) return { error: "Pilih file gambar" };
-    const url = await uploadImage(file, `uploads/${post.id}`);
-    await saveSlide(post, index, { ...slide, image: { url, source: "upload", query: "", prompt: "", credit: "" } });
+    const url = await uploadImage(w, file, `uploads/${post.id}`);
+    await saveSlide(w, post, index, { ...slide, image: { url, source: "upload", query: "", prompt: "", credit: "" } });
     return { ok: "Gambar di-upload" };
   } catch (e) {
     return fail(e);
@@ -277,9 +287,10 @@ export async function uploadSlideImageAction(postId: string, index: number, _: A
 }
 
 export async function removeSlideImageAction(postId: string, index: number): Promise<ActionState> {
+  const { w } = await workspaceOrThrow();
   try {
-    const { post, slide } = await editableSlide(postId, index);
-    await saveSlide(post, index, { ...slide, image: null });
+    const { post, slide } = await editableSlide(w, postId, index);
+    await saveSlide(w, post, index, { ...slide, image: null });
     return { ok: "Gambar dihapus" };
   } catch (e) {
     return fail(e);
@@ -291,20 +302,22 @@ function plainHeadline(s: Slide) {
 }
 
 export async function rejectPostAction(id: string): Promise<ActionState> {
-  await db().updatePost(id, { status: "rejected" });
+  const { w } = await workspaceOrThrow();
+  await w.updatePost(id, { status: "rejected" });
   revalidatePath("/", "layout");
   return { ok: "Konten ditolak" };
 }
 
 /** ACC konten → render desain → upload → kirim ke publisher (sekarang / terjadwal). */
 export async function approvePostAction(id: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  const { w } = await workspaceOrThrow();
   try {
     let scheduleAt: Date | null = null;
     if (str(fd, "when") === "schedule") {
       scheduleAt = parseWib(str(fd, "scheduledAt")); // dianggap WIB
       if (!scheduleAt) return { error: "Tanggal jadwal tidak valid" };
     }
-    const res = await approveAndPublish(id, scheduleAt);
+    const res = await approveAndPublish(w, id, scheduleAt);
     revalidatePath("/", "layout");
     return res.ok ? { ok: res.message } : { error: res.message };
   } catch (e) {
@@ -313,14 +326,16 @@ export async function approvePostAction(id: string, _: ActionState, fd: FormData
 }
 
 export async function checkStatusAction(id: string): Promise<ActionState> {
+  const { w } = await workspaceOrThrow();
   try {
-    const post = await db().getPost(id);
+    const post = await w.getPost(id);
     if (!post?.publish_ref) return { error: "Belum ada referensi posting" };
-    const raw = await getPublishStatus(post.publish_ref);
+    const target = await publishTarget(w.id);
+    const raw = await getPublishStatus(post.publish_ref, target.profileKey);
     if (!raw) return { error: "Tidak bisa mengambil status" };
     const s = String(raw.status ?? "");
     const status = s === "success" ? "published" : s === "error" ? "failed" : post.status;
-    await db().updatePost(id, { publish_result: raw, status });
+    await w.updatePost(id, { publish_result: raw, status });
     revalidatePath(`/posts/${id}`);
     return { ok: `Status dari publisher: ${s || "tidak diketahui"}` };
   } catch (e) {

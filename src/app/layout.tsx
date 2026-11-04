@@ -42,8 +42,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               ))}
             </nav>
             <div className="flex items-center gap-2 text-xs">
-              {user && !config.hasAI && <span className="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-800">AI: demo</span>}
-              {user && !config.hasPublisher && <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-600">Auto-post: off</span>}
+              {user?.role === "admin" && !config.hasAI && <span className="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-800">AI: demo</span>}
+              {user?.role === "admin" && !config.hasPublisher && <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-600">Auto-post: off</span>}
               {user && (
                 <form action={logoutAction} className="flex items-center gap-2">
                   <span className="hidden max-w-[10rem] truncate font-medium text-slate-600 sm:inline">{user.name}</span>

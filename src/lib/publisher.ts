@@ -16,6 +16,7 @@ export interface PublishInput {
   mediaUrls: string[];
   platforms: Platform[];
   scheduleAt: Date | null; // null = posting sekarang
+  profileKey: string | null;
 }
 
 export interface PublishResult {
@@ -25,11 +26,14 @@ export interface PublishResult {
   error: string | null;
 }
 
-function headers() {
-  return {
+/** profileKey: akun sosmed milik workspace klien (Ayrshare User Profile). Tanpa itu = akun utama. */
+function headers(profileKey?: string | null): Record<string, string> {
+  const h: Record<string, string> = {
     Authorization: `Bearer ${process.env.AYRSHARE_API_KEY}`,
     "Content-Type": "application/json",
   };
+  if (profileKey) h["Profile-Key"] = profileKey;
+  return h;
 }
 
 function errorText(raw: unknown, status: number) {
@@ -62,7 +66,7 @@ export async function publish(input: PublishInput): Promise<PublishResult> {
   if (input.scheduleAt && input.scheduleAt.getTime() > Date.now() + 60_000) {
     body.scheduleDate = input.scheduleAt.toISOString();
   }
-  const res = await fetch(`${BASE}/post`, { method: "POST", headers: headers(), body: JSON.stringify(body) });
+  const res = await fetch(`${BASE}/post`, { method: "POST", headers: headers(input.profileKey), body: JSON.stringify(body) });
   const raw = await res.json().catch(() => null);
   const r = (raw ?? {}) as Record<string, unknown>;
   const ok = res.ok && r.status !== "error";
@@ -74,8 +78,8 @@ export async function publish(input: PublishInput): Promise<PublishResult> {
   };
 }
 
-export async function getPublishStatus(ref: string) {
+export async function getPublishStatus(ref: string, profileKey: string | null) {
   if (!config.hasPublisher) return null;
-  const res = await fetch(`${BASE}/post/${encodeURIComponent(ref)}`, { headers: headers() });
+  const res = await fetch(`${BASE}/post/${encodeURIComponent(ref)}`, { headers: headers(profileKey) });
   return (await res.json().catch(() => null)) as Record<string, unknown> | null;
 }

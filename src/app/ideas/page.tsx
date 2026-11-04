@@ -1,5 +1,5 @@
+import { requireWorkspace } from "@/lib/session";
 import Link from "next/link";
-import { db } from "@/lib/db";
 import { ActionForm, Submit } from "@/components/forms";
 import { Card, Field, PageTitle, Pill, inputCls } from "@/components/ui";
 import { approveIdeaAction, generateIdeasAction, rejectIdeaAction } from "../actions";
@@ -9,7 +9,8 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 export default async function IdeasPage() {
-  const ideas = await db().listIdeas();
+  const { w } = await requireWorkspace();
+  const ideas = await w.listIdeas();
   const pending = ideas.filter((i) => i.status === "pending");
   const history = ideas.filter((i) => i.status !== "pending").slice(0, 30);
 

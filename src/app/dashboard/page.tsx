@@ -1,12 +1,13 @@
+import { requireWorkspace } from "@/lib/session";
 import Link from "next/link";
-import { db } from "@/lib/db";
 import { config } from "@/lib/config";
 import { Card, PageTitle, StatusBadge, formatWIB } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
-  const [brand, ideas, posts] = await Promise.all([db().getBrand(), db().listIdeas(), db().listPosts()]);
+  const { w, user } = await requireWorkspace();
+  const [brand, ideas, posts] = await Promise.all([w.getBrand(), w.listIdeas(), w.listPosts()]);
   const pendingIdeas = ideas.filter((i) => i.status === "pending");
   const review = posts.filter((p) => p.status === "review");
   const upcoming = posts
@@ -14,7 +15,7 @@ export default async function Dashboard() {
     .sort((a, b) => (a.scheduled_at ?? "").localeCompare(b.scheduled_at ?? ""));
   const published = posts.filter((p) => p.status === "published");
 
-  const setup = [
+  const allSetup = [
     { done: config.hasAI, label: "Hubungkan AI (ANTHROPIC_API_KEY)", hint: "Tanpa ini ide & konten masih contoh (mode demo)." },
     { done: config.hasSupabase, label: "Hubungkan database (Supabase)", hint: "Tanpa ini data disimpan lokal di folder .data." },
     { done: config.hasPublisher, label: "Hubungkan Instagram & TikTok (AYRSHARE_API_KEY)", hint: "Tanpa ini desain final bisa diunduh, tapi belum auto-post." },
@@ -24,6 +25,8 @@ export default async function Dashboard() {
     { done: Boolean(brand.logoUrl), label: "Upload logo", href: "/brand" },
     { done: brand.exampleUrls.length > 0, label: "Upload contoh post yang disukai", href: "/brand" },
   ];
+  // Item yang berupa pengaturan server (API key) hanya relevan untuk owner aplikasi.
+  const setup = allSetup.filter((s) => user.role === "admin" || s.href);
   const setupLeft = setup.filter((s) => !s.done).length;
 
   const steps = [

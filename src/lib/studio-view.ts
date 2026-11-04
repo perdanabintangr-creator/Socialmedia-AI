@@ -1,5 +1,5 @@
 import "server-only";
-import { db } from "./db";
+import type { WorkspaceRepo } from "./db";
 import type { ChatMessage, Idea, Job, Post } from "./types";
 
 export interface IdeaCard {
@@ -32,13 +32,13 @@ export interface StudioState {
   postingTime: string;
 }
 
-export async function studioState(limit = 80): Promise<StudioState> {
+export async function studioState(w: WorkspaceRepo, limit = 80): Promise<StudioState> {
   const [messages, job, ideas, posts, brand] = await Promise.all([
-    db().listMessages(limit),
-    db().getActiveJob(),
-    db().listIdeas(),
-    db().listPosts(),
-    db().getBrand(),
+    w.listMessages(limit),
+    w.getActiveJob(),
+    w.listIdeas(),
+    w.listPosts(),
+    w.getBrand(),
   ]);
   const ideaById = new Map(ideas.map((i) => [i.id, i]));
   const postById = new Map(posts.map((p) => [p.id, p]));

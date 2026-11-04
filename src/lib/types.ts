@@ -94,6 +94,7 @@ export type IdeaStatus = "pending" | "approved" | "rejected";
 
 export interface Idea {
   id: string;
+  workspace_id: string;
   title: string;
   hook: string;
   angle: string;
@@ -116,6 +117,7 @@ export type PostStatus =
 
 export interface Post {
   id: string;
+  workspace_id: string;
   idea_id: string | null;
   title: string;
   format: PostFormat;
@@ -195,6 +197,7 @@ export type ChatKind = "text" | "ideas" | "post" | "error";
 
 export interface ChatMessage {
   id: string;
+  workspace_id: string;
   role: "user" | "agent";
   agent: "kata" | "rupa" | "siar" | null;
   kind: ChatKind;
@@ -205,6 +208,7 @@ export interface ChatMessage {
 
 export interface Job {
   id: string;
+  workspace_id: string;
   status: "running" | "done" | "error";
   agent: "kata" | "rupa" | "siar";
   label: string; // "Rupa sedang menyusun desain…"
@@ -216,6 +220,7 @@ export interface Job {
 
 export interface User {
   id: string;
+  workspace_id: string | null;
   name: string;
   email: string;
   password_hash: string;
@@ -225,3 +230,11 @@ export interface User {
   last_login_at: string | null;
 }
 export type PublicUser = Omit<User, "password_hash">;
+
+export interface Workspace {
+  id: string;
+  name: string;
+  owner_id: string | null;
+  publish_key: string | null; // Ayrshare Profile-Key: akun sosmed milik klien ini
+  created_at: string;
+}

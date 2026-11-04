@@ -90,7 +90,7 @@ export function Studio({ initial }: { initial: StudioState }) {
     setText("");
     setState((s) => ({
       ...s,
-      messages: [...s.messages, { id: `tmp-${Date.now()}`, role: "user", agent: null, kind: "text", text: m, created_at: new Date().toISOString() }],
+      messages: [...s.messages, { id: `tmp-${Date.now()}`, workspace_id: "", role: "user", agent: null, kind: "text", text: m, created_at: new Date().toISOString() }],
     }));
     run(() => sendChatAction(m));
   };

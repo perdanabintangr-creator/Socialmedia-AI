@@ -19,12 +19,18 @@ Cukup ketik arahan, misalnya "buatkan 5 ide konten minggu ini", "bikin carousel 
 
 Halaman Ringkasan, Ide, Konten, dan Brand Kit tetap ada untuk pemantauan dan edit manual.
 
-## Akun & login
+## Akun, klien & workspace
 
-- **/daftar** untuk membuat akun dan **/login** untuk masuk (email + password, di-hash dengan scrypt).
-- Pengguna **pertama** yang mendaftar otomatis menjadi admin aktif. Pendaftar berikutnya berstatus *menunggu persetujuan*.
-- Admin menyetujui, menonaktifkan, mengubah peran, atau menghapus akun di halaman **Pengguna** (`/pengguna`). Akun yang dinonaktifkan langsung tidak bisa mengakses dashboard.
-- Sesi login berupa cookie bertanda tangan (HMAC dengan `SESSION_SECRET`), berlaku 30 hari.
+- **/daftar**: klien mengisi nama, **nama brand/bisnis**, email, dan password. Setiap pendaftar otomatis mendapat **workspace sendiri**: Brand Kit, chat dengan tim agen, ide, konten, gambar, dan jadwal yang terpisah total dari klien lain.
+- Pendaftar **pertama** otomatis menjadi **admin** (owner aplikasi). Klien berikutnya berstatus *menunggu persetujuan*.
+- Halaman **Pengguna** (`/pengguna`), khusus admin:
+  - menyetujui, menonaktifkan, atau mengubah peran akun;
+  - **menghubungkan akun sosmed klien** (Ayrshare *Profile Key*);
+  - menghapus klien beserta workspace-nya.
+  Admin melihat daftar klien, tapi tidak melihat isi konten mereka.
+- **Isolasi data:** semua query selalu difilter per workspace, termasuk akses langsung lewat id/URL. Ini dites otomatis: klien B mendapat 404 saat membuka konten klien A.
+- **Auto-posting per klien:** konten klien hanya diposting ke akun sosmed yang terhubung ke workspace-nya. Tanpa Profile Key, desain hanya bisa diunduh, jadi tidak pernah terposting ke akun orang lain. Workspace milik admin memakai akun Ayrshare utama.
+- Login memakai email + password (scrypt). Sesi berupa cookie bertanda tangan (HMAC dengan `SESSION_SECRET`), berlaku 30 hari.
 
 ## Cara kerja
 

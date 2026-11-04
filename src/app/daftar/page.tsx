@@ -11,10 +11,13 @@ export const dynamic = "force-dynamic";
 export default async function RegisterPage() {
   if (await currentUser()) redirect("/");
   return (
-    <AuthShell title="Daftar" subtitle="Buat akun baru. Akun aktif setelah disetujui admin.">
+    <AuthShell title="Daftar" subtitle="Buat workspace untuk brand kamu. Akun aktif setelah disetujui.">
       <ActionForm action={registerAction} className="space-y-4" resetOnOk>
-        <Field label="Nama">
+        <Field label="Nama kamu">
           <input name="name" autoComplete="name" required className={inputCls} />
+        </Field>
+        <Field label="Nama brand / bisnis" hint="Jadi nama workspace & Brand Kit kamu. Bisa diubah nanti.">
+          <input name="brand" autoComplete="organization" required className={inputCls} />
         </Field>
         <Field label="Email">
           <input type="email" name="email" autoComplete="email" required className={inputCls} />

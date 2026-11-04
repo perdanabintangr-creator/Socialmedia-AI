@@ -1,7 +1,7 @@
 import "server-only";
 import sharp from "sharp";
 import { config } from "./config";
-import { db } from "./db";
+import type { WorkspaceRepo } from "./db";
 import type { Brand, SlideImage } from "./types";
 
 /**
@@ -80,9 +80,9 @@ async function searchPexels(query: string): Promise<{ data: Buffer; credit: stri
   return { data: Buffer.from(await img.arrayBuffer()), credit: `Foto: ${pick.photographer} / Pexels` };
 }
 
-async function store(data: Buffer, key: string) {
+async function store(w: WorkspaceRepo, data: Buffer, key: string) {
   const jpg = await sharp(data).rotate().resize({ width: 1350, height: 1350, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 88 }).toBuffer();
-  return db().uploadFile(`images/${key}-${Date.now()}.jpg`, jpg, "image/jpeg");
+  return w.uploadFile(`images/${key}-${Date.now()}.jpg`, jpg, "image/jpeg");
 }
 
 /** Gambar abstrak on-brand untuk mode demo (tanpa API gambar). */
@@ -98,7 +98,7 @@ async function demoImage(brand: Brand, seed: number) {
   return sharp(Buffer.from(svg)).jpeg({ quality: 85 }).toBuffer();
 }
 
-export async function sourceImage(brand: Brand, req: ImageRequest, key: string, seed = 0): Promise<SlideImage | null> {
+export async function sourceImage(w: WorkspaceRepo, brand: Brand, req: ImageRequest, key: string, seed = 0): Promise<SlideImage | null> {
   const base = { query: req.query, prompt: req.prompt, credit: "" };
   const mode = brand.imageSource;
   if (mode === "none") return null;
@@ -110,14 +110,14 @@ export async function sourceImage(brand: Brand, req: ImageRequest, key: string, 
   if (!config.hasAI) {
     // Mode demo: pakai foto brand bergantian, kalau tidak ada pakai gambar abstrak.
     if (brand.assets.length) return { ...base, url: brand.assets[seed % brand.assets.length].url, source: "brand" };
-    return { ...base, url: await store(await demoImage(brand, seed + 1), key), source: "demo" };
+    return { ...base, url: await store(w, await demoImage(brand, seed + 1), key), source: "demo" };
   }
 
   if ((mode === "auto" || mode === "ai") && config.imageProvider && (req.prompt || req.query)) {
     try {
       const prompt = aiPrompt(brand, req);
       const data = config.imageProvider === "gemini" ? await generateGemini(prompt) : await generateOpenAI(prompt);
-      return { ...base, url: await store(data, key), source: "ai" };
+      return { ...base, url: await store(w, data, key), source: "ai" };
     } catch (e) {
       console.error("AI image gagal, coba stok foto:", e);
     }
@@ -125,7 +125,7 @@ export async function sourceImage(brand: Brand, req: ImageRequest, key: string, 
   if ((mode === "auto" || mode === "stock" || mode === "ai") && config.hasStock && req.query) {
     try {
       const found = await searchPexels(req.query);
-      if (found) return { ...base, url: await store(found.data, key), source: "stock", credit: found.credit };
+      if (found) return { ...base, url: await store(w, found.data, key), source: "stock", credit: found.credit };
     } catch (e) {
       console.error("Stok foto gagal:", e);
     }

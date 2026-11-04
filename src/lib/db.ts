@@ -4,18 +4,24 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { config } from "./config";
-import { DEFAULT_BRAND, type Brand, type ChatMessage, type Idea, type Job, type Post, type User } from "./types";
+import { DEFAULT_BRAND, type Brand, type ChatMessage, type Idea, type Job, type Post, type User, type Workspace } from "./types";
 
 /**
  * Lapisan data. Dua mode:
  * - Supabase (produksi): aktif bila SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY di-set.
  * - Lokal (.data/): untuk coba-coba tanpa cloud. Gambar disajikan lewat /api/media.
+ *
+ * Multi-tenant: semua data konten (brand, ide, konten, chat, job, file) milik satu workspace.
+ * `db(workspaceId)` mengembalikan repo yang SELALU memfilter per workspace — termasuk saat
+ * mengambil/mengubah berdasarkan id — jadi satu klien tidak bisa menyentuh data klien lain.
+ * `accounts()` untuk data lintas workspace: pengguna & workspace.
  */
 
-type NewIdea = Omit<Idea, "id" | "created_at" | "status" | "feedback" | "post_id">;
-type NewPost = Omit<
+export type NewIdea = Omit<Idea, "id" | "workspace_id" | "created_at" | "status" | "feedback" | "post_id">;
+export type NewPost = Omit<
   Post,
   | "id"
+  | "workspace_id"
   | "created_at"
   | "updated_at"
   | "media_urls"
@@ -25,8 +31,11 @@ type NewPost = Omit<
   | "revision_count"
   | "scheduled_at"
 >;
+export type NewMessage = Omit<ChatMessage, "id" | "workspace_id" | "created_at">;
+export type NewUser = Pick<User, "name" | "email" | "password_hash" | "role" | "status" | "workspace_id">;
 
-interface Repo {
+export interface WorkspaceRepo {
+  readonly id: string;
   getBrand(): Promise<Brand>;
   saveBrand(brand: Brand): Promise<void>;
   listIdeas(): Promise<Idea[]>;
@@ -37,27 +46,44 @@ interface Repo {
   getPost(id: string): Promise<Post | null>;
   createPost(post: NewPost): Promise<Post>;
   updatePost(id: string, patch: Partial<Post>): Promise<void>;
+  /** key relatif; otomatis disimpan di bawah folder workspace. */
   uploadFile(key: string, data: Buffer, contentType: string): Promise<string>;
   listMessages(limit: number): Promise<ChatMessage[]>; // urut lama → baru
   addMessage(m: NewMessage): Promise<ChatMessage>;
   getActiveJob(): Promise<Job | null>;
   createJob(j: Pick<Job, "agent" | "label">): Promise<Job>;
   updateJob(id: string, patch: Partial<Job>): Promise<void>;
+}
+
+export interface AccountRepo {
   countUsers(): Promise<number>;
   listUsers(): Promise<User[]>;
   getUserById(id: string): Promise<User | null>;
   getUserByEmail(email: string): Promise<User | null>;
-  createUser(u: Pick<User, "name" | "email" | "password_hash" | "role" | "status">): Promise<User>;
+  createUser(u: NewUser): Promise<User>;
   updateUser(id: string, patch: Partial<User>): Promise<void>;
   deleteUser(id: string): Promise<void>;
+  createWorkspace(name: string): Promise<Workspace>;
+  setWorkspaceOwner(id: string, ownerId: string): Promise<void>;
+  getWorkspace(id: string): Promise<Workspace | null>;
+  setWorkspacePublishKey(id: string, key: string | null): Promise<void>;
+  listWorkspaces(): Promise<Workspace[]>;
+  deleteWorkspace(id: string): Promise<void>;
 }
 
-export type NewMessage = Omit<ChatMessage, "id" | "created_at">;
 const JOB_STALE_MS = 6 * 60_000; // job lebih lama dari ini dianggap macet
-
 const BUCKET = "media";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const STRIP = ["id", "workspace_id", "created_at"] as const;
 
-function mergeBrand(data: Partial<Brand> | null | undefined): Brand {
+/** Buang field yang tidak boleh diubah lewat patch (id, workspace). */
+function safePatch<T extends object>(patch: T): T {
+  const out = { ...patch } as Record<string, unknown>;
+  for (const k of STRIP) delete out[k];
+  return out as T;
+}
+
+export function mergeBrand(data: Partial<Brand> | null | undefined): Brand {
   return {
     ...DEFAULT_BRAND,
     ...(data ?? {}),
@@ -65,86 +91,96 @@ function mergeBrand(data: Partial<Brand> | null | undefined): Brand {
   };
 }
 
+const wsKey = (ws: string, key: string) => `ws/${ws}/${key.replace(/\.\./g, "").replace(/^\/+/, "")}`;
+
 // ---------------------------------------------------------------- Supabase
 
-class SupabaseRepo implements Repo {
-  private sb: SupabaseClient;
-  constructor() {
+let sbClient: SupabaseClient | null = null;
+function sb() {
+  if (!sbClient) {
     // trim: kunci yang ditempel di dashboard sering ikut spasi / baris baru.
-    this.sb = createClient(
-      process.env.SUPABASE_URL!.trim(),
-      process.env.SUPABASE_SERVICE_ROLE_KEY!.trim(),
-      { auth: { persistSession: false } },
-    );
+    sbClient = createClient(process.env.SUPABASE_URL!.trim(), process.env.SUPABASE_SERVICE_ROLE_KEY!.trim(), {
+      auth: { persistSession: false },
+    });
   }
-  private check<T>(res: { data: T; error: { message: string } | null }): T {
-    if (res.error) throw new Error(`Database: ${res.error.message}`);
-    return res.data;
-  }
+  return sbClient;
+}
+function check<T>(res: { data: T; error: { message: string } | null }): T {
+  if (res.error) throw new Error(`Database: ${res.error.message}`);
+  return res.data;
+}
+
+class SupabaseWorkspace implements WorkspaceRepo {
+  constructor(readonly id: string) {}
   async getBrand() {
-    const res = await this.sb.from("brand").select("data").eq("id", 1).maybeSingle();
-    const row = this.check(res) as { data: Partial<Brand> } | null;
+    const row = check(await sb().from("brand").select("data").eq("workspace_id", this.id).maybeSingle()) as { data: Partial<Brand> } | null;
     return mergeBrand(row?.data);
   }
   async saveBrand(brand: Brand) {
-    this.check(
-      await this.sb
-        .from("brand")
-        .upsert({ id: 1, data: brand, updated_at: new Date().toISOString() }),
-    );
+    check(await sb().from("brand").upsert({ workspace_id: this.id, data: brand, updated_at: new Date().toISOString() }));
   }
   async listIdeas() {
-    return this.check(
-      await this.sb.from("ideas").select("*").order("created_at", { ascending: false }).limit(200),
+    return check(
+      await sb().from("ideas").select("*").eq("workspace_id", this.id).order("created_at", { ascending: false }).limit(200),
     ) as Idea[];
   }
   async getIdea(id: string) {
-    return this.check(await this.sb.from("ideas").select("*").eq("id", id).maybeSingle()) as Idea | null;
+    if (!UUID.test(id)) return null;
+    return check(await sb().from("ideas").select("*").eq("workspace_id", this.id).eq("id", id).maybeSingle()) as Idea | null;
   }
   async createIdeas(ideas: NewIdea[]) {
-    return this.check(await this.sb.from("ideas").insert(ideas).select("*")) as Idea[];
+    if (!ideas.length) return [];
+    return check(await sb().from("ideas").insert(ideas.map((i) => ({ ...i, workspace_id: this.id }))).select("*")) as Idea[];
   }
   async updateIdea(id: string, patch: Partial<Idea>) {
-    this.check(await this.sb.from("ideas").update(patch).eq("id", id));
+    check(await sb().from("ideas").update(safePatch(patch)).eq("workspace_id", this.id).eq("id", id));
   }
   async listPosts() {
-    return this.check(
-      await this.sb.from("posts").select("*").order("created_at", { ascending: false }).limit(200),
+    return check(
+      await sb().from("posts").select("*").eq("workspace_id", this.id).order("created_at", { ascending: false }).limit(200),
     ) as Post[];
   }
   async getPost(id: string) {
-    return this.check(await this.sb.from("posts").select("*").eq("id", id).maybeSingle()) as Post | null;
+    if (!UUID.test(id)) return null;
+    return check(await sb().from("posts").select("*").eq("workspace_id", this.id).eq("id", id).maybeSingle()) as Post | null;
   }
   async createPost(post: NewPost) {
-    return this.check(await this.sb.from("posts").insert(post).select("*").single()) as Post;
+    return check(await sb().from("posts").insert({ ...post, workspace_id: this.id }).select("*").single()) as Post;
   }
   async updatePost(id: string, patch: Partial<Post>) {
-    this.check(
-      await this.sb
+    check(
+      await sb()
         .from("posts")
-        .update({ ...patch, updated_at: new Date().toISOString() })
+        .update({ ...safePatch(patch), updated_at: new Date().toISOString() })
+        .eq("workspace_id", this.id)
         .eq("id", id),
     );
   }
   async uploadFile(key: string, data: Buffer, contentType: string) {
-    const { error } = await this.sb.storage
-      .from(BUCKET)
-      .upload(key, data, { contentType, upsert: true });
+    const full = wsKey(this.id, key);
+    const { error } = await sb().storage.from(BUCKET).upload(full, data, { contentType, upsert: true });
     if (error) throw new Error(`Storage: ${error.message}`);
-    return this.sb.storage.from(BUCKET).getPublicUrl(key).data.publicUrl;
+    return sb().storage.from(BUCKET).getPublicUrl(full).data.publicUrl;
   }
   async listMessages(limit: number) {
-    const rows = this.check(
-      await this.sb.from("messages").select("*").order("created_at", { ascending: false }).limit(limit),
+    const rows = check(
+      await sb().from("messages").select("*").eq("workspace_id", this.id).order("created_at", { ascending: false }).limit(limit),
     ) as ChatMessage[];
     return rows.reverse();
   }
   async addMessage(m: NewMessage) {
-    return this.check(await this.sb.from("messages").insert(m).select("*").single()) as ChatMessage;
+    return check(await sb().from("messages").insert({ ...m, workspace_id: this.id }).select("*").single()) as ChatMessage;
   }
   async getActiveJob() {
-    const job = this.check(
-      await this.sb.from("jobs").select("*").eq("status", "running").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    const job = check(
+      await sb()
+        .from("jobs")
+        .select("*")
+        .eq("workspace_id", this.id)
+        .eq("status", "running")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ) as Job | null;
     if (job && Date.now() - new Date(job.updated_at).getTime() > JOB_STALE_MS) {
       await this.updateJob(job.id, { status: "error" });
@@ -153,48 +189,78 @@ class SupabaseRepo implements Repo {
     return job;
   }
   async createJob(j: Pick<Job, "agent" | "label">) {
-    return this.check(await this.sb.from("jobs").insert({ ...j, status: "running" }).select("*").single()) as Job;
+    return check(await sb().from("jobs").insert({ ...j, workspace_id: this.id, status: "running" }).select("*").single()) as Job;
   }
   async updateJob(id: string, patch: Partial<Job>) {
-    this.check(await this.sb.from("jobs").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", id));
+    check(
+      await sb()
+        .from("jobs")
+        .update({ ...safePatch(patch), updated_at: new Date().toISOString() })
+        .eq("workspace_id", this.id)
+        .eq("id", id),
+    );
   }
+}
+
+class SupabaseAccounts implements AccountRepo {
   async countUsers() {
-    const res = await this.sb.from("users").select("id", { count: "exact", head: true });
+    const res = await sb().from("users").select("id", { count: "exact", head: true });
     if (res.error) throw new Error(`Database: ${res.error.message}`);
     return res.count ?? 0;
   }
   async listUsers() {
-    return this.check(await this.sb.from("users").select("*").order("created_at", { ascending: true })) as User[];
+    return check(await sb().from("users").select("*").order("created_at", { ascending: true })) as User[];
   }
   async getUserById(id: string) {
-    if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
-    return this.check(await this.sb.from("users").select("*").eq("id", id).maybeSingle()) as User | null;
+    if (!UUID.test(id)) return null;
+    return check(await sb().from("users").select("*").eq("id", id).maybeSingle()) as User | null;
   }
   async getUserByEmail(email: string) {
-    return this.check(await this.sb.from("users").select("*").eq("email", email.toLowerCase()).maybeSingle()) as User | null;
+    return check(await sb().from("users").select("*").eq("email", email.toLowerCase()).maybeSingle()) as User | null;
   }
-  async createUser(u: Pick<User, "name" | "email" | "password_hash" | "role" | "status">) {
-    const res = await this.sb.from("users").insert({ ...u, email: u.email.toLowerCase() }).select("*").single();
+  async createUser(u: NewUser) {
+    const res = await sb().from("users").insert({ ...u, email: u.email.toLowerCase() }).select("*").single();
     if (res.error?.code === "23505") throw new Error("Email sudah terdaftar");
-    return this.check(res) as User;
+    return check(res) as User;
   }
   async updateUser(id: string, patch: Partial<User>) {
-    this.check(await this.sb.from("users").update(patch).eq("id", id));
+    check(await sb().from("users").update(safePatch(patch)).eq("id", id));
   }
   async deleteUser(id: string) {
-    this.check(await this.sb.from("users").delete().eq("id", id));
+    check(await sb().from("users").delete().eq("id", id));
+  }
+  async createWorkspace(name: string) {
+    return check(await sb().from("workspaces").insert({ name }).select("*").single()) as Workspace;
+  }
+  async setWorkspaceOwner(id: string, ownerId: string) {
+    check(await sb().from("workspaces").update({ owner_id: ownerId }).eq("id", id));
+  }
+  async getWorkspace(id: string) {
+    if (!UUID.test(id)) return null;
+    return check(await sb().from("workspaces").select("*").eq("id", id).maybeSingle()) as Workspace | null;
+  }
+  async setWorkspacePublishKey(id: string, key: string | null) {
+    check(await sb().from("workspaces").update({ publish_key: key }).eq("id", id));
+  }
+  async listWorkspaces() {
+    return check(await sb().from("workspaces").select("*").order("created_at", { ascending: true })) as Workspace[];
+  }
+  async deleteWorkspace(id: string) {
+    // Konten workspace ikut terhapus (foreign key ON DELETE CASCADE).
+    check(await sb().from("workspaces").delete().eq("id", id));
   }
 }
 
 // ---------------------------------------------------------------- Lokal
 
 interface LocalData {
-  brand: Brand | null;
+  brands?: Record<string, Brand>;
   ideas: Idea[];
   posts: Post[];
   messages?: ChatMessage[];
   jobs?: Job[];
   users?: User[];
+  workspaces?: Workspace[];
 }
 
 export const LOCAL_DIR = path.join(process.cwd(), ".data");
@@ -204,75 +270,82 @@ export const LOCAL_MEDIA = path.join(LOCAL_DIR, "media");
 // Semua tulis-ulang file lokal diserialkan (job agen & request owner bisa jalan bersamaan).
 const g = globalThis as unknown as { __mtLocalQueue?: Promise<unknown> };
 
-class LocalRepo implements Repo {
-  private async read(): Promise<LocalData> {
-    try {
-      return JSON.parse(await fs.readFile(LOCAL_DB, "utf8")) as LocalData;
-    } catch {
-      return { brand: null, ideas: [], posts: [] };
-    }
+async function readLocal(): Promise<LocalData> {
+  try {
+    return JSON.parse(await fs.readFile(LOCAL_DB, "utf8")) as LocalData;
+  } catch {
+    return { ideas: [], posts: [] };
   }
-  private async write(d: LocalData) {
-    await fs.mkdir(LOCAL_DIR, { recursive: true });
-    const tmp = `${LOCAL_DB}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
-    await fs.writeFile(tmp, JSON.stringify(d, null, 2));
-    await fs.rename(tmp, LOCAL_DB);
-  }
-  private mutate<T>(fn: (d: LocalData) => T): Promise<T> {
-    const run = (g.__mtLocalQueue ?? Promise.resolve()).then(async () => {
-      const d = await this.read();
-      const out = fn(d);
-      await this.write(d);
-      return out;
-    });
-    g.__mtLocalQueue = run.catch(() => {});
-    return run;
+}
+async function writeLocal(d: LocalData) {
+  await fs.mkdir(LOCAL_DIR, { recursive: true });
+  const tmp = `${LOCAL_DB}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify(d, null, 2));
+  await fs.rename(tmp, LOCAL_DB);
+}
+function mutateLocal<T>(fn: (d: LocalData) => T): Promise<T> {
+  const run = (g.__mtLocalQueue ?? Promise.resolve()).then(async () => {
+    const d = await readLocal();
+    const out = fn(d);
+    await writeLocal(d);
+    return out;
+  });
+  g.__mtLocalQueue = run.catch(() => {});
+  return run;
+}
+
+class LocalWorkspace implements WorkspaceRepo {
+  constructor(readonly id: string) {}
+  private mine<T extends { workspace_id: string }>(rows: T[] | undefined) {
+    return (rows ?? []).filter((r) => r.workspace_id === this.id);
   }
   async getBrand() {
-    return mergeBrand((await this.read()).brand);
+    return mergeBrand((await readLocal()).brands?.[this.id]);
   }
   async saveBrand(brand: Brand) {
-    await this.mutate((d) => {
-      d.brand = brand;
+    await mutateLocal((d) => {
+      d.brands = { ...(d.brands ?? {}), [this.id]: brand };
     });
   }
   async listIdeas() {
-    return (await this.read()).ideas.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    return this.mine((await readLocal()).ideas).sort((a, b) => b.created_at.localeCompare(a.created_at));
   }
   async getIdea(id: string) {
-    return (await this.read()).ideas.find((i) => i.id === id) ?? null;
+    return this.mine((await readLocal()).ideas).find((i) => i.id === id) ?? null;
   }
   async createIdeas(ideas: NewIdea[]) {
     const now = Date.now();
     const created: Idea[] = ideas.map((i, n) => ({
       ...i,
       id: randomUUID(),
+      workspace_id: this.id,
       status: "pending",
       feedback: null,
       post_id: null,
       created_at: new Date(now - n).toISOString(),
     }));
-    await this.mutate((d) => {
+    await mutateLocal((d) => {
       d.ideas.push(...created);
     });
     return created;
   }
   async updateIdea(id: string, patch: Partial<Idea>) {
-    await this.mutate((d) => {
-      d.ideas = d.ideas.map((i) => (i.id === id ? { ...i, ...patch } : i));
+    await mutateLocal((d) => {
+      d.ideas = d.ideas.map((i) => (i.id === id && i.workspace_id === this.id ? { ...i, ...safePatch(patch) } : i));
     });
   }
   async listPosts() {
-    return (await this.read()).posts.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    return this.mine((await readLocal()).posts).sort((a, b) => b.created_at.localeCompare(a.created_at));
   }
   async getPost(id: string) {
-    return (await this.read()).posts.find((p) => p.id === id) ?? null;
+    return this.mine((await readLocal()).posts).find((p) => p.id === id) ?? null;
   }
   async createPost(post: NewPost) {
     const now = new Date().toISOString();
     const created: Post = {
       ...post,
       id: randomUUID(),
+      workspace_id: this.id,
       scheduled_at: null,
       media_urls: [],
       publish_ref: null,
@@ -282,36 +355,37 @@ class LocalRepo implements Repo {
       created_at: now,
       updated_at: now,
     };
-    await this.mutate((d) => {
+    await mutateLocal((d) => {
       d.posts.push(created);
     });
     return created;
   }
   async updatePost(id: string, patch: Partial<Post>) {
-    await this.mutate((d) => {
-      d.posts = d.posts.map((p) => (p.id === id ? { ...p, ...patch, updated_at: new Date().toISOString() } : p));
+    await mutateLocal((d) => {
+      d.posts = d.posts.map((p) =>
+        p.id === id && p.workspace_id === this.id ? { ...p, ...safePatch(patch), updated_at: new Date().toISOString() } : p,
+      );
     });
   }
   async uploadFile(key: string, data: Buffer) {
-    const safe = key.replace(/\.\./g, "");
+    const safe = wsKey(this.id, key);
     const full = path.join(LOCAL_MEDIA, safe);
     await fs.mkdir(path.dirname(full), { recursive: true });
     await fs.writeFile(full, data);
     return `${config.appUrl}/api/media/${safe}`;
   }
   async listMessages(limit: number) {
-    return ((await this.read()).messages ?? []).slice(-limit);
+    return this.mine((await readLocal()).messages).slice(-limit);
   }
   async addMessage(m: NewMessage) {
-    const msg: ChatMessage = { ...m, id: randomUUID(), created_at: new Date().toISOString() };
-    await this.mutate((d) => {
-      d.messages = [...(d.messages ?? []), msg].slice(-500);
+    const msg: ChatMessage = { ...m, id: randomUUID(), workspace_id: this.id, created_at: new Date().toISOString() };
+    await mutateLocal((d) => {
+      d.messages = [...(d.messages ?? []), msg].slice(-5000);
     });
     return msg;
   }
   async getActiveJob() {
-    const jobs = (await this.read()).jobs ?? [];
-    const job = jobs.filter((j) => j.status === "running").at(-1) ?? null;
+    const job = this.mine((await readLocal()).jobs).filter((j) => j.status === "running").at(-1) ?? null;
     if (job && Date.now() - new Date(job.updated_at).getTime() > JOB_STALE_MS) {
       await this.updateJob(job.id, { status: "error" });
       return null;
@@ -320,51 +394,98 @@ class LocalRepo implements Repo {
   }
   async createJob(j: Pick<Job, "agent" | "label">) {
     const now = new Date().toISOString();
-    const job: Job = { ...j, id: randomUUID(), status: "running", created_at: now, updated_at: now };
-    await this.mutate((d) => {
-      d.jobs = [...(d.jobs ?? []), job].slice(-50);
+    const job: Job = { ...j, id: randomUUID(), workspace_id: this.id, status: "running", created_at: now, updated_at: now };
+    await mutateLocal((d) => {
+      d.jobs = [...(d.jobs ?? []), job].slice(-500);
     });
     return job;
   }
   async updateJob(id: string, patch: Partial<Job>) {
-    await this.mutate((d) => {
-      d.jobs = (d.jobs ?? []).map((j) => (j.id === id ? { ...j, ...patch, updated_at: new Date().toISOString() } : j));
+    await mutateLocal((d) => {
+      d.jobs = (d.jobs ?? []).map((j) =>
+        j.id === id && j.workspace_id === this.id ? { ...j, ...safePatch(patch), updated_at: new Date().toISOString() } : j,
+      );
     });
   }
+}
+
+class LocalAccounts implements AccountRepo {
   async countUsers() {
-    return ((await this.read()).users ?? []).length;
+    return ((await readLocal()).users ?? []).length;
   }
   async listUsers() {
-    return (await this.read()).users ?? [];
+    return (await readLocal()).users ?? [];
   }
   async getUserById(id: string) {
-    return ((await this.read()).users ?? []).find((u) => u.id === id) ?? null;
+    return ((await readLocal()).users ?? []).find((u) => u.id === id) ?? null;
   }
   async getUserByEmail(email: string) {
-    return ((await this.read()).users ?? []).find((u) => u.email === email.toLowerCase()) ?? null;
+    return ((await readLocal()).users ?? []).find((u) => u.email === email.toLowerCase()) ?? null;
   }
-  async createUser(u: Pick<User, "name" | "email" | "password_hash" | "role" | "status">) {
+  async createUser(u: NewUser) {
     const user: User = { ...u, email: u.email.toLowerCase(), id: randomUUID(), created_at: new Date().toISOString(), last_login_at: null };
-    await this.mutate((d) => {
+    await mutateLocal((d) => {
       if ((d.users ?? []).some((x) => x.email === user.email)) throw new Error("Email sudah terdaftar");
       d.users = [...(d.users ?? []), user];
     });
     return user;
   }
   async updateUser(id: string, patch: Partial<User>) {
-    await this.mutate((d) => {
-      d.users = (d.users ?? []).map((u) => (u.id === id ? { ...u, ...patch } : u));
+    await mutateLocal((d) => {
+      d.users = (d.users ?? []).map((u) => (u.id === id ? { ...u, ...safePatch(patch) } : u));
     });
   }
   async deleteUser(id: string) {
-    await this.mutate((d) => {
+    await mutateLocal((d) => {
       d.users = (d.users ?? []).filter((u) => u.id !== id);
+    });
+  }
+  async createWorkspace(name: string) {
+    const ws: Workspace = { id: randomUUID(), name, owner_id: null, publish_key: null, created_at: new Date().toISOString() };
+    await mutateLocal((d) => {
+      d.workspaces = [...(d.workspaces ?? []), ws];
+    });
+    return ws;
+  }
+  async setWorkspaceOwner(id: string, ownerId: string) {
+    await mutateLocal((d) => {
+      d.workspaces = (d.workspaces ?? []).map((w) => (w.id === id ? { ...w, owner_id: ownerId } : w));
+    });
+  }
+  async getWorkspace(id: string) {
+    return ((await readLocal()).workspaces ?? []).find((w) => w.id === id) ?? null;
+  }
+  async setWorkspacePublishKey(id: string, key: string | null) {
+    await mutateLocal((d) => {
+      d.workspaces = (d.workspaces ?? []).map((w) => (w.id === id ? { ...w, publish_key: key } : w));
+    });
+  }
+  async listWorkspaces() {
+    return (await readLocal()).workspaces ?? [];
+  }
+  async deleteWorkspace(id: string) {
+    await mutateLocal((d) => {
+      const keep = <T extends { workspace_id: string }>(rows: T[] | undefined) => (rows ?? []).filter((r) => r.workspace_id !== id);
+      d.workspaces = (d.workspaces ?? []).filter((w) => w.id !== id);
+      d.ideas = keep(d.ideas);
+      d.posts = keep(d.posts);
+      d.messages = keep(d.messages);
+      d.jobs = keep(d.jobs);
+      if (d.brands) delete d.brands[id];
+      d.users = (d.users ?? []).map((u) => (u.workspace_id === id ? { ...u, workspace_id: null } : u));
     });
   }
 }
 
-let repo: Repo | null = null;
-export function db(): Repo {
-  if (!repo) repo = config.hasSupabase ? new SupabaseRepo() : new LocalRepo();
-  return repo;
+// ---------------------------------------------------------------- akses
+
+export function db(workspaceId: string): WorkspaceRepo {
+  if (!workspaceId) throw new Error("Workspace tidak diketahui");
+  return config.hasSupabase ? new SupabaseWorkspace(workspaceId) : new LocalWorkspace(workspaceId);
+}
+
+let acc: AccountRepo | null = null;
+export function accounts(): AccountRepo {
+  if (!acc) acc = config.hasSupabase ? new SupabaseAccounts() : new LocalAccounts();
+  return acc;
 }
