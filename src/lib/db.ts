@@ -76,10 +76,18 @@ const BUCKET = "media";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const STRIP = ["id", "workspace_id", "created_at"] as const;
 
-/** Buang field yang tidak boleh diubah lewat patch (id, workspace). */
+/** Buang field yang tidak boleh diubah lewat patch (id, workspace) pada data konten. */
 function safePatch<T extends object>(patch: T): T {
   const out = { ...patch } as Record<string, unknown>;
   for (const k of STRIP) delete out[k];
+  return out as T;
+}
+
+/** Untuk akun: id & tanggal dibuat tidak boleh diubah, tapi workspace_id boleh (ditautkan ke workspace). */
+function userPatch<T extends object>(patch: T): T {
+  const out = { ...patch } as Record<string, unknown>;
+  delete out.id;
+  delete out.created_at;
   return out as T;
 }
 
@@ -224,7 +232,7 @@ class SupabaseAccounts implements AccountRepo {
     return check(res) as User;
   }
   async updateUser(id: string, patch: Partial<User>) {
-    check(await sb().from("users").update(safePatch(patch)).eq("id", id));
+    check(await sb().from("users").update(userPatch(patch)).eq("id", id));
   }
   async deleteUser(id: string) {
     check(await sb().from("users").delete().eq("id", id));
@@ -432,7 +440,7 @@ class LocalAccounts implements AccountRepo {
   }
   async updateUser(id: string, patch: Partial<User>) {
     await mutateLocal((d) => {
-      d.users = (d.users ?? []).map((u) => (u.id === id ? { ...u, ...safePatch(patch) } : u));
+      d.users = (d.users ?? []).map((u) => (u.id === id ? { ...u, ...userPatch(patch) } : u));
     });
   }
   async deleteUser(id: string) {
