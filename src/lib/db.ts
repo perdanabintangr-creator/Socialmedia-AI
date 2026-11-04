@@ -70,9 +70,10 @@ function mergeBrand(data: Partial<Brand> | null | undefined): Brand {
 class SupabaseRepo implements Repo {
   private sb: SupabaseClient;
   constructor() {
+    // trim: kunci yang ditempel di dashboard sering ikut spasi / baris baru.
     this.sb = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      process.env.SUPABASE_URL!.trim(),
+      process.env.SUPABASE_SERVICE_ROLE_KEY!.trim(),
       { auth: { persistSession: false } },
     );
   }

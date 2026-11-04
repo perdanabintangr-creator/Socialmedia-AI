@@ -22,7 +22,13 @@ export async function loginAction(_: ActionState, fd: FormData): Promise<ActionS
   const f = fails.get(email);
   if (f && f.n >= 8 && f.until > Date.now()) return { error: "Terlalu banyak percobaan. Coba lagi 15 menit lagi." };
 
-  const user = await db().getUserByEmail(email);
+  let user: Awaited<ReturnType<ReturnType<typeof db>["getUserByEmail"]>>;
+  try {
+    user = await db().getUserByEmail(email);
+  } catch (e) {
+    console.error("Login: database error", e);
+    return { error: "Server belum tersambung ke database. Hubungi admin (cek SUPABASE_SERVICE_ROLE_KEY)." };
+  }
   const ok = user ? await verifyPassword(password, user.password_hash) : false;
   if (!user || !ok) {
     fails.set(email, { n: (f && f.until > Date.now() ? f.n : 0) + 1, until: Date.now() + 15 * 60_000 });
@@ -46,7 +52,12 @@ export async function registerAction(_: ActionState, fd: FormData): Promise<Acti
   if (!EMAIL.test(email)) return { error: "Format email tidak valid" };
   if (password.length < 8) return { error: "Password minimal 8 karakter" };
   if (password !== confirm) return { error: "Konfirmasi password tidak sama" };
-  if (await db().getUserByEmail(email)) return { error: "Email sudah terdaftar. Silakan masuk." };
+  try {
+    if (await db().getUserByEmail(email)) return { error: "Email sudah terdaftar. Silakan masuk." };
+  } catch (e) {
+    console.error("Daftar: database error", e);
+    return { error: "Server belum tersambung ke database. Coba lagi nanti." };
+  }
 
   // Pengguna pertama otomatis jadi admin aktif; berikutnya menunggu persetujuan admin.
   const first = (await db().countUsers()) === 0;
