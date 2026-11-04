@@ -4,7 +4,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { config } from "./config";
-import { DEFAULT_BRAND, type Brand, type Idea, type Post } from "./types";
+import { DEFAULT_BRAND, type Brand, type ChatMessage, type Idea, type Job, type Post } from "./types";
 
 /**
  * Lapisan data. Dua mode:
@@ -38,7 +38,15 @@ interface Repo {
   createPost(post: NewPost): Promise<Post>;
   updatePost(id: string, patch: Partial<Post>): Promise<void>;
   uploadFile(key: string, data: Buffer, contentType: string): Promise<string>;
+  listMessages(limit: number): Promise<ChatMessage[]>; // urut lama → baru
+  addMessage(m: NewMessage): Promise<ChatMessage>;
+  getActiveJob(): Promise<Job | null>;
+  createJob(j: Pick<Job, "agent" | "label">): Promise<Job>;
+  updateJob(id: string, patch: Partial<Job>): Promise<void>;
 }
+
+export type NewMessage = Omit<ChatMessage, "id" | "created_at">;
+const JOB_STALE_MS = 6 * 60_000; // job lebih lama dari ini dianggap macet
 
 const BUCKET = "media";
 
@@ -117,6 +125,31 @@ class SupabaseRepo implements Repo {
     if (error) throw new Error(`Storage: ${error.message}`);
     return this.sb.storage.from(BUCKET).getPublicUrl(key).data.publicUrl;
   }
+  async listMessages(limit: number) {
+    const rows = this.check(
+      await this.sb.from("messages").select("*").order("created_at", { ascending: false }).limit(limit),
+    ) as ChatMessage[];
+    return rows.reverse();
+  }
+  async addMessage(m: NewMessage) {
+    return this.check(await this.sb.from("messages").insert(m).select("*").single()) as ChatMessage;
+  }
+  async getActiveJob() {
+    const job = this.check(
+      await this.sb.from("jobs").select("*").eq("status", "running").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    ) as Job | null;
+    if (job && Date.now() - new Date(job.updated_at).getTime() > JOB_STALE_MS) {
+      await this.updateJob(job.id, { status: "error" });
+      return null;
+    }
+    return job;
+  }
+  async createJob(j: Pick<Job, "agent" | "label">) {
+    return this.check(await this.sb.from("jobs").insert({ ...j, status: "running" }).select("*").single()) as Job;
+  }
+  async updateJob(id: string, patch: Partial<Job>) {
+    this.check(await this.sb.from("jobs").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", id));
+  }
 }
 
 // ---------------------------------------------------------------- Lokal
@@ -125,11 +158,16 @@ interface LocalData {
   brand: Brand | null;
   ideas: Idea[];
   posts: Post[];
+  messages?: ChatMessage[];
+  jobs?: Job[];
 }
 
 export const LOCAL_DIR = path.join(process.cwd(), ".data");
 const LOCAL_DB = path.join(LOCAL_DIR, "db.json");
 export const LOCAL_MEDIA = path.join(LOCAL_DIR, "media");
+
+// Semua tulis-ulang file lokal diserialkan (job agen & request owner bisa jalan bersamaan).
+const g = globalThis as unknown as { __mtLocalQueue?: Promise<unknown> };
 
 class LocalRepo implements Repo {
   private async read(): Promise<LocalData> {
@@ -141,17 +179,27 @@ class LocalRepo implements Repo {
   }
   private async write(d: LocalData) {
     await fs.mkdir(LOCAL_DIR, { recursive: true });
-    const tmp = `${LOCAL_DB}.${process.pid}.tmp`;
+    const tmp = `${LOCAL_DB}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
     await fs.writeFile(tmp, JSON.stringify(d, null, 2));
     await fs.rename(tmp, LOCAL_DB);
+  }
+  private mutate<T>(fn: (d: LocalData) => T): Promise<T> {
+    const run = (g.__mtLocalQueue ?? Promise.resolve()).then(async () => {
+      const d = await this.read();
+      const out = fn(d);
+      await this.write(d);
+      return out;
+    });
+    g.__mtLocalQueue = run.catch(() => {});
+    return run;
   }
   async getBrand() {
     return mergeBrand((await this.read()).brand);
   }
   async saveBrand(brand: Brand) {
-    const d = await this.read();
-    d.brand = brand;
-    await this.write(d);
+    await this.mutate((d) => {
+      d.brand = brand;
+    });
   }
   async listIdeas() {
     return (await this.read()).ideas.sort((a, b) => b.created_at.localeCompare(a.created_at));
@@ -160,7 +208,6 @@ class LocalRepo implements Repo {
     return (await this.read()).ideas.find((i) => i.id === id) ?? null;
   }
   async createIdeas(ideas: NewIdea[]) {
-    const d = await this.read();
     const now = Date.now();
     const created: Idea[] = ideas.map((i, n) => ({
       ...i,
@@ -170,14 +217,15 @@ class LocalRepo implements Repo {
       post_id: null,
       created_at: new Date(now - n).toISOString(),
     }));
-    d.ideas.push(...created);
-    await this.write(d);
+    await this.mutate((d) => {
+      d.ideas.push(...created);
+    });
     return created;
   }
   async updateIdea(id: string, patch: Partial<Idea>) {
-    const d = await this.read();
-    d.ideas = d.ideas.map((i) => (i.id === id ? { ...i, ...patch } : i));
-    await this.write(d);
+    await this.mutate((d) => {
+      d.ideas = d.ideas.map((i) => (i.id === id ? { ...i, ...patch } : i));
+    });
   }
   async listPosts() {
     return (await this.read()).posts.sort((a, b) => b.created_at.localeCompare(a.created_at));
@@ -186,7 +234,6 @@ class LocalRepo implements Repo {
     return (await this.read()).posts.find((p) => p.id === id) ?? null;
   }
   async createPost(post: NewPost) {
-    const d = await this.read();
     const now = new Date().toISOString();
     const created: Post = {
       ...post,
@@ -200,16 +247,15 @@ class LocalRepo implements Repo {
       created_at: now,
       updated_at: now,
     };
-    d.posts.push(created);
-    await this.write(d);
+    await this.mutate((d) => {
+      d.posts.push(created);
+    });
     return created;
   }
   async updatePost(id: string, patch: Partial<Post>) {
-    const d = await this.read();
-    d.posts = d.posts.map((p) =>
-      p.id === id ? { ...p, ...patch, updated_at: new Date().toISOString() } : p,
-    );
-    await this.write(d);
+    await this.mutate((d) => {
+      d.posts = d.posts.map((p) => (p.id === id ? { ...p, ...patch, updated_at: new Date().toISOString() } : p));
+    });
   }
   async uploadFile(key: string, data: Buffer) {
     const safe = key.replace(/\.\./g, "");
@@ -217,6 +263,38 @@ class LocalRepo implements Repo {
     await fs.mkdir(path.dirname(full), { recursive: true });
     await fs.writeFile(full, data);
     return `${config.appUrl}/api/media/${safe}`;
+  }
+  async listMessages(limit: number) {
+    return ((await this.read()).messages ?? []).slice(-limit);
+  }
+  async addMessage(m: NewMessage) {
+    const msg: ChatMessage = { ...m, id: randomUUID(), created_at: new Date().toISOString() };
+    await this.mutate((d) => {
+      d.messages = [...(d.messages ?? []), msg].slice(-500);
+    });
+    return msg;
+  }
+  async getActiveJob() {
+    const jobs = (await this.read()).jobs ?? [];
+    const job = jobs.filter((j) => j.status === "running").at(-1) ?? null;
+    if (job && Date.now() - new Date(job.updated_at).getTime() > JOB_STALE_MS) {
+      await this.updateJob(job.id, { status: "error" });
+      return null;
+    }
+    return job;
+  }
+  async createJob(j: Pick<Job, "agent" | "label">) {
+    const now = new Date().toISOString();
+    const job: Job = { ...j, id: randomUUID(), status: "running", created_at: now, updated_at: now };
+    await this.mutate((d) => {
+      d.jobs = [...(d.jobs ?? []), job].slice(-50);
+    });
+    return job;
+  }
+  async updateJob(id: string, patch: Partial<Job>) {
+    await this.mutate((d) => {
+      d.jobs = (d.jobs ?? []).map((j) => (j.id === id ? { ...j, ...patch, updated_at: new Date().toISOString() } : j));
+    });
   }
 }
 

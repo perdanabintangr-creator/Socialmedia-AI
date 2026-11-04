@@ -76,7 +76,7 @@ const LAYOUT_GUIDE = `# Layout yang tersedia (pilih per slide)
 - quote: kutipan besar + nama sumber (body). Opsional foto bulat.
 - cta: penutup ajakan follow/save/share; opsional foto latar.`;
 
-function brandSystemPrompt(brand: Brand): string {
+export function brandSystemPrompt(brand: Brand): string {
   const assets = brand.assets.length
     ? brand.assets.map((a) => `- id "${a.id}": ${a.description || "(tanpa deskripsi)"}`).join("\n")
     : "- (belum ada)";
@@ -123,10 +123,11 @@ function formatRules(format: PostFormat): string {
 - Slide terakhir: layout cta.`;
 }
 
-async function callStructured<T extends z.ZodType>(
+export async function callStructured<T extends z.ZodType>(
   system: string,
   content: Anthropic.Beta.BetaContentBlockParam[] | string,
   schema: T,
+  effort: "low" | "medium" | "high" = "medium",
 ): Promise<z.infer<T>> {
   try {
     const res = await anthropic().beta.messages.parse({
@@ -135,7 +136,7 @@ async function callStructured<T extends z.ZodType>(
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
       system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
-      output_config: { effort: "medium", format: betaZodOutputFormat(schema) },
+      output_config: { effort, format: betaZodOutputFormat(schema) },
       messages: [{ role: "user", content }],
     });
     if (res.stop_reason === "refusal") {

@@ -1,0 +1,352 @@
+import "server-only";
+import { z } from "zod";
+import { db, type NewMessage } from "./db";
+import { config } from "./config";
+import { brandSystemPrompt, callStructured } from "./ai";
+import { AGENTS, type AgentId } from "./agents";
+import {
+  approveAndPublish,
+  buildPostFromIdea,
+  createIdeas,
+  defaultScheduleWib,
+  nowWib,
+  parseWib,
+  revisePostWith,
+  type Progress,
+} from "./pipeline";
+import type { Idea, Job, Post, PostFormat } from "./types";
+
+/**
+ * Studio: owner ngobrol dengan tim agen (Kata, Rupa, Siar).
+ * 1. Pesan owner → diputuskan aksinya (Claude, atau aturan kata kunci di mode demo)
+ * 2. Agen membalas singkat
+ * 3. Pekerjaan berat dijalankan di latar belakang (job); tiap agen melapor progres ke chat
+ */
+
+const say = (agent: AgentId, text: string, extra: Partial<NewMessage> = {}) =>
+  db().addMessage({ role: "agent", agent, kind: "text", text, refs: [], ...extra });
+
+export const userSays = (text: string) => db().addMessage({ role: "user", agent: null, kind: "text", text, refs: [] });
+
+const fmtWib = (iso: string | null) =>
+  iso
+    ? new Intl.DateTimeFormat("id-ID", { dateStyle: "full", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(new Date(iso)) + " WIB"
+    : "-";
+
+// ------------------------------------------------------------------ keputusan
+
+const Decision = z.object({
+  action: z.enum(["ideas", "create_post", "revise", "approve", "reject", "status", "chat"]),
+  speaker: z.enum(["kata", "rupa", "siar"]).describe("Agen yang paling pas membalas: kata (ide/naskah), rupa (desain/revisi visual), siar (jadwal/posting/status)"),
+  reply: z.string().describe("Balasan singkat 1-2 kalimat, santai & ramah, sebagai agen tersebut. Jangan janji hal yang tidak dikerjakan aksi ini"),
+  brief: z.string().describe("ideas/create_post: topik / arahan dari owner. Selain itu kosong"),
+  count: z.number().describe("ideas: jumlah ide (1-10), default 5. Selain itu 0"),
+  format: z.enum(["auto", "single", "carousel"]),
+  targetId: z.string().describe("revise/approve/reject: id konten (post) atau ide yang dimaksud. Kosong bila tidak jelas"),
+  instruction: z.string().describe("revise: instruksi revisi selengkap mungkin. Selain itu kosong"),
+  when: z.enum(["now", "schedule"]).describe("approve: posting sekarang atau dijadwalkan (default schedule)"),
+  scheduleAt: z.string().describe("approve + schedule: waktu WIB format YYYY-MM-DDTHH:mm, atau kosong untuk jam default"),
+});
+type DecisionT = z.infer<typeof Decision>;
+
+interface Snapshot {
+  pendingIdeas: Idea[];
+  review: Post[];
+  upcoming: Post[];
+  published: Post[];
+}
+
+async function snapshot(): Promise<Snapshot> {
+  const [ideas, posts] = await Promise.all([db().listIdeas(), db().listPosts()]);
+  return {
+    pendingIdeas: ideas.filter((i) => i.status === "pending").slice(0, 15),
+    review: posts.filter((p) => p.status === "review" || p.status === "failed").slice(0, 10),
+    upcoming: posts
+      .filter((p) => p.status === "scheduled" || p.status === "approved")
+      .sort((a, b) => (a.scheduled_at ?? "").localeCompare(b.scheduled_at ?? ""))
+      .slice(0, 10),
+    published: posts.filter((p) => p.status === "published").slice(0, 5),
+  };
+}
+
+async function decide(text: string, snap: Snapshot): Promise<DecisionT> {
+  if (!config.hasAI) return demoDecide(text, snap);
+  const brand = await db().getBrand();
+  const history = (await db().listMessages(14))
+    .map((m) => `${m.role === "user" ? "Owner" : AGENTS[m.agent ?? "kata"].name}: ${m.text}`)
+    .join("\n");
+  const state = JSON.stringify(
+    {
+      ide_menunggu_acc: snap.pendingIdeas.map((i) => ({ id: i.id, judul: i.title, format: i.format })),
+      konten_menunggu_acc: snap.review.map((p) => ({ id: p.id, judul: p.title, slide: p.slides.length, revisi: p.revision_count })),
+      terjadwal: snap.upcoming.map((p) => ({ id: p.id, judul: p.title, jadwal: fmtWib(p.scheduled_at), status: p.status })),
+      sudah_terbit: snap.published.map((p) => ({ judul: p.title, waktu: fmtWib(p.scheduled_at) })),
+    },
+    null,
+    1,
+  );
+  const system = `${brandSystemPrompt(brand)}
+
+# Peranmu sekarang: koordinator tim di Studio chat
+Owner mengobrol dengan tim agen: Kata (strategi & naskah), Rupa (desain & visual), Siar (jadwal & posting ke Instagram & TikTok). Tugasmu membaca pesan owner lalu memilih SATU aksi:
+- ideas: owner minta ide / brainstorming.
+- create_post: owner minta langsung dibuatkan konten tentang topik tertentu.
+- revise: owner minta mengubah konten yang sedang menunggu ACC (teks, visual, foto, caption, dsb).
+- approve: owner menyetujui konten (ACC / oke / posting / jadwalkan). Jika targetId tidak disebut, pilih konten menunggu ACC terbaru.
+- reject: owner menolak/membuang ide atau konten.
+- status: owner bertanya jadwal, progres, apa yang sudah/akan terbit. Jawab langsung di reply berdasarkan data.
+- chat: sapaan, pertanyaan umum, atau hal lain. Jawab membantu di reply.
+Gunakan id persis dari data. Jangan mengarang id.`;
+  const user = `Sekarang: ${nowWib()} (WIB)
+
+Data saat ini:
+${state}
+
+Percakapan terakhir:
+${history || "(belum ada)"}
+
+Pesan baru dari owner: ${text}`;
+  return callStructured(system, user, Decision, "low");
+}
+
+/** Mode demo: aturan kata kunci sederhana. */
+function demoDecide(text: string, snap: Snapshot): DecisionT {
+  const t = text.toLowerCase();
+  const base: DecisionT = {
+    action: "chat",
+    speaker: "kata",
+    reply: "",
+    brief: "",
+    count: 0,
+    format: "auto",
+    targetId: "",
+    instruction: "",
+    when: "schedule",
+    scheduleAt: "",
+  };
+  const latest = snap.review[0];
+  if (/\b(acc|setuju|approve|oke posting|gas)\b/.test(t) && latest) {
+    return { ...base, action: "approve", speaker: "siar", targetId: latest.id, when: /sekarang/.test(t) ? "now" : "schedule", reply: "Siap! Aku render versi final dan atur jadwalnya." };
+  }
+  if (/(revisi|ubah|ganti|perbaiki|lebih |kurang)/.test(t) && latest) {
+    return { ...base, action: "revise", speaker: "rupa", targetId: latest.id, instruction: text, reply: "Oke, aku dan Kata kerjakan revisinya." };
+  }
+  if (/(jadwal|status|kapan|terbit)/.test(t)) {
+    return { ...base, action: "status", speaker: "siar", reply: "" };
+  }
+  if (/\bide\b|brainstorm/.test(t)) {
+    const n = Number(/(\d+)/.exec(t)?.[1] ?? 5);
+    return { ...base, action: "ideas", speaker: "kata", brief: text, count: Math.min(10, Math.max(1, n)), reply: "Siap, aku cari ide-idenya dulu ya." };
+  }
+  if (/(buat|bikin|carousel|konten|post)/.test(t)) {
+    return { ...base, action: "create_post", speaker: "kata", brief: text, format: /single/.test(t) ? "single" : /carousel/.test(t) ? "carousel" : "auto", reply: "Siap! Aku susun angle & naskahnya, nanti Rupa yang desain." };
+  }
+  return {
+    ...base,
+    reply:
+      "Halo! Kami siap bantu. Coba ketik misalnya: “buatkan 5 ide konten minggu ini”, “bikin carousel tentang tips branding”, atau “ACC, jadwalkan besok jam 7 malam”. (Mode demo: isi ANTHROPIC_API_KEY supaya kami benar-benar pintar.)",
+  };
+}
+
+function statusText(snap: Snapshot) {
+  const lines: string[] = [];
+  if (snap.review.length) lines.push(`Menunggu ACC kamu: ${snap.review.map((p) => `“${p.title}”`).join(", ")}.`);
+  if (snap.pendingIdeas.length) lines.push(`Ada ${snap.pendingIdeas.length} ide yang belum kamu pilih.`);
+  if (snap.upcoming.length)
+    lines.push(`Jadwal: ${snap.upcoming.map((p) => `“${p.title}” → ${fmtWib(p.scheduled_at)}${p.status === "approved" ? " (belum terkirim, auto-post belum aktif)" : ""}`).join("; ")}.`);
+  if (snap.published.length) lines.push(`Terakhir terbit: “${snap.published[0].title}”.`);
+  return lines.length ? lines.join("\n") : "Belum ada konten yang berjalan. Mau aku minta Kata siapkan ide?";
+}
+
+// ------------------------------------------------------------------ job
+
+type Task =
+  | { type: "ideas"; brief: string; count: number; format?: PostFormat }
+  | { type: "create_post"; brief: string; format?: PostFormat }
+  | { type: "build_from_idea"; ideaId: string }
+  | { type: "revise"; postId: string; instruction: string }
+  | { type: "approve"; postId: string; scheduleAt: Date | null };
+
+const FIRST_AGENT: Record<Task["type"], [AgentId, string]> = {
+  ideas: ["kata", "Kata sedang mencari ide…"],
+  create_post: ["kata", "Kata sedang menulis naskah…"],
+  build_from_idea: ["kata", "Kata sedang menulis naskah…"],
+  revise: ["kata", "Kata sedang merevisi…"],
+  approve: ["siar", "Siar sedang merender & menjadwalkan…"],
+};
+
+export async function activeJob(): Promise<Job | null> {
+  return db().getActiveJob();
+}
+
+/** Buat job lalu kembalikan fungsi yang menjalankannya (dipanggil lewat after()). */
+export async function startTask(task: Task): Promise<() => Promise<void>> {
+  const [agent, label] = FIRST_AGENT[task.type];
+  const job = await db().createJob({ agent, label });
+  return () => runTask(job, task);
+}
+
+const NEXT_LABEL: Partial<Record<AgentId, [AgentId, string]>> = {
+  kata: ["rupa", "Rupa sedang menyusun desain…"],
+  rupa: ["rupa", "Rupa sedang mengecek hasil render…"],
+};
+
+async function runTask(job: Job, task: Task) {
+  let current: AgentId = job.agent;
+  const progress: Progress = async (agent, text) => {
+    await say(agent, text);
+    const next = NEXT_LABEL[agent];
+    if (next) {
+      current = next[0];
+      await db().updateJob(job.id, { agent: next[0], label: next[1] });
+    }
+  };
+  try {
+    switch (task.type) {
+      case "ideas": {
+        const ideas = await createIdeas(task.brief, task.count, task.format);
+        await say("kata", `Ini ${ideas.length} ide buat kamu. Pilih yang kamu suka, klik ACC, nanti aku & Rupa langsung kerjakan.`, {
+          kind: "ideas",
+          refs: ideas.map((i) => i.id),
+        });
+        break;
+      }
+      case "create_post": {
+        const [idea] = await createIdeas(task.brief, 1, task.format);
+        await say("kata", `Angle-nya: “${idea.title}” (${idea.format === "carousel" ? "carousel" : "single post"}). Hook: “${idea.hook}”. Aku tulis naskahnya sekarang.`);
+        await deliverPost(await buildPostFromIdea(idea.id, progress));
+        break;
+      }
+      case "build_from_idea": {
+        await deliverPost(await buildPostFromIdea(task.ideaId, progress));
+        break;
+      }
+      case "revise": {
+        await deliverPost(await revisePostWith(task.postId, task.instruction, progress), true);
+        break;
+      }
+      case "approve": {
+        current = "siar";
+        const res = await approveAndPublish(task.postId, task.scheduleAt);
+        const when = task.scheduleAt ? fmtWib(task.scheduleAt.toISOString()) : "sekarang";
+        await say(
+          "siar",
+          res.ok
+            ? config.hasPublisher
+              ? `Beres! “${res.post.title}” ${task.scheduleAt ? `terjadwal ${when}` : "sedang diposting"} ke ${res.post.platforms.map((p) => (p === "instagram" ? "Instagram" : "TikTok")).join(" & ")}.`
+              : `${res.message}${task.scheduleAt ? ` Jadwal yang kucatat: ${when}.` : ""}`
+            : res.message,
+          { kind: res.ok ? "post" : "error", refs: [task.postId] },
+        );
+        break;
+      }
+    }
+    await db().updateJob(job.id, { status: "done" });
+  } catch (e) {
+    console.error("Job gagal:", e);
+    await say(current, `Maaf, ada kendala: ${e instanceof Error ? e.message : "terjadi kesalahan"}. Coba ulangi ya.`, { kind: "error" });
+    await db().updateJob(job.id, { status: "error" });
+  }
+}
+
+async function deliverPost(post: Post, revised = false) {
+  const intro = revised ? "Revisi sudah masuk. Cek lagi ya." : `Desain ${post.slides.length > 1 ? `${post.slides.length} slide` : ""} siap!`;
+  const notes = post.design_notes ? `\nCatatan dariku: ${post.design_notes}` : "";
+  await say("rupa", `${intro} Kalau sudah oke tinggal ACC, atau ketik revisinya di sini.${notes}`, { kind: "post", refs: [post.id] });
+}
+
+// ------------------------------------------------------------------ pesan owner
+
+/** Proses pesan owner. Mengembalikan job yang perlu dijalankan di latar belakang (bila ada). */
+export async function handleMessage(text: string): Promise<(() => Promise<void>) | null> {
+  await userSays(text);
+  const running = await activeJob();
+  if (running) {
+    await say(running.agent, `Sebentar ya, aku masih ${running.label.replace(/^\w+ sedang /, "").replace(/…$/, "")}. Pesanmu kubaca setelah ini selesai.`);
+    return null;
+  }
+  const snap = await snapshot();
+  let d: DecisionT;
+  try {
+    d = await decide(text, snap);
+  } catch (e) {
+    await say("kata", `Maaf, aku lagi kesulitan memahami pesan ini (${e instanceof Error ? e.message : "error"}). Coba lagi ya.`, { kind: "error" });
+    return null;
+  }
+  const format = d.format === "auto" ? undefined : d.format;
+  const brand = await db().getBrand();
+
+  switch (d.action) {
+    case "ideas":
+      await say("kata", d.reply || "Siap, aku cari ide dulu.");
+      return startTask({ type: "ideas", brief: d.brief || text, count: Math.min(10, Math.max(1, Math.round(d.count) || 5)), format });
+    case "create_post":
+      await say("kata", d.reply || "Siap, kukerjakan.");
+      return startTask({ type: "create_post", brief: d.brief || text, format });
+    case "revise": {
+      const post = snap.review.find((p) => p.id === d.targetId) ?? snap.review[0];
+      if (!post) {
+        await say("rupa", "Belum ada konten yang menunggu ACC untuk direvisi. Mau kubuatkan konten baru?");
+        return null;
+      }
+      await say(d.speaker, d.reply || "Oke, kami revisi.");
+      return startTask({ type: "revise", postId: post.id, instruction: d.instruction || text });
+    }
+    case "approve": {
+      const post = snap.review.find((p) => p.id === d.targetId) ?? snap.review[0];
+      if (!post) {
+        await say("siar", "Belum ada konten yang menunggu ACC. Kalau ada ide yang kamu suka, klik ACC di kartunya ya.");
+        return null;
+      }
+      let when: Date | null = null;
+      if (d.when === "schedule") {
+        when = parseWib(d.scheduleAt) ?? parseWib(defaultScheduleWib(brand.postingTime));
+        if (when && when.getTime() < Date.now() + 5 * 60_000) when = parseWib(defaultScheduleWib(brand.postingTime));
+      }
+      await say("siar", d.reply || "Siap, kuproses.");
+      return startTask({ type: "approve", postId: post.id, scheduleAt: when });
+    }
+    case "reject": {
+      const post = snap.review.find((p) => p.id === d.targetId);
+      const idea = snap.pendingIdeas.find((i) => i.id === d.targetId);
+      if (post) await db().updatePost(post.id, { status: "rejected" });
+      else if (idea) await db().updateIdea(idea.id, { status: "rejected" });
+      await say(d.speaker, d.reply || (post || idea ? "Oke, sudah kubuang." : "Yang mana ya? Sebutkan judulnya."));
+      return null;
+    }
+    case "status":
+      await say("siar", config.hasAI && d.reply ? d.reply : statusText(snap));
+      return null;
+    default:
+      await say(d.speaker, d.reply || "Siap membantu!");
+      return null;
+  }
+}
+
+/** Klik tombol di kartu chat. */
+export async function approveIdeaFromChat(ideaId: string) {
+  const idea = await db().getIdea(ideaId);
+  if (!idea) throw new Error("Ide tidak ditemukan");
+  if (await activeJob()) throw new Error("Tim masih mengerjakan tugas lain, tunggu sebentar ya");
+  await userSays(`ACC ide: “${idea.title}”`);
+  await say("kata", "Mantap, pilihan bagus! Aku tulis naskahnya sekarang.");
+  return startTask({ type: "build_from_idea", ideaId });
+}
+
+export async function approvePostFromChat(postId: string, scheduleAt: Date | null) {
+  const post = await db().getPost(postId);
+  if (!post) throw new Error("Konten tidak ditemukan");
+  if (await activeJob()) throw new Error("Tim masih mengerjakan tugas lain, tunggu sebentar ya");
+  await userSays(`ACC “${post.title}” — ${scheduleAt ? `jadwalkan ${fmtWib(scheduleAt.toISOString())}` : "posting sekarang"}`);
+  return startTask({ type: "approve", postId, scheduleAt });
+}
+
+export async function greetIfEmpty() {
+  const msgs = await db().listMessages(1);
+  if (msgs.length) return;
+  const brand = await db().getBrand();
+  await say(
+    "kata",
+    `Halo tim ${brand.name}! Kami bertiga siap jadi tim kontenmu: aku (Kata) urus ide & naskah, Rupa urus desain, Siar urus jadwal & posting. Mau mulai dari mana? Kasih arahan aja, misalnya “buatkan 5 ide konten minggu ini”.`,
+  );
+}

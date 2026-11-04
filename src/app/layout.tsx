@@ -10,7 +10,8 @@ export const metadata: Metadata = {
 };
 
 const NAV = [
-  { href: "/", label: "Dashboard" },
+  { href: "/", label: "Studio" },
+  { href: "/dashboard", label: "Ringkasan" },
   { href: "/ideas", label: "Ide" },
   { href: "/posts", label: "Konten" },
   { href: "/brand", label: "Brand Kit" },
@@ -44,7 +45,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             </div>
           </div>
         </header>
-        <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
+        <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
       </body>
     </html>
   );

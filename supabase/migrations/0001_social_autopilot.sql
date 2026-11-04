@@ -58,3 +58,28 @@ alter table public.posts enable row level security;
 insert into storage.buckets (id, name, public)
 values ('media', 'media', true)
 on conflict (id) do nothing;
+
+-- Studio chat: percakapan owner dengan tim agen AI
+create table if not exists public.messages (
+  id uuid primary key default gen_random_uuid(),
+  role text not null check (role in ('user', 'agent')),
+  agent text check (agent in ('kata', 'rupa', 'siar')),
+  kind text not null default 'text' check (kind in ('text', 'ideas', 'post', 'error')),
+  text text not null default '',
+  refs text[] not null default '{}',
+  created_at timestamptz not null default clock_timestamp()
+);
+create index if not exists messages_created_idx on public.messages (created_at desc);
+
+-- Pekerjaan agen yang sedang berjalan (untuk indikator "sedang bekerja")
+create table if not exists public.jobs (
+  id uuid primary key default gen_random_uuid(),
+  status text not null default 'running' check (status in ('running', 'done', 'error')),
+  agent text not null check (agent in ('kata', 'rupa', 'siar')),
+  label text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.messages enable row level security;
+alter table public.jobs enable row level security;

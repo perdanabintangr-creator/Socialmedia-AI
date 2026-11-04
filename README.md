@@ -5,11 +5,26 @@ AI yang menjalankan sosmed Marqthink end-to-end: **brief → ide → konten (cop
 1. **ACC ide.** AI mengusulkan ide dari brief mingguan. Setelah di-ACC, AI langsung menulis caption dan menyusun slide.
 2. **ACC konten.** Review desain dan caption, minta revisi ke AI (atau edit manual), lalu ACC. Desain final dirender jadi JPEG 1080×1350 dan dikirim ke Instagram & TikTok, langsung atau terjadwal.
 
+## Studio: ngobrol dengan tim agen AI
+
+Halaman utama adalah **Studio**, chat dengan tiga agen:
+
+| Agen | Peran |
+|---|---|
+| **Kata** | Strategi & naskah: ide, hook, isi slide, caption |
+| **Rupa** | Desain & visual: layout, foto, ikon, review hasil render |
+| **Siar** | Jadwal & posting: render final, jadwal, posting ke Instagram & TikTok |
+
+Cukup ketik arahan, misalnya "buatkan 5 ide konten minggu ini", "bikin carousel tentang tips branding", "revisi: hook-nya lebih nendang", "ACC, jadwalkan besok jam 7 malam", atau "apa jadwal minggu ini?". Claude membaca maksudnya, lalu agen yang tepat mengerjakan di latar belakang dan melaporkan progresnya langsung di chat. Hasilnya muncul sebagai kartu: daftar ide dengan tombol ACC/Tolak, dan preview carousel dengan tombol ACC & jadwalkan / Posting sekarang / Revisi.
+
+Halaman Ringkasan, Ide, Konten, dan Brand Kit tetap ada untuk pemantauan dan edit manual.
+
 ## Cara kerja
 
 | Bagian | Teknologi | File |
 |---|---|---|
-| Dashboard & approval | Next.js 15 (App Router, server actions) | `src/app/` |
+| Studio chat + dashboard | Next.js 15 (App Router, server actions, `after()` untuk job latar belakang) | `src/app/`, `src/components/studio.tsx` |
+| Orkestrator tim agen | Claude memilih aksi, lalu pipeline dijalankan per agen | `src/lib/studio.ts`, `src/lib/pipeline.ts` |
 | Otak konten: strategi, copy, art direction, revisi | Claude API (`claude-opus-5-5`, structured output) | `src/lib/ai.ts` |
 | AI art director (review visual otomatis) | Claude vision melihat hasil render lalu memperbaiki | `src/lib/ai.ts` → `reviewDesign` |
 | Desain otomatis | 11 layout × 3 gaya → PNG (next/og / satori) → JPEG (sharp) | `src/lib/templates.tsx`, `src/lib/render.tsx` |

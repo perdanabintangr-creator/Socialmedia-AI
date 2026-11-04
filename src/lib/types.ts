@@ -188,3 +188,26 @@ export function normalizeSlide(s: Partial<Slide> & { layout?: string }): Slide {
     image: s.image ?? null,
   };
 }
+
+// ---------------------------------------------------------------- Studio chat
+
+export type ChatKind = "text" | "ideas" | "post" | "error";
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "agent";
+  agent: "kata" | "rupa" | "siar" | null;
+  kind: ChatKind;
+  text: string;
+  refs: string[]; // id ide (kind=ideas) atau id post (kind=post)
+  created_at: string;
+}
+
+export interface Job {
+  id: string;
+  status: "running" | "done" | "error";
+  agent: "kata" | "rupa" | "siar";
+  label: string; // "Rupa sedang menyusun desain…"
+  created_at: string;
+  updated_at: string;
+}

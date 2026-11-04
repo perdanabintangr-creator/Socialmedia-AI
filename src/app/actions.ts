@@ -5,13 +5,12 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import sharp from "sharp";
 import { db } from "@/lib/db";
-import { analyzeExamples, generateIdeas, generatePost, reviewDesign, revisePost, type Draft } from "@/lib/ai";
-import { renderSlidePng, renderSlidesJpeg } from "@/lib/render";
+import { analyzeExamples } from "@/lib/ai";
 import { sourceImage } from "@/lib/images";
+import { approveAndPublish, buildPostFromIdea, createIdeas, parseWib, revisePostWith } from "@/lib/pipeline";
 import { readMedia } from "@/lib/media";
 import { randomUUID } from "crypto";
-import { getPublishStatus, publish } from "@/lib/publisher";
-import { config } from "@/lib/config";
+import { getPublishStatus } from "@/lib/publisher";
 import { SESSION_COOKIE, sessionToken } from "@/lib/auth";
 import { SLIDE_LAYOUTS, normalizeSlide, type Brand, type FontKey, type ImageSourceMode, type Platform, type Post, type Slide, type SlideLayout, type TemplateKey } from "@/lib/types";
 
@@ -163,11 +162,8 @@ export async function analyzeExamplesAction(): Promise<ActionState> {
 
 export async function generateIdeasAction(_: ActionState, fd: FormData): Promise<ActionState> {
   try {
-    const brand = await db().getBrand();
     const count = Math.min(10, Math.max(1, Number(str(fd, "count")) || 6));
-    const recent = (await db().listIdeas()).slice(0, 40).map((i) => i.title);
-    const ideas = await generateIdeas(brand, { brief: str(fd, "brief"), count, recentTitles: recent });
-    await db().createIdeas(ideas);
+    const ideas = await createIdeas(str(fd, "brief"), count);
     revalidatePath("/", "layout");
     return { ok: `${ideas.length} ide baru siap di-review` };
   } catch (e) {
@@ -178,30 +174,9 @@ export async function generateIdeasAction(_: ActionState, fd: FormData): Promise
 export async function approveIdeaAction(id: string): Promise<ActionState> {
   let postId: string;
   try {
-    const idea = await db().getIdea(id);
-    if (!idea) return { error: "Ide tidak ditemukan" };
-    if (idea.post_id) redirect(`/posts/${idea.post_id}`);
-    const brand = await db().getBrand();
-    const draft = await generatePost(brand, idea);
-    const tempKey = randomUUID();
-    const slides = await materialize(brand, draft, tempKey);
-    const reviewed = await artDirector(brand, { slides, format: idea.format, caption: draft.caption, template: brand.defaultTemplate }, tempKey);
-    const post = await db().createPost({
-      idea_id: idea.id,
-      title: draft.title || idea.title,
-      format: idea.format,
-      platforms: ["instagram", "tiktok"],
-      caption: draft.caption,
-      hashtags: draft.hashtags,
-      slides: reviewed.slides,
-      template: brand.defaultTemplate,
-      status: "review",
-      design_notes: reviewed.notes,
-    });
-    await db().updateIdea(id, { status: "approved", post_id: post.id });
+    const post = await buildPostFromIdea(id);
     postId = post.id;
   } catch (e) {
-    if (isRedirect(e)) throw e;
     return fail(e);
   }
   revalidatePath("/", "layout");
@@ -214,48 +189,7 @@ export async function rejectIdeaAction(id: string): Promise<ActionState> {
   return { ok: "Ide ditolak" };
 }
 
-function isRedirect(e: unknown) {
-  return typeof e === "object" && e !== null && "digest" in e && String((e as { digest: unknown }).digest).startsWith("NEXT_REDIRECT");
-}
-
 // ------------------------------------------------------------------ konten
-
-/** Isi gambar untuk slide yang membutuhkannya (paralel, maks 3 sekaligus). */
-async function materialize(brand: Brand, draft: Pick<Draft, "slides">, key: string): Promise<Slide[]> {
-  const out = draft.slides.map((d) => d.slide);
-  const jobs = draft.slides.map((d, i) => ({ d, i })).filter(({ d }) => d.imageRequest);
-  for (let n = 0; n < jobs.length; n += 3) {
-    await Promise.all(
-      jobs.slice(n, n + 3).map(async ({ d, i }) => {
-        out[i] = { ...out[i], image: await sourceImage(brand, d.imageRequest!, `${key}-${i}`, i) };
-      }),
-    );
-  }
-  return out;
-}
-
-/** AI art director: render → lihat → perbaiki (1 putaran). */
-async function artDirector(
-  brand: Brand,
-  post: Pick<Post, "slides" | "format" | "caption" | "template">,
-  key: string,
-): Promise<{ slides: Slide[]; notes: string | null }> {
-  if (!brand.autoReview || !config.hasAI) return { slides: post.slides, notes: null };
-  try {
-    const renders: string[] = [];
-    for (let i = 0; i < post.slides.length; i++) {
-      const png = await renderSlidePng(brand, post, i);
-      renders.push((await sharp(png).resize(540).jpeg({ quality: 75 }).toBuffer()).toString("base64"));
-    }
-    const review = await reviewDesign(brand, post, renders);
-    if (!review) return { slides: post.slides, notes: null };
-    if (review.verdict === "approve") return { slides: post.slides, notes: review.notes };
-    return { slides: await materialize(brand, review, `${key}-qa`), notes: review.notes };
-  } catch (e) {
-    console.error("Review art director gagal (konten tetap dipakai):", e);
-    return { slides: post.slides, notes: null };
-  }
-}
 
 const LAYOUTS = SLIDE_LAYOUTS as readonly SlideLayout[];
 
@@ -308,19 +242,7 @@ export async function revisePostAction(id: string, _: ActionState, fd: FormData)
   try {
     const instruction = str(fd, "instruction") || str(fd, "preset");
     if (!instruction) return { error: "Tulis dulu revisi yang diinginkan" };
-    const post = await db().getPost(id);
-    if (!post) return { error: "Konten tidak ditemukan" };
-    const brand = await db().getBrand();
-    const draft = await revisePost(brand, post, instruction);
-    const slides = await materialize(brand, draft, `${post.id}-r${post.revision_count + 1}`);
-    await db().updatePost(id, {
-      title: draft.title,
-      caption: draft.caption,
-      hashtags: draft.hashtags,
-      slides,
-      status: "review",
-      revision_count: post.revision_count + 1,
-    });
+    await revisePostWith(id, instruction);
     revalidatePath(`/posts/${id}`);
     return { ok: "Revisi selesai — cek hasilnya" };
   } catch (e) {
@@ -400,58 +322,14 @@ export async function rejectPostAction(id: string): Promise<ActionState> {
 /** ACC konten → render desain → upload → kirim ke publisher (sekarang / terjadwal). */
 export async function approvePostAction(id: string, _: ActionState, fd: FormData): Promise<ActionState> {
   try {
-    const post = await db().getPost(id);
-    if (!post) return { error: "Konten tidak ditemukan" };
-    if (!["review", "failed", "approved"].includes(post.status)) {
-      return { error: "Konten ini sudah dikirim ke jadwal posting" };
-    }
-    const brand = await db().getBrand();
-
     let scheduleAt: Date | null = null;
     if (str(fd, "when") === "schedule") {
-      const local = str(fd, "scheduledAt"); // "2026-11-05T19:00" dianggap WIB
-      scheduleAt = new Date(`${local}:00+07:00`);
-      if (Number.isNaN(scheduleAt.getTime())) return { error: "Tanggal jadwal tidak valid" };
-      if (scheduleAt.getTime() < Date.now() + 5 * 60_000) return { error: "Jadwal minimal 5 menit dari sekarang" };
+      scheduleAt = parseWib(str(fd, "scheduledAt")); // dianggap WIB
+      if (!scheduleAt) return { error: "Tanggal jadwal tidak valid" };
     }
-
-    // 1) Render & upload gambar final
-    const jpgs = await renderSlidesJpeg(brand, post);
-    const stamp = Date.now();
-    const mediaUrls: string[] = [];
-    for (let i = 0; i < jpgs.length; i++) {
-      mediaUrls.push(await db().uploadFile(`posts/${post.id}/${stamp}-${i + 1}.jpg`, jpgs[i], "image/jpeg"));
-    }
-    const text = [post.caption, post.hashtags.map((h) => `#${h}`).join(" ")].filter(Boolean).join("\n\n");
-
-    // 2) Kirim ke publisher
-    if (!config.hasPublisher) {
-      await db().updatePost(id, {
-        status: "approved",
-        media_urls: mediaUrls,
-        scheduled_at: scheduleAt?.toISOString() ?? null,
-        error: null,
-      });
-      revalidatePath("/", "layout");
-      return {
-        ok: "Konten di-ACC & desain final sudah dibuat. Auto-posting belum aktif (AYRSHARE_API_KEY belum diisi) — gambar bisa diunduh di bawah.",
-      };
-    }
-    if (!mediaUrls.every((u) => u.startsWith("https://"))) {
-      return { error: "Gambar harus punya URL publik https (pakai Supabase Storage di produksi)" };
-    }
-    const result = await publish({ text, mediaUrls, platforms: post.platforms, scheduleAt });
-    await db().updatePost(id, {
-      status: result.ok ? (scheduleAt ? "scheduled" : "published") : "failed",
-      media_urls: mediaUrls,
-      scheduled_at: (scheduleAt ?? new Date()).toISOString(),
-      publish_ref: result.ref,
-      publish_result: result.raw,
-      error: result.error,
-    });
+    const res = await approveAndPublish(id, scheduleAt);
     revalidatePath("/", "layout");
-    if (!result.ok) return { error: `Gagal posting: ${result.error}` };
-    return { ok: scheduleAt ? "Terjadwal! Akan terbit otomatis." : "Terkirim! Konten sedang diposting." };
+    return res.ok ? { ok: res.message } : { error: res.message };
   } catch (e) {
     return fail(e);
   }
