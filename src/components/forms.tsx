@@ -1,11 +1,16 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
-import { useFormStatus } from "react-dom";
+import { createContext, startTransition, useActionState, useContext, useEffect, useRef, useState } from "react";
 import type { ActionState } from "@/app/actions";
 
 type Action = (state: ActionState, fd: FormData) => Promise<ActionState>;
 
+const PendingCtx = createContext(false);
+
+/**
+ * Form untuk server action. Dikirim lewat onSubmit (bukan `action=`), supaya React tidak
+ * mengosongkan isian setelah submit — isian tetap ada bila server mengembalikan error.
+ */
 export function ActionForm({
   action,
   children,
@@ -17,19 +22,29 @@ export function ActionForm({
   className?: string;
   resetOnOk?: boolean;
 }) {
-  const [state, formAction] = useActionState(action, undefined);
+  const [state, formAction, pending] = useActionState(action, undefined);
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => {
     if (resetOnOk && state?.ok) ref.current?.reset();
   }, [state, resetOnOk]);
   return (
-    <form ref={ref} action={formAction} className={className}>
-      {children}
+    <form
+      ref={ref}
+      className={className}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (pending) return;
+        const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLElement | null;
+        const fd = new FormData(e.currentTarget, submitter);
+        startTransition(() => formAction(fd));
+      }}
+    >
+      <PendingCtx.Provider value={pending}>{children}</PendingCtx.Provider>
       {state?.error && (
-        <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200">{state.error}</p>
+        <p role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200">{state.error}</p>
       )}
       {state?.ok && (
-        <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 ring-1 ring-emerald-200">{state.ok}</p>
+        <p role="status" className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 ring-1 ring-emerald-200">{state.ok}</p>
       )}
     </form>
   );
@@ -57,7 +72,7 @@ export function Submit({
   name?: string;
   value?: string;
 }) {
-  const { pending } = useFormStatus();
+  const pending = useContext(PendingCtx);
   return (
     <button
       type="submit"

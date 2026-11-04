@@ -19,6 +19,13 @@ Cukup ketik arahan, misalnya "buatkan 5 ide konten minggu ini", "bikin carousel 
 
 Halaman Ringkasan, Ide, Konten, dan Brand Kit tetap ada untuk pemantauan dan edit manual.
 
+## Akun & login
+
+- **/daftar** untuk membuat akun dan **/login** untuk masuk (email + password, di-hash dengan scrypt).
+- Pengguna **pertama** yang mendaftar otomatis menjadi admin aktif. Pendaftar berikutnya berstatus *menunggu persetujuan*.
+- Admin menyetujui, menonaktifkan, mengubah peran, atau menghapus akun di halaman **Pengguna** (`/pengguna`). Akun yang dinonaktifkan langsung tidak bisa mengakses dashboard.
+- Sesi login berupa cookie bertanda tangan (HMAC dengan `SESSION_SECRET`), berlaku 30 hari.
+
 ## Cara kerja
 
 | Bagian | Teknologi | File |
@@ -52,7 +59,7 @@ cp .env.example .env.local   # isi yang sudah ada
 npm run dev
 ```
 
-Buka http://localhost:3000. Di mode dev, `ADMIN_PASSWORD` boleh kosong.
+Buka http://localhost:3000. Daftar akun pertama di `/daftar`; akun itu otomatis menjadi admin.
 
 ## Setup produksi
 

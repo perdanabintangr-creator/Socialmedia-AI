@@ -211,3 +211,17 @@ export interface Job {
   created_at: string;
   updated_at: string;
 }
+
+// ---------------------------------------------------------------- Pengguna
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  password_hash: string;
+  role: "admin" | "member";
+  status: "pending" | "active" | "disabled";
+  created_at: string;
+  last_login_at: string | null;
+}
+export type PublicUser = Omit<User, "password_hash">;

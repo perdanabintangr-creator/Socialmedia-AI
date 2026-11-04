@@ -1,6 +1,5 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import sharp from "sharp";
@@ -11,7 +10,6 @@ import { approveAndPublish, buildPostFromIdea, createIdeas, parseWib, revisePost
 import { readMedia } from "@/lib/media";
 import { randomUUID } from "crypto";
 import { getPublishStatus } from "@/lib/publisher";
-import { SESSION_COOKIE, sessionToken } from "@/lib/auth";
 import { SLIDE_LAYOUTS, normalizeSlide, type Brand, type FontKey, type ImageSourceMode, type Platform, type Post, type Slide, type SlideLayout, type TemplateKey } from "@/lib/types";
 
 export type ActionState = { error?: string; ok?: string } | undefined;
@@ -23,27 +21,6 @@ function fail(e: unknown): ActionState {
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
 const lines = (s: string) =>
   s.split(/[\n,]/).map((x) => x.trim()).filter(Boolean);
-
-// ------------------------------------------------------------------ auth
-
-export async function login(_: ActionState, fd: FormData): Promise<ActionState> {
-  const password = process.env.ADMIN_PASSWORD;
-  if (!password) redirect("/");
-  if (str(fd, "password") !== password) return { error: "Password salah" };
-  (await cookies()).set(SESSION_COOKIE, await sessionToken(password), {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 30,
-    path: "/",
-  });
-  redirect("/");
-}
-
-export async function logout() {
-  (await cookies()).delete(SESSION_COOKIE);
-  redirect("/login");
-}
 
 // ------------------------------------------------------------------ brand
 

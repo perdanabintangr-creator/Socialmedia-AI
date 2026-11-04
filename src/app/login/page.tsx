@@ -1,18 +1,32 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ActionForm, Submit } from "@/components/forms";
-import { Card, inputCls } from "@/components/ui";
-import { login } from "../actions";
+import { AuthShell } from "@/components/auth-shell";
+import { Field, inputCls } from "@/components/ui";
+import { currentUser } from "@/lib/session";
+import { loginAction } from "../auth-actions";
 
-export default function LoginPage() {
+export const dynamic = "force-dynamic";
+
+export default async function LoginPage() {
+  if (await currentUser()) redirect("/");
   return (
-    <div className="mx-auto mt-16 max-w-sm">
-      <Card>
-        <h1 className="text-xl font-bold">Masuk</h1>
-        <p className="mt-1 text-sm text-slate-500">Dashboard Social Media AI</p>
-        <ActionForm action={login} className="mt-5 space-y-3">
-          <input type="password" name="password" placeholder="Password admin" className={inputCls} required autoFocus />
-          <Submit className="w-full" pendingText="Masuk…">Masuk</Submit>
-        </ActionForm>
-      </Card>
-    </div>
+    <AuthShell title="Masuk" subtitle="Masuk ke Studio Social Media AI">
+      <ActionForm action={loginAction} className="space-y-4">
+        <Field label="Email">
+          <input type="email" name="email" autoComplete="email" required autoFocus className={inputCls} />
+        </Field>
+        <Field label="Password">
+          <input type="password" name="password" autoComplete="current-password" required className={inputCls} />
+        </Field>
+        <Submit className="w-full" pendingText="Masuk…">Masuk</Submit>
+      </ActionForm>
+      <p className="mt-6 text-center text-sm text-slate-500">
+        Belum punya akun?{" "}
+        <Link href="/daftar" className="font-semibold text-indigo-600 hover:underline">
+          Daftar
+        </Link>
+      </p>
+    </AuthShell>
   );
 }

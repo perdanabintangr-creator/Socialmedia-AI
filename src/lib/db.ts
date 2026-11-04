@@ -4,7 +4,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { config } from "./config";
-import { DEFAULT_BRAND, type Brand, type ChatMessage, type Idea, type Job, type Post } from "./types";
+import { DEFAULT_BRAND, type Brand, type ChatMessage, type Idea, type Job, type Post, type User } from "./types";
 
 /**
  * Lapisan data. Dua mode:
@@ -43,6 +43,13 @@ interface Repo {
   getActiveJob(): Promise<Job | null>;
   createJob(j: Pick<Job, "agent" | "label">): Promise<Job>;
   updateJob(id: string, patch: Partial<Job>): Promise<void>;
+  countUsers(): Promise<number>;
+  listUsers(): Promise<User[]>;
+  getUserById(id: string): Promise<User | null>;
+  getUserByEmail(email: string): Promise<User | null>;
+  createUser(u: Pick<User, "name" | "email" | "password_hash" | "role" | "status">): Promise<User>;
+  updateUser(id: string, patch: Partial<User>): Promise<void>;
+  deleteUser(id: string): Promise<void>;
 }
 
 export type NewMessage = Omit<ChatMessage, "id" | "created_at">;
@@ -150,6 +157,32 @@ class SupabaseRepo implements Repo {
   async updateJob(id: string, patch: Partial<Job>) {
     this.check(await this.sb.from("jobs").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", id));
   }
+  async countUsers() {
+    const res = await this.sb.from("users").select("id", { count: "exact", head: true });
+    if (res.error) throw new Error(`Database: ${res.error.message}`);
+    return res.count ?? 0;
+  }
+  async listUsers() {
+    return this.check(await this.sb.from("users").select("*").order("created_at", { ascending: true })) as User[];
+  }
+  async getUserById(id: string) {
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+    return this.check(await this.sb.from("users").select("*").eq("id", id).maybeSingle()) as User | null;
+  }
+  async getUserByEmail(email: string) {
+    return this.check(await this.sb.from("users").select("*").eq("email", email.toLowerCase()).maybeSingle()) as User | null;
+  }
+  async createUser(u: Pick<User, "name" | "email" | "password_hash" | "role" | "status">) {
+    const res = await this.sb.from("users").insert({ ...u, email: u.email.toLowerCase() }).select("*").single();
+    if (res.error?.code === "23505") throw new Error("Email sudah terdaftar");
+    return this.check(res) as User;
+  }
+  async updateUser(id: string, patch: Partial<User>) {
+    this.check(await this.sb.from("users").update(patch).eq("id", id));
+  }
+  async deleteUser(id: string) {
+    this.check(await this.sb.from("users").delete().eq("id", id));
+  }
 }
 
 // ---------------------------------------------------------------- Lokal
@@ -160,6 +193,7 @@ interface LocalData {
   posts: Post[];
   messages?: ChatMessage[];
   jobs?: Job[];
+  users?: User[];
 }
 
 export const LOCAL_DIR = path.join(process.cwd(), ".data");
@@ -294,6 +328,36 @@ class LocalRepo implements Repo {
   async updateJob(id: string, patch: Partial<Job>) {
     await this.mutate((d) => {
       d.jobs = (d.jobs ?? []).map((j) => (j.id === id ? { ...j, ...patch, updated_at: new Date().toISOString() } : j));
+    });
+  }
+  async countUsers() {
+    return ((await this.read()).users ?? []).length;
+  }
+  async listUsers() {
+    return (await this.read()).users ?? [];
+  }
+  async getUserById(id: string) {
+    return ((await this.read()).users ?? []).find((u) => u.id === id) ?? null;
+  }
+  async getUserByEmail(email: string) {
+    return ((await this.read()).users ?? []).find((u) => u.email === email.toLowerCase()) ?? null;
+  }
+  async createUser(u: Pick<User, "name" | "email" | "password_hash" | "role" | "status">) {
+    const user: User = { ...u, email: u.email.toLowerCase(), id: randomUUID(), created_at: new Date().toISOString(), last_login_at: null };
+    await this.mutate((d) => {
+      if ((d.users ?? []).some((x) => x.email === user.email)) throw new Error("Email sudah terdaftar");
+      d.users = [...(d.users ?? []), user];
+    });
+    return user;
+  }
+  async updateUser(id: string, patch: Partial<User>) {
+    await this.mutate((d) => {
+      d.users = (d.users ?? []).map((u) => (u.id === id ? { ...u, ...patch } : u));
+    });
+  }
+  async deleteUser(id: string) {
+    await this.mutate((d) => {
+      d.users = (d.users ?? []).filter((u) => u.id !== id);
     });
   }
 }
