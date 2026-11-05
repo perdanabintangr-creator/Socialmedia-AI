@@ -63,30 +63,96 @@ function useCarousel(count: number) {
   };
   const go = (i: number) => {
     const el = ref.current;
-    if (el) el.scrollTo({ left: Math.max(0, Math.min(count - 1, i)) * el.clientWidth, behavior: "smooth" });
+    if (!el) return;
+    const n = Math.max(0, Math.min(count - 1, i));
+    el.scrollTo({ left: n * el.clientWidth, behavior: "smooth" });
+    setIdx(n);
   };
-  return { ref, idx, onScroll, go };
+  return { ref, idx, onScroll, go, count };
 }
 
-function Slides({ images, fit, c }: { images: string[]; fit: "cover" | "contain"; c: ReturnType<typeof useCarousel> }) {
+/**
+ * Slide yang bisa digeser: swipe (sentuh), seret mouse, tombol panah, tombol keyboard,
+ * dan (TikTok) ketuk sisi kiri/kanan seperti di aplikasinya.
+ */
+function Slides({ images, fit, c, tapZones = false, arrows = "hover" }: { images: string[]; fit: "cover" | "contain"; c: ReturnType<typeof useCarousel>; tapZones?: boolean; arrows?: "hover" | "always" }) {
+  const drag = useRef<{ x: number; left: number; moved: boolean; id: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const many = images.length > 1;
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!many || e.pointerType === "touch") return; // sentuhan: biarkan scroll bawaan (lebih mulus)
+    const el = c.ref.current;
+    if (!el) return;
+    drag.current = { x: e.clientX, left: el.scrollLeft, moved: false, id: e.pointerId };
+    el.setPointerCapture(e.pointerId);
+    setDragging(true);
+  };
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    const el = c.ref.current;
+    if (!d || !el) return;
+    const dx = e.clientX - d.x;
+    if (Math.abs(dx) > 4) d.moved = true;
+    el.scrollLeft = d.left - dx;
+  };
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    const el = c.ref.current;
+    drag.current = null;
+    setDragging(false);
+    if (!d || !el) return;
+    el.releasePointerCapture(d.id);
+    const dx = e.clientX - d.x;
+    if (d.moved) {
+      // geser > 15% lebar = pindah slide
+      const start = Math.round(d.left / el.clientWidth);
+      c.go(Math.abs(dx) > el.clientWidth * 0.15 ? start + (dx < 0 ? 1 : -1) : start);
+    } else if (tapZones) {
+      const r = el.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width;
+      if (x < 0.35) c.go(c.idx - 1);
+      else if (x > 0.65) c.go(c.idx + 1);
+    }
+  };
+
+  const arrowCls = `absolute top-1/2 z-30 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-ink shadow-soft transition hover:bg-white ${arrows === "hover" ? "opacity-0 group-hover:opacity-100 focus-visible:opacity-100" : ""}`;
+
   return (
-    <div className="group relative">
-      <div ref={c.ref} onScroll={c.onScroll} className="scrollbar-none flex snap-x snap-mandatory overflow-x-auto">
+    <div
+      className="group relative"
+      tabIndex={many ? 0 : -1}
+      aria-roledescription="carousel"
+      aria-label={`Slide ${c.idx + 1} dari ${images.length}`}
+      onKeyDown={(e) => {
+        if (e.key === "ArrowRight") c.go(c.idx + 1);
+        if (e.key === "ArrowLeft") c.go(c.idx - 1);
+      }}
+    >
+      <div
+        ref={c.ref}
+        onScroll={c.onScroll}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        className={`scrollbar-none flex touch-pan-x overflow-x-auto overscroll-x-contain ${dragging ? "cursor-grabbing select-none" : `snap-x snap-mandatory ${many ? "cursor-grab" : ""}`}`}
+      >
         {images.map((src, i) => (
           // eslint-disable-next-line @next/next/no-img-element
-          <img key={src} src={src} alt={`Slide ${i + 1}`} className={`aspect-[4/5] w-full shrink-0 snap-center bg-slate-100 object-${fit}`} />
+          <img key={src} src={src} alt={`Slide ${i + 1}`} draggable={false} className={`pointer-events-none aspect-[4/5] w-full shrink-0 snap-center bg-slate-100 object-${fit}`} />
         ))}
       </div>
-      {images.length > 1 && (
+      {many && (
         <>
           {c.idx > 0 && (
-            <button aria-label="Slide sebelumnya" onClick={() => c.go(c.idx - 1)} className="absolute top-1/2 left-2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-ink shadow-soft opacity-0 transition group-hover:opacity-100">
-              <ChevronLeft size={16} />
+            <button aria-label="Slide sebelumnya" onClick={() => c.go(c.idx - 1)} className={`${arrowCls} left-2`}>
+              <ChevronLeft size={17} />
             </button>
           )}
           {c.idx < images.length - 1 && (
-            <button aria-label="Slide berikutnya" onClick={() => c.go(c.idx + 1)} className="absolute top-1/2 right-2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-ink shadow-soft opacity-0 transition group-hover:opacity-100">
-              <ChevronRight size={16} />
+            <button aria-label="Slide berikutnya" onClick={() => c.go(c.idx + 1)} className={`${arrowCls} right-2`}>
+              <ChevronRight size={17} />
             </button>
           )}
         </>
@@ -144,19 +210,20 @@ function TikTokView(p: PreviewProps) {
   const tags = p.hashtags.map((h) => `#${h}`).join(" ");
   return (
     <div className="relative flex aspect-[9/19] flex-col justify-center bg-black text-white">
-      <div className="absolute top-10 left-0 right-0 z-10 flex justify-center gap-5 text-[13px] font-semibold">
+      <div className="pointer-events-none absolute top-10 left-0 right-0 z-10 flex justify-center gap-5 text-[13px] font-semibold">
         <span className="text-white/60">Mengikuti</span>
         <span className="border-b-2 border-white pb-1">Untuk Anda</span>
       </div>
-      <Slides images={p.images} fit="contain" c={c} />
+      <Slides images={p.images} fit="contain" c={c} tapZones arrows="always" />
       {p.images.length > 1 && (
-        <div className="absolute bottom-[132px] left-0 right-0 flex justify-center gap-1">
+        <div className="pointer-events-none absolute bottom-[132px] left-0 right-0 flex justify-center gap-1">
           {p.images.map((_, i) => (
             <span key={i} className={`h-1 rounded-full ${i === c.idx ? "w-4 bg-white" : "w-1 bg-white/50"}`} />
           ))}
         </div>
       )}
-      <div className="absolute right-2.5 bottom-28 flex flex-col items-center gap-4 text-[11px] font-semibold">
+      {/* ikon samping hanya hiasan: jangan menghalangi geser / tombol panah */}
+      <div className="pointer-events-none absolute right-2.5 bottom-24 z-10 flex flex-col items-center gap-3.5 text-[11px] font-semibold [filter:drop-shadow(0_1px_2px_rgba(0,0,0,0.75))]">
         <span className="relative">
           <Avatar p={p} size={40} />
           <span className="absolute -bottom-2 left-1/2 grid h-4 w-4 -translate-x-1/2 place-items-center rounded-full bg-[#fe2c55]">
@@ -168,7 +235,7 @@ function TikTokView(p: PreviewProps) {
         <span className="flex flex-col items-center gap-0.5"><Bookmark size={24} fill="white" />Simpan</span>
         <span className="flex flex-col items-center gap-0.5"><Share2 size={24} />Bagikan</span>
       </div>
-      <div className="absolute right-16 bottom-6 left-3 text-[12px] leading-snug">
+      <div className="pointer-events-none absolute right-16 bottom-6 left-3 text-[12px] leading-snug">
         <div className="font-bold">@{handleOf(p)}</div>
         <p className="mt-1 line-clamp-2 text-white/90">
           {p.caption.split("\n")[0]} <span className="font-semibold">{tags}</span>
