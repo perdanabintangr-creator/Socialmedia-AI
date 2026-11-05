@@ -8,6 +8,7 @@ export const config = {
   hasPublisher: Boolean(process.env.AYRSHARE_API_KEY),
   imageProvider: imageProvider && (imageProvider === "gemini" ? process.env.GEMINI_API_KEY : process.env.OPENAI_API_KEY) ? imageProvider : null,
   hasStock: Boolean(process.env.PEXELS_API_KEY),
+  hasApify: Boolean(process.env.APIFY_TOKEN?.trim()),
   hasGoogle: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
   appUrl: (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, ""),
   timezone: "Asia/Jakarta",

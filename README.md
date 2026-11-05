@@ -37,6 +37,20 @@ Cukup ketik arahan, misalnya "buatkan 5 ide konten minggu ini", "bikin carousel 
 
 Halaman Ringkasan, Ide, Konten, dan Brand Kit tetap ada untuk pemantauan dan edit manual.
 
+## Performa (baca metrik dari link)
+
+Menu **Performa** (`/performa`) bisa diaktifkan per workspace. Customer cukup menempel link
+postingan / reels / video / profil TikTok atau Instagram; angka dibaca otomatis (`src/lib/insights.ts`).
+
+- **TikTok**: dibaca langsung dari halaman publik (views, likes, komentar, share, simpan, followers). Gratis.
+- **Instagram**: memblokir pembacaan dari server, jadi lewat konektor Apify bila `APIFY_TOKEN` di-set.
+  Tanpa token, link tetap tersimpan dengan status menunggu. Apify juga jadi cadangan bila TikTok membatasi.
+- Gambar sampul disalin ke storage kita (URL CDN platform kedaluwarsa).
+- Pembaruan: saat halaman dibuka (link > 6 jam) + Vercel Cron harian `/api/cron/insights` (butuh `CRON_SECRET`).
+- Riwayat satu titik per hari (maks 90) untuk grafik tren & pertumbuhan mingguan.
+- Konten yang terbit lewat Ayrshare otomatis ikut dipantau (`postIds[].postUrl`).
+- Uji lokal tanpa internet: `INSIGHTS_FAKE=1` (tidak berlaku di Vercel).
+
 ## Akun, klien & workspace
 
 - **/daftar**: klien mengisi nama, **nama brand/bisnis**, email, dan password. Setiap pendaftar otomatis mendapat **workspace sendiri**: Brand Kit, chat dengan tim agen, ide, konten, gambar, dan jadwal yang terpisah total dari klien lain.

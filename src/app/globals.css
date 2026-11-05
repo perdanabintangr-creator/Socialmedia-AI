@@ -16,6 +16,11 @@
   --color-brand-800: #412cab;
   --color-brand-900: #352787;
 
+  /* Aksen sosial: dipakai hemat untuk story ring, CTA, dan sorotan */
+  --color-pop: #ff3d8b;
+  --color-sun: #ff9a3d;
+  --color-aqua: #22d3c5;
+
   /* Netral bertinta dingin */
   --color-ink: #0f1222;
   --color-canvas: #f8f8fb;
@@ -39,6 +44,51 @@
     }
     to {
       transform: translateX(0);
+    }
+  }
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-float-slow: float 9s ease-in-out infinite;
+  --animate-heart: heart-rise 2.4s ease-out infinite;
+  --animate-pop: pop-in 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  --animate-spin-y: spin-y 28s linear infinite;
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-14px);
+    }
+  }
+  @keyframes heart-rise {
+    0% {
+      transform: translate(0, 0) scale(0.5);
+      opacity: 0;
+    }
+    15% {
+      opacity: 1;
+    }
+    100% {
+      transform: translate(var(--dx, 0px), -170px) scale(1.15);
+      opacity: 0;
+    }
+  }
+  @keyframes pop-in {
+    from {
+      transform: scale(0.6);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+  @keyframes spin-y {
+    from {
+      transform: rotateX(-8deg) rotateY(0deg);
+    }
+    to {
+      transform: rotateX(-8deg) rotateY(-360deg);
     }
   }
   @keyframes fade-up {
@@ -65,15 +115,38 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* Gradien khas sosmed (sunset → pink → violet) */
+.bg-social {
+  background-image: linear-gradient(120deg, var(--color-sun) 0%, var(--color-pop) 45%, var(--color-brand-600) 100%);
+}
+.text-social {
+  background-image: linear-gradient(100deg, var(--color-sun) 0%, var(--color-pop) 40%, var(--color-brand-600) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+/* Cincin story: bungkus elemen bulat dengan .story-ring (padding 2.5px) */
+.story-ring {
+  background-image: conic-gradient(from 210deg, var(--color-sun), var(--color-pop), var(--color-brand-500), var(--color-sun));
+  padding: 2.5px;
+  border-radius: 9999px;
+}
+.story-ring > * {
+  border: 2.5px solid #fff;
+  border-radius: 9999px;
+}
+
 ::selection {
   background: var(--color-brand-200);
 }
 
-/* Fokus keyboard yang jelas di seluruh aplikasi */
-:where(a, button, input, textarea, select, summary):focus-visible {
-  outline: 2px solid var(--color-brand-500);
-  outline-offset: 2px;
-  border-radius: 8px;
+/* Fokus keyboard yang jelas di seluruh aplikasi (di layer base agar utilitas bisa menimpanya) */
+@layer base {
+  :where(a, button, input, textarea, select, summary):focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
 }
 
 /* Item grid boleh menyusut di layar kecil (cegah halaman melebar ke samping) */

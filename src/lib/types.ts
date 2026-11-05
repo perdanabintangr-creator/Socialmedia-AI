@@ -42,6 +42,7 @@ export interface Brand {
   industry: string; // bidang usaha
   goals: string[]; // tujuan konten
   socialRequested: boolean; // klien minta akun sosmed dihubungkan
+  performance: boolean; // pemantauan performa (baca metrik dari link) aktif
 }
 
 export type ImageSourceMode = "auto" | "ai" | "stock" | "brand" | "none";
@@ -177,6 +178,7 @@ export const DEFAULT_BRAND: Brand = {
   industry: "",
   goals: [],
   socialRequested: false,
+  performance: false,
 };
 
 export function normalizeSlide(s: Partial<Slide> & { layout?: string }): Slide {
@@ -253,5 +255,41 @@ export interface Workspace {
   name: string;
   owner_id: string | null;
   publish_key: string | null; // Ayrshare Profile-Key: akun sosmed milik klien ini
+  created_at: string;
+}
+
+// ---------------------------------------------------------------- Performa
+
+export type InsightPlatform = "tiktok" | "instagram";
+export type InsightKind = "post" | "profile";
+
+/** Angka yang terbaca dari sebuah link. Field kosong = platform tidak menyediakannya. */
+export interface InsightMetrics {
+  views?: number;
+  likes?: number;
+  comments?: number;
+  shares?: number;
+  saves?: number;
+  followers?: number;
+  following?: number;
+  posts?: number;
+  totalLikes?: number;
+}
+
+export interface TrackedLink {
+  id: string;
+  workspace_id: string;
+  platform: InsightPlatform;
+  kind: InsightKind;
+  url: string;
+  handle: string | null;
+  title: string | null;
+  thumbnail: string | null;
+  metrics: InsightMetrics | null;
+  history: { at: string; m: InsightMetrics }[]; // satu titik per hari, maks 90
+  status: "pending" | "ok" | "error";
+  error: string | null;
+  post_id: string | null; // konten SosmedAutopilot yang terkait (bila ada)
+  checked_at: string | null;
   created_at: string;
 }

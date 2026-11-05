@@ -1,8 +1,9 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowUp, CalendarCheck, Images, Lightbulb, Loader2, Megaphone, Sparkles } from "lucide-react";
+import { ArrowUp, CalendarCheck, Images, Lightbulb, Loader2, Megaphone, Sparkles, TrendingUp } from "lucide-react";
 import { startChatAction } from "@/app/studio-actions";
 
 const FORMATS = [
@@ -11,10 +12,10 @@ const FORMATS = [
 ] as const;
 
 const ACTIONS = [
-  { icon: Lightbulb, title: "Ide konten", desc: "5 ide minggu ini sesuai brand", prompt: "Buatkan 5 ide konten minggu ini", send: true },
-  { icon: Images, title: "Bikin carousel", desc: "Carousel edukasi 5–8 slide", prompt: "Bikin carousel tentang ", send: false },
-  { icon: Megaphone, title: "Promo produk", desc: "Single post promo siap posting", prompt: "Bikin single post promo untuk ", send: false },
-  { icon: CalendarCheck, title: "Cek jadwal", desc: "Lihat yang akan tayang", prompt: "Apa jadwal posting minggu ini?", send: true },
+  { icon: Lightbulb, title: "Ide konten", desc: "5 ide minggu ini sesuai brand", prompt: "Buatkan 5 ide konten minggu ini", send: true, tint: "from-amber-100 to-orange-50 text-orange-600" },
+  { icon: Images, title: "Carousel", desc: "Carousel edukasi 5–8 slide", prompt: "Bikin carousel tentang ", send: false, tint: "from-brand-100 to-brand-50 text-brand-600" },
+  { icon: Megaphone, title: "Promo", desc: "Single post promo siap posting", prompt: "Bikin single post promo untuk ", send: false, tint: "from-pink-100 to-rose-50 text-pop" },
+  { icon: CalendarCheck, title: "Jadwal", desc: "Lihat yang akan tayang", prompt: "Apa jadwal posting minggu ini?", send: true, tint: "from-sky-100 to-cyan-50 text-sky-600" },
 ];
 
 /** Kotak perintah besar di Beranda: setiap kiriman membuka percakapan baru. */
@@ -48,7 +49,7 @@ export function HomePrompt() {
         className="rounded-3xl bg-white p-3 shadow-lift ring-1 ring-line transition focus-within:ring-2 focus-within:ring-brand-400"
       >
         <div className="flex gap-3 px-2 pt-1">
-          <span className="mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white">
+          <span className="bg-social mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-xl text-white">
             <Sparkles size={16} />
           </span>
           <textarea
@@ -83,7 +84,7 @@ export function HomePrompt() {
           <button
             type="submit"
             disabled={!text.trim() || pending}
-            className="ml-auto inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-ink/85 disabled:opacity-30"
+            className="bg-social ml-auto inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:brightness-105 disabled:opacity-30 disabled:saturate-0"
           >
             {pending ? <Loader2 size={16} className="animate-spin" /> : <ArrowUp size={16} />} Kirim
           </button>
@@ -95,27 +96,38 @@ export function HomePrompt() {
         </p>
       )}
 
-      <p className="mt-10 mb-4 text-center text-sm font-semibold text-slate-500">Atau pilih salah satu</p>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {ACTIONS.map(({ icon: Icon, title, desc, prompt, send }) => (
+      {/* Aksi cepat sebagai "story" */}
+      <div className="scrollbar-none -mx-4 mt-8 flex justify-start gap-5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:justify-center sm:gap-8 sm:px-0">
+        {ACTIONS.map(({ icon: Icon, title, desc, prompt, send, tint }) => (
           <button
             key={title}
             type="button"
             disabled={pending}
+            aria-label={`${title}: ${desc}`}
+            title={desc}
             onClick={() => {
               if (send) return submit(prompt);
               setText(prompt);
               ref.current?.focus();
             }}
-            className="group flex flex-col items-start rounded-2xl bg-white p-4 text-left shadow-soft ring-1 ring-line transition hover:-translate-y-0.5 hover:shadow-lift hover:ring-brand-200 disabled:opacity-60"
+            className="group flex w-[72px] shrink-0 flex-col items-center gap-2 disabled:opacity-60"
           >
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-50 text-brand-600 transition group-hover:bg-brand-600 group-hover:text-white">
-              <Icon size={19} />
+            <span className="story-ring transition group-hover:scale-105 group-active:scale-95">
+              <span className={`grid h-16 w-16 place-items-center bg-gradient-to-br ${tint}`}>
+                <Icon size={24} />
+              </span>
             </span>
-            <div className="mt-4 font-bold">{title}</div>
-            <div className="mt-0.5 text-sm text-slate-500">{desc}</div>
+            <span className="text-xs font-semibold text-slate-600 group-hover:text-ink">{title}</span>
           </button>
         ))}
+        <Link href="/performa" aria-label="Performa: cek likes dan komentar" className="group flex w-[72px] shrink-0 flex-col items-center gap-2">
+          <span className="story-ring transition group-hover:scale-105 group-active:scale-95">
+            <span className="grid h-16 w-16 place-items-center bg-gradient-to-br from-emerald-100 to-teal-50 text-emerald-600">
+              <TrendingUp size={24} />
+            </span>
+          </span>
+          <span className="text-xs font-semibold text-slate-600 group-hover:text-ink">Performa</span>
+        </Link>
       </div>
     </div>
   );

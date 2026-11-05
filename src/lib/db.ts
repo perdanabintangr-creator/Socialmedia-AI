@@ -4,7 +4,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { config } from "./config";
-import { DEFAULT_BRAND, type Brand, type Chat, type ChatMessage, type Idea, type Job, type Post, type User, type Workspace } from "./types";
+import { DEFAULT_BRAND, type Brand, type Chat, type ChatMessage, type Idea, type Job, type Post, type TrackedLink, type User, type Workspace } from "./types";
 
 /**
  * Lapisan data. Dua mode:
@@ -32,6 +32,7 @@ export type NewPost = Omit<
   | "scheduled_at"
 >;
 export type NewMessage = Omit<ChatMessage, "id" | "workspace_id" | "created_at" | "chat_id"> & { chat_id?: string | null };
+export type NewLink = Pick<TrackedLink, "platform" | "kind" | "url" | "handle"> & { post_id?: string | null };
 export type NewUser = Pick<User, "name" | "email" | "password_hash" | "role" | "status" | "workspace_id">;
 
 export interface WorkspaceRepo {
@@ -59,6 +60,11 @@ export interface WorkspaceRepo {
   getActiveJob(): Promise<Job | null>;
   createJob(j: Pick<Job, "agent" | "label">): Promise<Job>;
   updateJob(id: string, patch: Partial<Job>): Promise<void>;
+  listLinks(): Promise<TrackedLink[]>; // terbaru dulu
+  getLink(id: string): Promise<TrackedLink | null>;
+  createLink(l: NewLink): Promise<TrackedLink>;
+  updateLink(id: string, patch: Partial<TrackedLink>): Promise<void>;
+  deleteLink(id: string): Promise<void>;
 }
 
 export interface AccountRepo {
@@ -75,6 +81,8 @@ export interface AccountRepo {
   setWorkspacePublishKey(id: string, key: string | null): Promise<void>;
   listWorkspaces(): Promise<Workspace[]>;
   deleteWorkspace(id: string): Promise<void>;
+  /** Link yang terakhir dicek sebelum `before` (untuk pembaruan terjadwal), lintas workspace. */
+  listStaleLinks(before: string, limit: number): Promise<TrackedLink[]>;
 }
 
 const JOB_STALE_MS = 6 * 60_000; // job lebih lama dari ini dianggap macet
@@ -234,6 +242,26 @@ class SupabaseWorkspace implements WorkspaceRepo {
         .eq("id", id),
     );
   }
+  async listLinks() {
+    return check(
+      await sb().from("tracked_links").select("*").eq("workspace_id", this.id).order("created_at", { ascending: false }).limit(100),
+    ) as TrackedLink[];
+  }
+  async getLink(id: string) {
+    if (!UUID.test(id)) return null;
+    return check(await sb().from("tracked_links").select("*").eq("workspace_id", this.id).eq("id", id).maybeSingle()) as TrackedLink | null;
+  }
+  async createLink(l: NewLink) {
+    const res = await sb().from("tracked_links").insert({ ...l, workspace_id: this.id }).select("*").single();
+    if (res.error?.code === "23505") throw new Error("Link ini sudah dipantau");
+    return check(res) as TrackedLink;
+  }
+  async updateLink(id: string, patch: Partial<TrackedLink>) {
+    check(await sb().from("tracked_links").update(safePatch(patch)).eq("workspace_id", this.id).eq("id", id));
+  }
+  async deleteLink(id: string) {
+    check(await sb().from("tracked_links").delete().eq("workspace_id", this.id).eq("id", id));
+  }
 }
 
 class SupabaseAccounts implements AccountRepo {
@@ -283,6 +311,16 @@ class SupabaseAccounts implements AccountRepo {
     // Konten workspace ikut terhapus (foreign key ON DELETE CASCADE).
     check(await sb().from("workspaces").delete().eq("id", id));
   }
+  async listStaleLinks(before: string, limit: number) {
+    return check(
+      await sb()
+        .from("tracked_links")
+        .select("*")
+        .or(`checked_at.is.null,checked_at.lt.${before}`)
+        .order("checked_at", { ascending: true, nullsFirst: true })
+        .limit(limit),
+    ) as TrackedLink[];
+  }
 }
 
 // ---------------------------------------------------------------- Lokal
@@ -296,6 +334,7 @@ interface LocalData {
   jobs?: Job[];
   users?: User[];
   workspaces?: Workspace[];
+  links?: TrackedLink[];
 }
 
 export const LOCAL_DIR = path.join(process.cwd(), ".data");
@@ -473,9 +512,52 @@ class LocalWorkspace implements WorkspaceRepo {
       );
     });
   }
+  async listLinks() {
+    return this.mine((await readLocal()).links).sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }
+  async getLink(id: string) {
+    return this.mine((await readLocal()).links).find((l) => l.id === id) ?? null;
+  }
+  async createLink(l: NewLink) {
+    const link: TrackedLink = {
+      ...l,
+      id: randomUUID(),
+      workspace_id: this.id,
+      post_id: l.post_id ?? null,
+      title: null,
+      thumbnail: null,
+      metrics: null,
+      history: [],
+      status: "pending",
+      error: null,
+      checked_at: null,
+      created_at: new Date().toISOString(),
+    };
+    await mutateLocal((d) => {
+      if ((d.links ?? []).some((x) => x.workspace_id === this.id && x.url === l.url)) throw new Error("Link ini sudah dipantau");
+      d.links = [...(d.links ?? []), link];
+    });
+    return link;
+  }
+  async updateLink(id: string, patch: Partial<TrackedLink>) {
+    await mutateLocal((d) => {
+      d.links = (d.links ?? []).map((l) => (l.id === id && l.workspace_id === this.id ? { ...l, ...safePatch(patch) } : l));
+    });
+  }
+  async deleteLink(id: string) {
+    await mutateLocal((d) => {
+      d.links = (d.links ?? []).filter((l) => !(l.id === id && l.workspace_id === this.id));
+    });
+  }
 }
 
 class LocalAccounts implements AccountRepo {
+  async listStaleLinks(before: string, limit: number) {
+    return ((await readLocal()).links ?? [])
+      .filter((l) => !l.checked_at || l.checked_at < before)
+      .sort((a, b) => (a.checked_at ?? "").localeCompare(b.checked_at ?? ""))
+      .slice(0, limit);
+  }
   async countUsers() {
     return ((await readLocal()).users ?? []).length;
   }

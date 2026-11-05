@@ -29,20 +29,27 @@ export default async function AppLayout({ children }: Readonly<{ children: React
           </Link>
         </div>
 
-        <SideNav badges={badges} chats={chats.map((c) => ({ id: c.id, title: c.title }))} />
-
-        <div className="space-y-2 border-t border-line pt-4">
-          <Link href="/brand" className="flex items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-white/70">
+        {/* Profil brand ala aplikasi sosmed */}
+        <Link href="/brand" className="flex items-center gap-3 rounded-2xl bg-white p-2.5 shadow-soft ring-1 ring-line transition hover:ring-brand-200">
+          <span className="story-ring shrink-0">
             {brand.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={brand.logoUrl} alt="" className="h-8 w-8 rounded-lg bg-white object-contain p-0.5 ring-1 ring-line" />
+              <img src={brand.logoUrl} alt="" className="block h-10 w-10 bg-white object-contain p-1" />
             ) : (
-              <span className="grid h-8 w-8 place-items-center rounded-lg text-[11px] font-bold text-white" style={{ background: brand.colors.primary }}>
+              <span className="grid h-10 w-10 place-items-center text-xs font-bold text-white" style={{ background: brand.colors.primary }}>
                 {initials}
               </span>
             )}
-            <span className="min-w-0 flex-1 truncate text-sm font-semibold">{brand.name}</span>
-          </Link>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-bold">{brand.name}</span>
+            <span className="block truncate text-xs text-slate-500">{brand.handle || "Brand Kit"}</span>
+          </span>
+        </Link>
+
+        <SideNav badges={badges} chats={chats.map((c) => ({ id: c.id, title: c.title }))} />
+
+        <div className="space-y-2 border-t border-line pt-4">
           <div className="flex items-center gap-3 rounded-xl px-2 py-1.5">
             <Link href="/pengguna" className="flex min-w-0 flex-1 items-center gap-3">
               <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">{user.name.slice(0, 1).toUpperCase()}</span>

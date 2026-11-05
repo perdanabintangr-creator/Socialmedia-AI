@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, Home, LayoutGrid, Lightbulb, MessageSquareText, Palette, Plus, Settings2 } from "lucide-react";
+import { CalendarDays, Home, LayoutGrid, Lightbulb, MessageSquareText, Palette, Plus, Settings2, TrendingUp } from "lucide-react";
 
 export const NAV = [
   { href: "/beranda", label: "Beranda", icon: Home, mobile: true },
   { href: "/posts", label: "Hasil konten", short: "Konten", icon: LayoutGrid, mobile: true },
   { href: "/ideas", label: "Bank ide", short: "Ide", icon: Lightbulb, mobile: false },
   { href: "/kalender", label: "Kalender konten", short: "Kalender", icon: CalendarDays, mobile: true },
-  { href: "/brand", label: "Brand Kit", short: "Brand", icon: Palette, mobile: true },
+  { href: "/performa", label: "Performa", short: "Performa", icon: TrendingUp, mobile: true },
+  { href: "/brand", label: "Brand Kit", short: "Brand", icon: Palette, mobile: false },
 ] as const;
 
 const active = (path: string, href: string) => path === href || path.startsWith(href + "/");
@@ -25,9 +26,12 @@ export function SideNav({ badges, chats }: { badges: Partial<Record<string, numb
     <>
       <Link
         href="/beranda"
-        className="flex items-center gap-2.5 rounded-xl bg-ink px-4 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-ink/85"
+        className="group flex items-center gap-2.5 rounded-2xl bg-ink px-4 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-ink/90"
       >
-        <Plus size={18} /> Chat baru
+        <span className="bg-social grid h-6 w-6 place-items-center rounded-lg transition group-hover:rotate-90">
+          <Plus size={15} strokeWidth={2.6} />
+        </span>
+        Chat baru
       </Link>
 
       <nav className="flex flex-col gap-0.5" aria-label="Navigasi utama">
@@ -42,10 +46,12 @@ export function SideNav({ badges, chats }: { badges: Partial<Record<string, numb
                 on ? "bg-white text-ink shadow-soft ring-1 ring-line" : "text-slate-500 hover:bg-white/70 hover:text-ink"
               }`}
             >
-              <Icon size={18} strokeWidth={on ? 2.4 : 2} className={on ? "text-brand-600" : "text-slate-400 group-hover:text-slate-600"} />
+              <span className={`grid h-7 w-7 place-items-center rounded-lg transition ${on ? "bg-social text-white" : "text-slate-400 group-hover:text-slate-600"}`}>
+                <Icon size={16} strokeWidth={on ? 2.4 : 2} />
+              </span>
               <span className="flex-1">{label}</span>
               {badges[href] ? (
-                <span className="grid h-5 min-w-5 place-items-center rounded-full bg-brand-600 px-1.5 text-[11px] font-bold text-white">{badges[href]}</span>
+                <span className="grid h-5 min-w-5 place-items-center rounded-full bg-pop px-1.5 text-[11px] font-bold text-white">{badges[href]}</span>
               ) : null}
             </Link>
           );
@@ -94,9 +100,10 @@ export function TabBar({ badges }: { badges: Partial<Record<string, number>> }) 
           const Icon = n.icon;
           return (
             <Link key={n.href} href={n.href} aria-current={on ? "page" : undefined} className="relative flex flex-col items-center gap-1 py-2.5 text-[11px] font-semibold">
-              <Icon size={21} strokeWidth={on ? 2.4 : 1.9} className={on ? "text-brand-600" : "text-slate-400"} />
+              <Icon size={21} strokeWidth={on ? 2.4 : 1.9} className={on ? "text-ink" : "text-slate-400"} />
+              {on && <span className="bg-social absolute top-0 h-0.5 w-8 rounded-full" />}
               <span className={on ? "text-ink" : "text-slate-500"}>{"short" in n ? n.short : n.label}</span>
-              {badges[n.href] ? <span className="absolute top-1.5 left-[calc(50%+6px)] h-2 w-2 rounded-full bg-brand-600 ring-2 ring-white" /> : null}
+              {badges[n.href] ? <span className="absolute top-1.5 left-[calc(50%+6px)] h-2 w-2 rounded-full bg-pop ring-2 ring-white" /> : null}
             </Link>
           );
         })}
