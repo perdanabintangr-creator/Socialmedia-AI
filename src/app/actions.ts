@@ -10,7 +10,7 @@ import { sourceImage } from "@/lib/images";
 import { metered } from "@/lib/cost";
 import { brandGaps, quotaOf } from "@/lib/plans";
 import { importBrandFromWebsite } from "@/lib/brand-import";
-import { approveAndPublish, buildPostFromIdea, createIdeas, parseWib, publishTarget, revisePostWith } from "@/lib/pipeline";
+import { approveAndPublish, publishStoryFor, buildPostFromIdea, createIdeas, parseWib, publishTarget, revisePostWith } from "@/lib/pipeline";
 import { readMedia } from "@/lib/media";
 import { randomUUID } from "crypto";
 import { getPublishStatus } from "@/lib/publisher";
@@ -374,6 +374,25 @@ export async function checkStatusAction(id: string): Promise<ActionState> {
     await w.updatePost(id, { publish_result: raw, status });
     revalidatePath(`/posts/${id}`);
     return { ok: `Status dari publisher: ${s || "tidak diketahui"}` };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Versi Story 9:16: render frame terpilih lalu upload ke Instagram Story (sekarang / terjadwal). */
+export async function storyAction(postId: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const { w } = await workspaceOrThrow();
+    const frames = fd.getAll("frame").map((v) => Number(v));
+    if (!frames.length) return { error: "Pilih minimal satu slide untuk dijadikan Story." };
+    let at: Date | null = null;
+    if (str(fd, "when") === "schedule") {
+      at = parseWib(str(fd, "scheduledAt"));
+      if (!at) return { error: "Tanggal jadwal tidak valid" };
+    }
+    const res = await publishStoryFor(w, postId, frames, at);
+    revalidatePath(`/posts/${postId}`);
+    return res.ok ? { ok: res.message } : { error: res.message };
   } catch (e) {
     return fail(e);
   }

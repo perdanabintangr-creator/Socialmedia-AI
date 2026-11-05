@@ -160,6 +160,7 @@ export interface Post {
   revision_count: number;
   design_notes: string | null; // catatan AI art director
   reference: PostReference | null; // referensi desain yang diikuti
+  story: PostStory | null; // versi Story 9:16
   created_at: string;
   updated_at: string;
 }
@@ -365,3 +366,14 @@ export interface UsageLog {
 
 export const PLAN_KEYS = ["free", "newbie", "starter", "growth", "agency"] as const;
 export type PlanKey = (typeof PLAN_KEYS)[number];
+
+/** Versi Story 9:16 dari sebuah konten feed. */
+export interface PostStory {
+  frames: number[]; // index slide yang dijadikan frame Story
+  status: "approved" | "scheduled" | "published" | "failed";
+  scheduled_at: string | null;
+  media_urls: string[];
+  publish_refs: string[];
+  error: string | null;
+  updated_at: string;
+}

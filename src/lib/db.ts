@@ -31,7 +31,8 @@ export type NewPost = Omit<
   | "revision_count"
   | "scheduled_at"
   | "reference"
-> & { reference?: Post["reference"] };
+  | "story"
+> & { reference?: Post["reference"]; story?: Post["story"] };
 export type NewMessage = Omit<ChatMessage, "id" | "workspace_id" | "created_at" | "chat_id" | "attachments"> & { chat_id?: string | null; attachments?: string[] };
 export type NewLink = Pick<TrackedLink, "platform" | "kind" | "url" | "handle"> & { post_id?: string | null };
 export type NewUsage = Omit<UsageLog, "id" | "workspace_id" | "created_at">;
@@ -120,6 +121,12 @@ export function mergeBrand(data: Partial<Brand> | null | undefined): Brand {
   };
 }
 
+/**
+ * updated_at dipakai sebagai versi gambar (cache render). Perubahan yang tidak mengubah
+ * tampilan desain (status Story) tidak menaikkan versinya.
+ */
+const touch = (patch: Partial<Post>) => (Object.keys(patch).every((k) => k === "story") ? {} : { updated_at: new Date().toISOString() });
+
 /** Kolom numeric dari Postgres datang sebagai string. */
 const numUsage = (u: UsageLog): UsageLog => ({ ...u, ai_usd: Number(u.ai_usd), image_usd: Number(u.image_usd) });
 
@@ -183,7 +190,7 @@ class SupabaseWorkspace implements WorkspaceRepo {
     check(
       await sb()
         .from("posts")
-        .update({ ...safePatch(patch), updated_at: new Date().toISOString() })
+        .update({ ...safePatch(patch), ...touch(patch) })
         .eq("workspace_id", this.id)
         .eq("id", id),
     );
@@ -446,6 +453,7 @@ class LocalWorkspace implements WorkspaceRepo {
     const created: Post = {
       ...post,
       reference: post.reference ?? null,
+      story: post.story ?? null,
       id: randomUUID(),
       workspace_id: this.id,
       scheduled_at: null,
@@ -465,7 +473,7 @@ class LocalWorkspace implements WorkspaceRepo {
   async updatePost(id: string, patch: Partial<Post>) {
     await mutateLocal((d) => {
       d.posts = d.posts.map((p) =>
-        p.id === id && p.workspace_id === this.id ? { ...p, ...safePatch(patch), updated_at: new Date().toISOString() } : p,
+        p.id === id && p.workspace_id === this.id ? { ...p, ...safePatch(patch), ...touch(patch) } : p,
       );
     });
   }

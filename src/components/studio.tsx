@@ -235,6 +235,7 @@ export function ChatRoom({ chatId, title, initial }: { chatId: string; title: st
             </button>
             <PhonePreview
               images={preview.media_urls.length ? preview.media_urls : Array.from({ length: preview.slides }, (_, i) => `/api/render/${preview.id}/${i}?v=${encodeURIComponent(preview.version)}`)}
+              storyImages={Array.from({ length: preview.slides }, (_, i) => `/api/story/${preview.id}/${i}?v=${encodeURIComponent(preview.version)}`)}
               brandName={state.brand.name}
               handle={state.brand.handle}
               logoUrl={state.brand.logoUrl}
@@ -386,6 +387,9 @@ function PostPreview({ post, postingTime, disabled, run, onRevise, onPreview }: 
           <button onClick={() => onPreview(post)} className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600 hover:underline">
             <Smartphone size={13} /> Lihat di HP
           </button>
+          <Link href={`/posts/${post.id}#story`} className="inline-flex items-center gap-1 text-xs font-semibold text-pop hover:underline">
+            Versi Story 9:16
+          </Link>
           <Link href={`/posts/${post.id}`} className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-ink hover:underline">
             Detail & edit <ExternalLink size={12} />
           </Link>

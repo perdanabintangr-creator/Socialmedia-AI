@@ -11,15 +11,17 @@ export interface PreviewProps {
   primary: string;
   caption: string;
   hashtags: string[];
+  storyImages?: string[]; // versi Story 9:16 (opsional)
 }
 
 /** Preview konten persis seperti di HP: tampilan feed Instagram atau TikTok photo mode. */
 export function PhonePreview(props: PreviewProps & { className?: string }) {
-  const [platform, setPlatform] = useState<"instagram" | "tiktok">("instagram");
+  const [platform, setPlatform] = useState<"instagram" | "tiktok" | "story">("instagram");
+  const tabs = (props.storyImages?.length ? (["instagram", "tiktok", "story"] as const) : (["instagram", "tiktok"] as const));
   return (
     <div className={props.className}>
       <div className="mx-auto mb-4 flex w-fit rounded-xl bg-slate-100 p-1 text-sm font-semibold" role="tablist" aria-label="Pilih tampilan">
-        {(["instagram", "tiktok"] as const).map((p) => (
+        {tabs.map((p) => (
           <button
             key={p}
             role="tab"
@@ -27,14 +29,14 @@ export function PhonePreview(props: PreviewProps & { className?: string }) {
             onClick={() => setPlatform(p)}
             className={`rounded-lg px-4 py-1.5 transition ${platform === p ? "bg-white text-ink shadow-soft" : "text-slate-500"}`}
           >
-            {p === "instagram" ? "Instagram" : "TikTok"}
+            {p === "instagram" ? "Instagram" : p === "tiktok" ? "TikTok" : "Story"}
           </button>
         ))}
       </div>
       <div className="mx-auto w-full max-w-[330px] rounded-[44px] bg-ink p-2.5 shadow-lift">
         <div className="relative overflow-hidden rounded-[36px] bg-white">
           <div className="absolute top-2 left-1/2 z-20 h-5 w-24 -translate-x-1/2 rounded-full bg-ink" />
-          {platform === "instagram" ? <InstagramView {...props} /> : <TikTokView {...props} />}
+          {platform === "instagram" ? <InstagramView {...props} /> : platform === "tiktok" ? <TikTokView {...props} /> : <StoryView {...props} />}
         </div>
       </div>
     </div>
@@ -243,6 +245,34 @@ function TikTokView(p: PreviewProps) {
         <div className="mt-1.5 flex items-center gap-1.5 text-white/80">
           <Music2 size={12} /> <span className="truncate">Suara asli · {p.brandName}</span>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Pratinjau Story 9:16: bar progres per frame, ketuk kiri/kanan untuk pindah frame. */
+function StoryView(p: PreviewProps) {
+  const frames = p.storyImages ?? [];
+  const [i, setI] = useState(0);
+  const go = (n: number) => setI(Math.max(0, Math.min(frames.length - 1, n)));
+  return (
+    <div className="relative aspect-[9/16] bg-black text-white select-none">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={frames[i]} alt={`Frame Story ${i + 1}`} className="h-full w-full object-cover" draggable={false} />
+      <div className="absolute top-8 right-3 left-3 flex gap-1">
+        {frames.map((_, n) => (
+          <span key={n} className={`h-0.5 flex-1 rounded-full ${n <= i ? "bg-white" : "bg-white/35"}`} />
+        ))}
+      </div>
+      <div className="absolute top-11 left-3 flex items-center gap-2 text-[12px] font-semibold drop-shadow">
+        <Avatar p={p} size={26} /> {handleOf(p)} <span className="font-normal text-white/70">· Pratinjau</span>
+      </div>
+      <button aria-label="Frame sebelumnya" onClick={() => go(i - 1)} className="absolute inset-y-0 left-0 w-1/3" />
+      <button aria-label="Frame berikutnya" onClick={() => go(i + 1)} className="absolute inset-y-0 right-0 w-1/3" />
+      <div className="pointer-events-none absolute right-3 bottom-4 left-3 flex items-center gap-2">
+        <span className="flex-1 rounded-full border border-white/60 px-3 py-2 text-[11px] text-white/80">Kirim pesan</span>
+        <Heart size={20} />
+        <Send size={19} />
       </div>
     </div>
   );

@@ -6,9 +6,9 @@ import { generateIdeas, generatePost, reviewDesign, revisePost, type Draft, type
 import { setMeterPost } from "./cost";
 import { brandForPlan, planOf, visualConcept, type PlanRule } from "./plans";
 import { referenceImageBlocks, referenceImageBuffers, referencePrompt } from "./reference";
-import { renderSlidePng, renderSlidesJpeg } from "./render";
+import { renderSlidePng, renderSlidesJpeg, renderStoryJpeg } from "./render";
 import { sourceImage } from "./images";
-import { publish } from "./publisher";
+import { publish, publishStory } from "./publisher";
 import { config } from "./config";
 import type { AgentId } from "./agents";
 import { styledBrand, type Brand, type Idea, type Post, type PostFormat, type PostReference, type Slide } from "./types";
@@ -330,4 +330,48 @@ export async function publishTarget(workspaceId: string): Promise<{ connected: b
   const owner = ws?.owner_id ? await accounts().getUserById(ws.owner_id) : null;
   if (owner?.role === "admin") return { connected: true, profileKey: null, reason: "" };
   return { connected: false, profileKey: null, reason: "Akun Instagram/TikTok workspace ini belum dihubungkan." };
+}
+
+/**
+ * Versi Story: render frame 9:16, simpan, lalu kirim ke Instagram Story (sekarang / terjadwal).
+ * Tanpa akun sosmed terhubung: frame tetap dirender & bisa diunduh.
+ */
+export async function publishStoryFor(
+  w: WorkspaceRepo,
+  postId: string,
+  frames: number[],
+  scheduleAt: Date | null,
+): Promise<{ ok: boolean; message: string }> {
+  const post = await w.getPost(postId);
+  if (!post) throw new Error("Konten tidak ditemukan");
+  const list = [...new Set(frames)].filter((i) => Number.isInteger(i) && i >= 0 && i < post.slides.length).sort((a, b) => a - b).slice(0, 10);
+  if (!list.length) throw new Error("Pilih minimal satu slide untuk Story");
+  if (scheduleAt && scheduleAt.getTime() < Date.now() + 5 * 60_000) throw new Error("Jadwal minimal 5 menit dari sekarang");
+  const brand = await w.getBrand();
+  const stamp = Date.now();
+  const media: string[] = [];
+  for (const i of list) {
+    const jpg = await renderStoryJpeg(brand, post, i);
+    media.push(await w.uploadFile(`stories/${post.id}/${stamp}-${i + 1}.jpg`, jpg, "image/jpeg"));
+  }
+  const base = { frames: list, media_urls: media, updated_at: new Date().toISOString(), scheduled_at: scheduleAt?.toISOString() ?? null };
+  const target = await publishTarget(w.id);
+  if (!target.connected) {
+    await w.updatePost(post.id, { story: { ...base, status: "approved", publish_refs: [], error: null } });
+    return { ok: true, message: `${list.length} frame Story siap diunduh. ${target.reason}` };
+  }
+  const refs: string[] = [];
+  const errors: string[] = [];
+  for (const [n, url] of media.entries()) {
+    // Frame berurutan: beri jarak 1 menit supaya urutannya terjaga di Story.
+    const at = scheduleAt ? new Date(scheduleAt.getTime() + n * 60_000) : null;
+    const r = await publishStory({ mediaUrl: url, profileKey: target.profileKey, scheduleAt: at, note: post.caption.split("\n")[0].slice(0, 200) });
+    if (r.ok && r.ref) refs.push(r.ref);
+    if (!r.ok) errors.push(r.error ?? "gagal");
+  }
+  const ok = !errors.length;
+  await w.updatePost(post.id, {
+    story: { ...base, status: ok ? (scheduleAt ? "scheduled" : "published") : "failed", publish_refs: refs, error: errors.join(" | ") || null },
+  });
+  return { ok, message: ok ? (scheduleAt ? `Story terjadwal (${list.length} frame).` : `Story sedang diunggah (${list.length} frame).`) : `Gagal upload Story: ${errors.join(" | ")}` };
 }

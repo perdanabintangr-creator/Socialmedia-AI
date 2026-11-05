@@ -83,3 +83,23 @@ export async function getPublishStatus(ref: string, profileKey: string | null) {
   const res = await fetch(`${BASE}/post/${encodeURIComponent(ref)}`, { headers: headers(profileKey) });
   return (await res.json().catch(() => null)) as Record<string, unknown> | null;
 }
+
+/**
+ * Upload satu frame ke Instagram Story (Ayrshare: instagramOptions.stories).
+ * TikTok belum menyediakan API Story untuk aplikasi pihak ketiga.
+ */
+export async function publishStory(input: { mediaUrl: string; profileKey: string | null; scheduleAt: Date | null; note: string }): Promise<PublishResult> {
+  if (!config.hasPublisher) return { ok: false, ref: null, raw: null, error: "AYRSHARE_API_KEY belum di-set" };
+  const body: Record<string, unknown> = {
+    post: input.note || "Story",
+    platforms: ["instagram"],
+    mediaUrls: [input.mediaUrl],
+    instagramOptions: { stories: true },
+  };
+  if (input.scheduleAt && input.scheduleAt.getTime() > Date.now() + 60_000) body.scheduleDate = input.scheduleAt.toISOString();
+  const res = await fetch(`${BASE}/post`, { method: "POST", headers: headers(input.profileKey), body: JSON.stringify(body) });
+  const raw = await res.json().catch(() => null);
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const ok = res.ok && r.status !== "error";
+  return { ok, ref: typeof r.id === "string" ? r.id : null, raw, error: ok ? null : errorText(raw, res.status) };
+}

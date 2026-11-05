@@ -1,6 +1,7 @@
 import { PhonePreview } from "@/components/phone-preview";
 import { publishTarget } from "@/lib/pipeline";
 import { requireWorkspace } from "@/lib/session";
+import { storyAction } from "@/app/actions";
 import { fmtIdr, fmtUsd } from "@/lib/cost";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -28,6 +29,13 @@ const LAYOUT_LABEL: Record<SlideLayout, string> = {
   promo_hero: "Promo • foto + angka",
   promo_offer: "Promo • angka besar",
 };
+
+const STORY_STATUS = {
+  approved: ["Siap diunduh", "bg-sky-100 text-sky-800"],
+  scheduled: ["Story terjadwal", "bg-brand-100 text-brand-800"],
+  published: ["Story terkirim", "bg-emerald-100 text-emerald-800"],
+  failed: ["Story gagal", "bg-red-100 text-red-700"],
+} as const;
 
 const SOURCE_LABEL = { ai: "AI image", stock: "Stok foto", brand: "Foto brand", upload: "Upload", demo: "Demo" } as const;
 
@@ -81,6 +89,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
         <div className="lg:sticky lg:top-8">
           <PhonePreview
             images={images}
+            storyImages={post.slides.map((_, i) => `/api/story/${post.id}/${i}?v=${v}`)}
             brandName={brand.name}
             handle={brand.handle}
             logoUrl={brand.logoUrl}
@@ -186,6 +195,51 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                   </span>
                 )}
               </div>
+            </Card>
+          )}
+          {post.status !== "rejected" && (
+            <Card>
+              <div id="story" className="scroll-mt-24" />
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="font-semibold">Versi Story (9:16)</h2>
+                {post.story && (
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STORY_STATUS[post.story.status][1]}`}>
+                    {STORY_STATUS[post.story.status][0]}
+                    {post.story.scheduled_at && post.story.status === "scheduled" ? ` · ${formatWIB(post.story.scheduled_at)}` : ""}
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-sm text-slate-500">
+                Dibuat otomatis dari slide konten ini, ukuran pas untuk Instagram Story. Pilih slide yang mau dijadikan Story.
+              </p>
+              <ActionForm action={storyAction.bind(null, post.id)} className="mt-4 space-y-4">
+                <div className="scrollbar-none flex gap-3 overflow-x-auto pb-1">
+                  {post.slides.map((_, i) => (
+                    <label key={i} className="group relative shrink-0 cursor-pointer">
+                      <input type="checkbox" name="frame" value={i} defaultChecked={(post.story?.frames ?? [0]).includes(i)} className="peer sr-only" />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={`/api/story/${post.id}/${i}?v=${v}`} alt={`Story dari slide ${i + 1}`} loading="lazy" className="aspect-[9/16] w-28 rounded-xl bg-slate-100 object-cover opacity-60 ring-2 ring-transparent transition peer-checked:opacity-100 peer-checked:ring-brand-500" />
+                      <span className="absolute top-1.5 left-1.5 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white">Slide {i + 1}</span>
+                      <a href={`/api/story/${post.id}/${i}?download=1`} className="mt-1 block text-center text-xs font-semibold text-brand-600 hover:underline">Unduh</a>
+                    </label>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name="when" value="schedule" defaultChecked /> Jadwalkan
+                  </label>
+                  <input type="datetime-local" name="scheduledAt" defaultValue={post.scheduled_at ? toWibInput(post.scheduled_at) : defaultSchedule(brand.postingTime)} className={`${inputCls} w-auto`} />
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name="when" value="now" /> Sekarang
+                  </label>
+                </div>
+                <Submit variant="accent" className="w-full" pendingText="Membuat & mengirim Story…">Upload ke Story Instagram</Submit>
+                <p className="text-xs text-slate-500">
+                  {target.connected
+                    ? "Tiap slide terpilih jadi 1 frame Story, berurutan. TikTok belum mendukung upload Story dari aplikasi luar."
+                    : `${target.reason} Frame Story tetap dibuat dan bisa diunduh untuk diposting manual.`}
+                </p>
+              </ActionForm>
             </Card>
           )}
           {usage.length > 0 && (
