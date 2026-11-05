@@ -160,6 +160,29 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               )}
             </Card>
           )}
+          {post.reference && post.reference.urls.length > 0 && (
+            <Card>
+              <h2 className="text-sm font-bold">Referensi yang diikuti</h2>
+              <p className="mt-0.5 text-xs text-slate-500">
+                {post.reference.colors ? "Warna, gaya, dan layout mengikuti contoh ini." : "Gaya & layout mengikuti contoh ini, warna tetap brand."}
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {post.reference.urls.map((src, i) => (
+                  <a key={src} href={src} target="_blank" rel="noreferrer">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={src} alt={`Referensi ${i + 1}`} className="h-24 w-[76px] rounded-lg object-cover ring-1 ring-line" />
+                  </a>
+                ))}
+                {post.reference.colors && (
+                  <span className="ml-1 flex gap-1" aria-label="Palet dari referensi">
+                    {[post.reference.colors.primary, post.reference.colors.secondary, post.reference.colors.accent, post.reference.colors.background].map((c, i) => (
+                      <span key={i} title={c} className="h-6 w-6 rounded-full ring-1 ring-black/10" style={{ background: c }} />
+                    ))}
+                  </span>
+                )}
+              </div>
+            </Card>
+          )}
           {post.design_notes && (
             <Card className="bg-brand-50/60 ring-brand-100">
               <h2 className="text-sm font-bold text-brand-900">Catatan dari Rupa (art director)</h2>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, useTransition } from "react";
 import { ArrowUp, Check, Clock, ExternalLink, Loader2, Palette, PenLine, Send, Smartphone, Sparkles, X } from "lucide-react";
 import { PhonePreview } from "./phone-preview";
+import { AttachButton, DropOverlay, RefTray, useReferences } from "./reference-input";
 import { AGENTS, AGENT_LIST, type AgentId } from "@/lib/agents";
 import type { ChatView, IdeaCard, PostCard, StudioState } from "@/lib/studio-view";
 import { chatApproveIdeaAction, chatApprovePostAction, chatRejectIdeaAction, sendChatAction, type StudioResult } from "@/app/studio-actions";
@@ -41,6 +42,7 @@ export function Avatar({ id, size = 36 }: { id: AgentId; size?: number }) {
 export function ChatRoom({ chatId, title, initial }: { chatId: string; title: string; initial: StudioState }) {
   const [state, setState] = useState(initial);
   const [text, setText] = useState("");
+  const refs = useReferences();
   const [sending, startSend] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [fastUntil, setFastUntil] = useState(() => Date.now() + 15_000);
@@ -88,13 +90,31 @@ export function ChatRoom({ chatId, title, initial }: { chatId: string; title: st
 
   const send = (msg: string) => {
     const m = msg.trim();
-    if (!m || sending) return;
+    if ((!m && !refs.items.length) || sending) return;
+    const fd = new FormData();
+    fd.set("text", m);
+    refs.appendTo(fd);
+    const previews = refs.items.map((i) => i.url);
     setText("");
+    refs.clear();
     setState((s) => ({
       ...s,
-      messages: [...s.messages, { id: `tmp-${Date.now()}`, workspace_id: "", chat_id: chatId, role: "user", agent: null, kind: "text", text: m, created_at: new Date().toISOString() }],
+      messages: [
+        ...s.messages,
+        {
+          id: `tmp-${Date.now()}`,
+          workspace_id: "",
+          chat_id: chatId,
+          role: "user",
+          agent: null,
+          kind: "text",
+          text: m || "Buatkan konten yang mirip dengan referensi ini.",
+          attachments: previews,
+          created_at: new Date().toISOString(),
+        },
+      ],
     }));
-    run(() => sendChatAction(chatId, m));
+    run(() => sendChatAction(chatId, fd));
   };
 
   const startRevise = (t: string) => {
@@ -170,12 +190,22 @@ export function ChatRoom({ chatId, title, initial }: { chatId: string; title: st
                 e.preventDefault();
                 send(text);
               }}
-              className="flex items-end gap-2 rounded-2xl bg-white p-2 shadow-lift ring-1 ring-line focus-within:ring-2 focus-within:ring-brand-400"
+              {...refs.dropZone}
+              className="relative rounded-2xl bg-white p-2 shadow-lift ring-1 ring-line focus-within:ring-2 focus-within:ring-brand-400"
             >
+              <DropOverlay show={refs.dragging} />
+              {(refs.items.length > 0 || refs.note) && (
+                <div className="px-2 pt-1 pb-2">
+                  <RefTray refs={refs} />
+                </div>
+              )}
+              <div className="flex items-end gap-1">
+              <AttachButton refs={refs} compact />
               <textarea
                 ref={inputRef}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
+                onPaste={refs.onPaste}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                     e.preventDefault();
@@ -183,15 +213,16 @@ export function ChatRoom({ chatId, title, initial }: { chatId: string; title: st
                   }
                 }}
                 rows={1}
-                placeholder="Balas atau kasih arahan baru…"
+                placeholder="Balas, kasih arahan, atau tempel gambar referensi…"
                 aria-label="Pesan untuk tim"
                 className="max-h-40 min-h-[44px] flex-1 resize-none bg-transparent px-3 py-2.5 text-[15px] outline-none placeholder:text-slate-400 focus-visible:outline-none"
               />
-              <button type="submit" disabled={!text.trim() || sending} aria-label="Kirim" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-ink text-white transition hover:bg-ink/85 disabled:opacity-30">
+              <button type="submit" disabled={(!text.trim() && !refs.items.length) || sending} aria-label="Kirim" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-ink text-white transition hover:bg-ink/85 disabled:opacity-30">
                 {sending ? <Loader2 size={18} className="animate-spin" /> : <ArrowUp size={18} />}
               </button>
+              </div>
             </form>
-            <p className="mt-2 text-center text-[11px] text-slate-400">Enter untuk kirim · Shift + Enter untuk baris baru</p>
+            <p className="mt-2 text-center text-[11px] text-slate-400">Enter untuk kirim · Shift + Enter baris baru · Tempel / seret gambar untuk referensi</p>
           </div>
         </div>
       </div>
@@ -223,7 +254,17 @@ type Run = (fn: () => Promise<StudioResult>) => void;
 function Message({ m, postingTime, disabled, run, onRevise, onPreview }: { m: ChatView; postingTime: string; disabled: boolean; run: Run; onRevise: (title: string) => void; onPreview: (p: PostCard) => void }) {
   if (m.role === "user") {
     return (
-      <div className="flex justify-end">
+      <div className="flex flex-col items-end gap-1.5">
+        {m.attachments?.length > 0 && (
+          <div className="flex max-w-[85%] flex-wrap justify-end gap-1.5" aria-label="Gambar referensi">
+            {m.attachments.map((src, i) => (
+              <a key={src} href={src} target="_blank" rel="noreferrer" className="block">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={src} alt={`Referensi ${i + 1}`} className="h-28 w-[90px] rounded-xl object-cover shadow-sm ring-1 ring-line" />
+              </a>
+            ))}
+          </div>
+        )}
         <div className="max-w-[85%] rounded-2xl rounded-br-md bg-brand-600 px-4 py-2.5 text-sm whitespace-pre-wrap text-white shadow-sm">
           {m.text}
           <div className="mt-1 text-right text-[10px] text-brand-200">{fmtTime(m.created_at)}</div>

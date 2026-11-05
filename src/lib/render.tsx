@@ -5,7 +5,7 @@ import { ImageResponse } from "next/og";
 import sharp from "sharp";
 import { CANVAS, IMAGE_BOX, SlideView, effectiveLayout, type Img, type LogoImg } from "./templates";
 import { readMedia } from "./media";
-import type { Brand, FontKey, Post, Slide } from "./types";
+import { styledBrand, type Brand, type FontKey, type Post, type PostReference, type Slide } from "./types";
 
 const FONT_DIR = path.join(process.cwd(), "assets", "fonts");
 const fontCache = new Map<string, Buffer>();
@@ -75,8 +75,11 @@ function loadSlideImage(slide: Slide): Promise<Img | null> {
   });
 }
 
-/** Render satu slide jadi PNG. */
-export async function renderSlidePng(brand: Brand, post: Pick<Post, "slides" | "template">, index: number) {
+type Renderable = Pick<Post, "slides" | "template"> & { reference?: PostReference | null };
+
+/** Render satu slide jadi PNG. Warna/font mengikuti referensi desain konten bila ada. */
+export async function renderSlidePng(baseBrand: Brand, post: Renderable, index: number) {
+  const brand = styledBrand(baseBrand, post.reference);
   const slide = post.slides[index];
   if (!slide) throw new Error("Slide tidak ditemukan");
   const [fonts, onDark, onLight, img] = await Promise.all([
@@ -101,7 +104,7 @@ export async function renderSlidePng(brand: Brand, post: Pick<Post, "slides" | "
 }
 
 /** Render semua slide jadi JPEG (Instagram & TikTok photo hanya menerima JPEG/WebP). */
-export async function renderSlidesJpeg(brand: Brand, post: Pick<Post, "slides" | "template">) {
+export async function renderSlidesJpeg(brand: Brand, post: Renderable) {
   const out: Buffer[] = [];
   for (let i = 0; i < post.slides.length; i++) {
     const png = await renderSlidePng(brand, post, i);

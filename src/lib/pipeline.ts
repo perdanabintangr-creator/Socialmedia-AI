@@ -2,13 +2,14 @@ import "server-only";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
 import { accounts, type WorkspaceRepo } from "./db";
-import { generateIdeas, generatePost, reviewDesign, revisePost, type Draft } from "./ai";
+import { generateIdeas, generatePost, reviewDesign, revisePost, type Draft, type RefContext } from "./ai";
+import { referenceImageBlocks, referencePrompt } from "./reference";
 import { renderSlidePng, renderSlidesJpeg } from "./render";
 import { sourceImage } from "./images";
 import { publish } from "./publisher";
 import { config } from "./config";
 import type { AgentId } from "./agents";
-import type { Brand, Idea, Post, PostFormat, Slide } from "./types";
+import { styledBrand, type Brand, type Idea, type Post, type PostFormat, type PostReference, type Slide } from "./types";
 
 /**
  * Inti alur kerja: ide → konten (copy + visual + review) → ACC → posting.
@@ -18,12 +19,29 @@ import type { Brand, Idea, Post, PostFormat, Slide } from "./types";
 export type Progress = (agent: AgentId, text: string) => Promise<void>;
 const silent: Progress = async () => {};
 
-export async function createIdeas(w: WorkspaceRepo, brief: string, count: number, format?: PostFormat): Promise<Idea[]> {
+export async function createIdeas(
+  w: WorkspaceRepo,
+  brief: string,
+  count: number,
+  format?: PostFormat,
+  reference: PostReference | null = null,
+): Promise<Idea[]> {
   const brand = await w.getBrand();
   const recent = (await w.listIdeas()).slice(0, 40).map((i) => i.title);
   const formatHint = format ? `\nSemua ide harus berformat ${format === "single" ? "single post" : "carousel"}.` : "";
-  const ideas = await generateIdeas(brand, { brief: brief + formatHint, count, recentTitles: recent });
-  return w.createIdeas(ideas.map((i) => (format ? { ...i, format } : i)));
+  const ideas = await generateIdeas(brand, {
+    brief: brief + formatHint,
+    count,
+    recentTitles: recent,
+    reference: reference ? [reference.notes, reference.layouts.length ? `Referensi berisi ${reference.layouts.length} slide.` : ""].filter(Boolean).join("\n") : undefined,
+  });
+  return w.createIdeas(ideas.map((i) => ({ ...i, ...(format ? { format } : {}), reference })));
+}
+
+/** Teks + gambar referensi untuk AI (hanya bila AI aktif; mode demo cukup palet & template). */
+async function refContext(ref: PostReference | null): Promise<RefContext | null> {
+  if (!ref || !config.hasAI) return null;
+  return { text: referencePrompt(ref), images: await referenceImageBlocks(ref) };
 }
 
 /** Isi gambar untuk slide yang membutuhkannya (paralel, maks 3 sekaligus). */
@@ -46,6 +64,7 @@ async function artDirector(
   brand: Brand,
   post: Pick<Post, "slides" | "format" | "caption" | "template">,
   key: string,
+  ref: RefContext | null = null,
 ): Promise<{ slides: Slide[]; notes: string | null }> {
   if (!brand.autoReview || !config.hasAI) return { slides: post.slides, notes: null };
   try {
@@ -54,7 +73,7 @@ async function artDirector(
       const png = await renderSlidePng(brand, post, i);
       renders.push((await sharp(png).resize(540).jpeg({ quality: 75 }).toBuffer()).toString("base64"));
     }
-    const review = await reviewDesign(brand, post, renders);
+    const review = await reviewDesign(brand, post, renders, ref);
     if (!review) return { slides: post.slides, notes: null };
     if (review.verdict === "approve") return { slides: post.slides, notes: review.notes };
     return { slides: await materialize(w, brand, review, `${key}-qa`), notes: review.notes };
@@ -76,12 +95,15 @@ export async function buildPostFromIdea(w: WorkspaceRepo, ideaId: string, progre
     if (existing) return existing;
   }
   await w.updateIdea(ideaId, { status: "approved" });
-  const brand = await w.getBrand();
+  const ref = idea.reference ?? null;
+  const brand = styledBrand(await w.getBrand(), ref);
+  const ctx = await refContext(ref);
+  const template = ref?.template ?? brand.defaultTemplate;
 
-  const draft = await generatePost(brand, idea);
+  const draft = await generatePost(brand, idea, ctx);
   await progress(
     "kata",
-    `Naskah ${draft.slides.length > 1 ? `${draft.slides.length} slide` : "single post"} + caption sudah jadi. Hook-nya: “${firstHook(draft.slides.map((d) => d.slide))}”. Aku oper ke Rupa ya.`,
+    `Naskah ${draft.slides.length > 1 ? `${draft.slides.length} slide` : "single post"} + caption sudah jadi${ref ? " mengikuti gaya referensimu" : ""}. Hook-nya: “${firstHook(draft.slides.map((d) => d.slide))}”. Aku oper ke Rupa ya.`,
   );
 
   const key = randomUUID();
@@ -89,10 +111,10 @@ export async function buildPostFromIdea(w: WorkspaceRepo, ideaId: string, progre
   const photos = countPhotos(slides);
   await progress(
     "rupa",
-    `Layout & visual sudah tersusun${photos ? ` (${photos} foto)` : ""}.${brand.autoReview && config.hasAI ? " Aku cek ulang hasil rendernya dulu sebelum kukirim." : ""}`,
+    `Layout & visual sudah tersusun${photos ? ` (${photos} foto)` : ""}${ref ? ", warna & gaya kusamakan dengan referensi" : ""}.${brand.autoReview && config.hasAI ? " Aku cek ulang hasil rendernya dulu sebelum kukirim." : ""}`,
   );
 
-  const reviewed = await artDirector(w, brand, { slides, format: idea.format, caption: draft.caption, template: brand.defaultTemplate }, key);
+  const reviewed = await artDirector(w, brand, { slides, format: idea.format, caption: draft.caption, template }, key, ctx);
   const post = await w.createPost({
     idea_id: idea.id,
     title: draft.title || idea.title,
@@ -101,21 +123,29 @@ export async function buildPostFromIdea(w: WorkspaceRepo, ideaId: string, progre
     caption: draft.caption,
     hashtags: draft.hashtags,
     slides: reviewed.slides,
-    template: brand.defaultTemplate,
+    template,
     status: "review",
     design_notes: reviewed.notes,
+    reference: ref,
   });
   await w.updateIdea(ideaId, { status: "approved", post_id: post.id });
   return post;
 }
 
-export async function revisePostWith(w: WorkspaceRepo, postId: string, instruction: string, progress: Progress = silent): Promise<Post> {
+export async function revisePostWith(
+  w: WorkspaceRepo,
+  postId: string,
+  instruction: string,
+  progress: Progress = silent,
+  newRef: PostReference | null = null,
+): Promise<Post> {
   const post = await w.getPost(postId);
   if (!post) throw new Error("Konten tidak ditemukan");
   if (!["review", "failed"].includes(post.status)) throw new Error("Konten ini sudah di-ACC, tidak bisa direvisi lagi");
-  const brand = await w.getBrand();
-  const draft = await revisePost(brand, post, instruction);
-  await progress("kata", "Revisi naskah sudah kuterapkan. Rupa, tolong sesuaikan visualnya.");
+  const ref = newRef ?? post.reference ?? null;
+  const brand = styledBrand(await w.getBrand(), ref);
+  const draft = await revisePost(brand, post, instruction, await refContext(ref));
+  await progress("kata", `Revisi naskah sudah kuterapkan${newRef ? " mengikuti referensi baru" : ""}. Rupa, tolong sesuaikan visualnya.`);
   const slides = await materialize(w, brand, draft, `${post.id}-r${post.revision_count + 1}`);
   const patch = {
     title: draft.title,
@@ -124,6 +154,8 @@ export async function revisePostWith(w: WorkspaceRepo, postId: string, instructi
     slides,
     status: "review" as const,
     revision_count: post.revision_count + 1,
+    reference: ref,
+    template: newRef?.template ?? post.template,
   };
   await w.updatePost(postId, patch);
   return { ...post, ...patch, updated_at: new Date().toISOString() };

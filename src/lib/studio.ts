@@ -14,7 +14,8 @@ import {
   revisePostWith,
   type Progress,
 } from "./pipeline";
-import type { Idea, Job, Post, PostFormat } from "./types";
+import { analyzeReference, describeReference } from "./reference";
+import type { Idea, Job, Post, PostFormat, PostReference } from "./types";
 
 /**
  * Studio: owner ngobrol dengan tim agen (Kata, Rupa, Siar).
@@ -26,7 +27,14 @@ import type { Idea, Job, Post, PostFormat } from "./types";
 const say = (w: WorkspaceRepo, agent: AgentId, text: string, extra: Partial<NewMessage> = {}) =>
   w.addMessage({ role: "agent", agent, kind: "text", text, refs: [], ...extra });
 
-export const userSays = (w: WorkspaceRepo, text: string) => w.addMessage({ role: "user", agent: null, kind: "text", text, refs: [] });
+export const userSays = (w: WorkspaceRepo, text: string, attachments: string[] = []) =>
+  w.addMessage({ role: "user", agent: null, kind: "text", text, refs: [], attachments });
+
+/** Gambar referensi yang dilampirkan owner pada sebuah pesan. */
+export interface Attach {
+  urls: string[];
+  useRefColors: boolean; // true: pakai palet referensi; false: tetap warna brand
+}
 
 const fmtWib = (iso: string | null) =>
   iso
@@ -69,8 +77,8 @@ async function snapshot(w: WorkspaceRepo): Promise<Snapshot> {
   };
 }
 
-async function decide(w: WorkspaceRepo, text: string, snap: Snapshot): Promise<DecisionT> {
-  if (!config.hasAI) return demoDecide(text, snap);
+async function decide(w: WorkspaceRepo, text: string, snap: Snapshot, refCount = 0): Promise<DecisionT> {
+  if (!config.hasAI) return demoDecide(text, snap, refCount);
   const brand = await w.getBrand();
   const history = (await w.listMessages(14))
     .map((m) => `${m.role === "user" ? "Owner" : AGENTS[m.agent ?? "kata"].name}: ${m.text}`)
@@ -96,7 +104,8 @@ Owner mengobrol dengan tim agen: Kata (strategi & naskah), Rupa (desain & visual
 - reject: owner menolak/membuang ide atau konten.
 - status: owner bertanya jadwal, progres, apa yang sudah/akan terbit. Jawab langsung di reply berdasarkan data.
 - chat: sapaan, pertanyaan umum, atau hal lain. Jawab membantu di reply.
-Gunakan id persis dari data. Jangan mengarang id.`;
+Gunakan id persis dari data. Jangan mengarang id.
+Bila owner melampirkan gambar referensi desain: pilih create_post (atau ideas bila owner minta ide, atau revise bila owner minta konten yang sedang menunggu ACC dibuat seperti referensi). Jangan pilih chat untuk pesan berlampiran.`;
   const user = `Sekarang: ${nowWib()} (WIB)
 
 Data saat ini:
@@ -105,12 +114,12 @@ ${state}
 Percakapan terakhir:
 ${history || "(belum ada)"}
 
-Pesan baru dari owner: ${text}`;
+Pesan baru dari owner: ${text}${refCount ? `\n(Owner melampirkan ${refCount} gambar referensi desain.)` : ""}`;
   return callStructured(system, user, Decision, "low");
 }
 
 /** Mode demo: aturan kata kunci sederhana. */
-function demoDecide(text: string, snap: Snapshot): DecisionT {
+function demoDecide(text: string, snap: Snapshot, refCount = 0): DecisionT {
   const t = text.toLowerCase();
   const base: DecisionT = {
     action: "chat",
@@ -138,7 +147,7 @@ function demoDecide(text: string, snap: Snapshot): DecisionT {
     const n = Number(/(\d+)/.exec(t)?.[1] ?? 5);
     return { ...base, action: "ideas", speaker: "kata", brief: text, count: Math.min(10, Math.max(1, n)), reply: "Siap, aku cari ide-idenya dulu ya." };
   }
-  if (/(buat|bikin|carousel|konten|post)/.test(t)) {
+  if (refCount || /(buat|bikin|carousel|konten|post)/.test(t)) {
     return { ...base, action: "create_post", speaker: "kata", brief: text, format: /single/.test(t) ? "single" : /carousel/.test(t) ? "carousel" : "auto", reply: "Siap! Aku susun angle & naskahnya, nanti Rupa yang desain." };
   }
   return {
@@ -161,11 +170,13 @@ function statusText(snap: Snapshot) {
 // ------------------------------------------------------------------ job
 
 type Task =
-  | { type: "ideas"; brief: string; count: number; format?: PostFormat }
-  | { type: "create_post"; brief: string; format?: PostFormat }
+  | { type: "ideas"; brief: string; count: number; format?: PostFormat; ref?: Attach }
+  | { type: "create_post"; brief: string; format?: PostFormat; ref?: Attach }
   | { type: "build_from_idea"; ideaId: string }
-  | { type: "revise"; postId: string; instruction: string }
+  | { type: "revise"; postId: string; instruction: string; ref?: Attach }
   | { type: "approve"; postId: string; scheduleAt: Date | null };
+
+const taskRef = (t: Task): Attach | undefined => ("ref" in t && t.ref?.urls.length ? t.ref : undefined);
 
 const FIRST_AGENT: Record<Task["type"], [AgentId, string]> = {
   ideas: ["kata", "Kata sedang mencari ide…"],
@@ -181,7 +192,7 @@ export async function activeJob(w: WorkspaceRepo): Promise<Job | null> {
 
 /** Buat job lalu kembalikan fungsi yang menjalankannya (dipanggil lewat after()). */
 export async function startTask(w: WorkspaceRepo, task: Task): Promise<() => Promise<void>> {
-  const [agent, label] = FIRST_AGENT[task.type];
+  const [agent, label] = taskRef(task) ? (["rupa", "Rupa sedang mempelajari referensimu…"] as const) : FIRST_AGENT[task.type];
   const job = await w.createJob({ agent, label });
   return () => runTask(w, job, task);
 }
@@ -202,9 +213,25 @@ async function runTask(w: WorkspaceRepo, job: Job, task: Task) {
     }
   };
   try {
+    // Referensi dipelajari dulu oleh Rupa, baru tim mulai menulis & mendesain.
+    let reference: PostReference | null = null;
+    const ref = taskRef(task);
+    if (ref) {
+      current = "rupa";
+      reference = await analyzeReference(await w.getBrand(), ref.urls, ref.useRefColors);
+      const summary = describeReference(reference);
+      await say(
+        w,
+        "rupa",
+        `Referensimu sudah kupelajari${summary ? `: ${summary}` : ""}. Gayanya kubuat semirip mungkin, isinya tetap untuk brand kamu.${!config.hasAI ? " (Mode demo: warna & gaya latar sudah mengikuti referensi; peniruan layout & copy aktif setelah ANTHROPIC_API_KEY diisi.)" : ""}`,
+      );
+      const [a, l] = FIRST_AGENT[task.type];
+      current = a;
+      await w.updateJob(job.id, { agent: a, label: l });
+    }
     switch (task.type) {
       case "ideas": {
-        const ideas = await createIdeas(w, task.brief, task.count, task.format);
+        const ideas = await createIdeas(w, task.brief, task.count, task.format, reference);
         await say(w, "kata", `Ini ${ideas.length} ide buat kamu. Pilih yang kamu suka, klik ACC, nanti aku & Rupa langsung kerjakan.`, {
           kind: "ideas",
           refs: ideas.map((i) => i.id),
@@ -212,7 +239,7 @@ async function runTask(w: WorkspaceRepo, job: Job, task: Task) {
         break;
       }
       case "create_post": {
-        const [idea] = await createIdeas(w, task.brief, 1, task.format);
+        const [idea] = await createIdeas(w, task.brief, 1, task.format, reference);
         await say(w, "kata", `Angle-nya: “${idea.title}” (${idea.format === "carousel" ? "carousel" : "single post"}). Hook: “${idea.hook}”. Aku tulis naskahnya sekarang.`);
         await deliverPost(w, await buildPostFromIdea(w, idea.id, progress));
         break;
@@ -222,7 +249,7 @@ async function runTask(w: WorkspaceRepo, job: Job, task: Task) {
         break;
       }
       case "revise": {
-        await deliverPost(w, await revisePostWith(w, task.postId, task.instruction, progress), true);
+        await deliverPost(w, await revisePostWith(w, task.postId, task.instruction, progress, reference), true);
         break;
       }
       case "approve": {
@@ -258,8 +285,9 @@ async function deliverPost(w: WorkspaceRepo, post: Post, revised = false) {
 // ------------------------------------------------------------------ pesan owner
 
 /** Proses pesan owner. Mengembalikan job yang perlu dijalankan di latar belakang (bila ada). */
-export async function handleMessage(w: WorkspaceRepo, text: string): Promise<(() => Promise<void>) | null> {
-  await userSays(w, text);
+export async function handleMessage(w: WorkspaceRepo, text: string, attach?: Attach): Promise<(() => Promise<void>) | null> {
+  const ref = attach?.urls.length ? attach : undefined;
+  await userSays(w, text, ref?.urls ?? []);
   const running = await activeJob(w);
   if (running) {
     await say(w, running.agent, `Sebentar ya, aku masih ${running.label.replace(/^\w+ sedang /, "").replace(/…$/, "")}. Pesanmu kubaca setelah ini selesai.`);
@@ -268,7 +296,9 @@ export async function handleMessage(w: WorkspaceRepo, text: string): Promise<(()
   const snap = await snapshot(w);
   let d: DecisionT;
   try {
-    d = await decide(w, text, snap);
+    d = await decide(w, text, snap, ref?.urls.length ?? 0);
+    // Pesan berlampiran selalu jadi pekerjaan desain, bukan obrolan.
+    if (ref && !["ideas", "create_post", "revise"].includes(d.action)) d = { ...d, action: "create_post", speaker: "rupa", brief: d.brief || text };
   } catch (e) {
     await say(w, "kata", `Maaf, aku lagi kesulitan memahami pesan ini (${e instanceof Error ? e.message : "error"}). Coba lagi ya.`, { kind: "error" });
     return null;
@@ -279,10 +309,10 @@ export async function handleMessage(w: WorkspaceRepo, text: string): Promise<(()
   switch (d.action) {
     case "ideas":
       await say(w, "kata", d.reply || "Siap, aku cari ide dulu.");
-      return startTask(w, { type: "ideas", brief: d.brief || text, count: Math.min(10, Math.max(1, Math.round(d.count) || 5)), format });
+      return startTask(w, { type: "ideas", brief: d.brief || text, count: Math.min(10, Math.max(1, Math.round(d.count) || 5)), format, ref });
     case "create_post":
-      await say(w, "kata", d.reply || "Siap, kukerjakan.");
-      return startTask(w, { type: "create_post", brief: d.brief || text, format });
+      await say(w, ref ? "rupa" : "kata", ref ? "Referensinya sudah kuterima! Aku pelajari dulu gayanya ya." : d.reply || "Siap, kukerjakan.");
+      return startTask(w, { type: "create_post", brief: d.brief || text, format, ref });
     case "revise": {
       const post = snap.review.find((p) => p.id === d.targetId) ?? snap.review[0];
       if (!post) {
@@ -290,7 +320,7 @@ export async function handleMessage(w: WorkspaceRepo, text: string): Promise<(()
         return null;
       }
       await say(w, d.speaker, d.reply || "Oke, kami revisi.");
-      return startTask(w, { type: "revise", postId: post.id, instruction: d.instruction || text });
+      return startTask(w, { type: "revise", postId: post.id, instruction: d.instruction || text, ref });
     }
     case "approve": {
       const post = snap.review.find((p) => p.id === d.targetId) ?? snap.review[0];

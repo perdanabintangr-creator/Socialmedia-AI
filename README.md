@@ -37,6 +37,19 @@ Cukup ketik arahan, misalnya "buatkan 5 ide konten minggu ini", "bikin carousel 
 
 Halaman Ringkasan, Ide, Konten, dan Brand Kit tetap ada untuk pemantauan dan edit manual.
 
+## Referensi desain ("bikin seperti ini")
+
+Di kotak perintah Beranda dan di chat, customer bisa melampirkan sampai 6 contoh desain:
+tombol **Referensi**, tempel gambar (Ctrl+V), atau seret & lepas. Gambar dikompres di browser lalu
+disimpan di storage workspace (`src/lib/reference.ts`).
+
+- Rupa mempelajari referensi lebih dulu: palet dihitung dari piksel (selalu jalan, juga di mode demo),
+  lalu bila AI aktif dianalisis dengan vision → layout per slide, template, font judul, gaya copy & foto.
+- Hasilnya (`PostReference`) disimpan di ide & konten. Kata menulis dengan gambar referensi terlampir,
+  Rupa mengikuti urutan layout, art director membandingkan hasil render dengan referensi.
+- Pilihan **Warna referensi / Warna brand**: palet referensi dipakai saat render (`styledBrand`), logo tetap milik brand.
+- Bisa juga untuk revisi: tempel referensi baru di chat saat konten menunggu ACC.
+
 ## Performa (baca metrik dari link)
 
 Menu **Performa** (`/performa`) bisa diaktifkan per workspace. Customer cukup menempel link

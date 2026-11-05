@@ -109,6 +109,7 @@ export interface Idea {
   status: IdeaStatus;
   feedback: string | null;
   post_id: string | null;
+  reference: PostReference | null; // referensi desain dari owner (dibawa ke konten)
   created_at: string;
 }
 
@@ -139,6 +140,7 @@ export interface Post {
   error: string | null;
   revision_count: number;
   design_notes: string | null; // catatan AI art director
+  reference: PostReference | null; // referensi desain yang diikuti
   created_at: string;
   updated_at: string;
 }
@@ -222,6 +224,7 @@ export interface ChatMessage {
   kind: ChatKind;
   text: string;
   refs: string[]; // id ide (kind=ideas) atau id post (kind=post)
+  attachments: string[]; // URL gambar referensi yang dilampirkan owner
   created_at: string;
 }
 
@@ -292,4 +295,31 @@ export interface TrackedLink {
   post_id: string | null; // konten SosmedAutopilot yang terkait (bila ada)
   checked_at: string | null;
   created_at: string;
+}
+
+// ---------------------------------------------------------------- Referensi desain
+
+/**
+ * Contoh desain yang ditempel owner ("bikin seperti ini"). Hasil analisis dipakai AI untuk
+ * meniru layout, tipografi, gaya copy & foto; palet & template dipakai renderer.
+ */
+export interface PostReference {
+  urls: string[];
+  notes: string; // analisis gaya: komposisi, hierarki teks, kepadatan, gaya copy
+  imageStyle: string; // art direction foto/ilustrasi
+  colors: Brand["colors"] | null; // null = tetap pakai warna brand
+  headingFont: FontKey | null;
+  template: TemplateKey | null;
+  layouts: SlideLayout[]; // layout paling mirip untuk tiap gambar referensi
+}
+
+/** Brand Kit yang sudah disesuaikan dengan referensi (warna, font, gaya foto). Logo & nama tetap. */
+export function styledBrand(brand: Brand, ref: PostReference | null | undefined): Brand {
+  if (!ref) return brand;
+  return {
+    ...brand,
+    colors: ref.colors ? { ...brand.colors, ...ref.colors } : brand.colors,
+    headingFont: ref.headingFont ?? brand.headingFont,
+    imageStyle: ref.imageStyle || brand.imageStyle,
+  };
 }

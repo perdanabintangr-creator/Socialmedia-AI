@@ -220,7 +220,15 @@ function slidesForPrompt(slides: Slide[]) {
 
 // ------------------------------------------------------------------ API
 
-export async function generateIdeas(brand: Brand, opts: { brief: string; count: number; recentTitles: string[] }) {
+/** Konteks tambahan dari referensi desain owner (teks arahan + gambar). */
+export interface RefContext {
+  text: string;
+  images: Anthropic.Beta.BetaContentBlockParam[];
+}
+const withRef = (prompt: string, ref?: RefContext | null): Anthropic.Beta.BetaContentBlockParam[] | string =>
+  ref ? [...ref.images, { type: "text", text: `${ref.text}\n\n${prompt}` }] : prompt;
+
+export async function generateIdeas(brand: Brand, opts: { brief: string; count: number; recentTitles: string[]; reference?: string }) {
   if (!config.hasAI) return demoIdeas(brand, opts.count);
   const prompt = `Buat ${opts.count} ide konten baru untuk minggu ini.
 
@@ -229,12 +237,12 @@ Brief dari owner: ${opts.brief || "(tidak ada brief khusus — seimbangkan pilar
 Ide yang sudah pernah dibuat (jangan diulang atau terlalu mirip):
 ${opts.recentTitles.length ? opts.recentTitles.map((t) => `- ${t}`).join("\n") : "- (belum ada)"}
 
-Campurkan format: kebanyakan carousel (lebih tinggi save & share), beberapa single post. Sebar ke pilar konten yang berbeda. Tiap ide harus spesifik, punya potensi visual yang kuat, dan langsung bisa dieksekusi — bukan topik umum.`;
+Campurkan format: kebanyakan carousel (lebih tinggi save & share), beberapa single post. Sebar ke pilar konten yang berbeda. Tiap ide harus spesifik, punya potensi visual yang kuat, dan langsung bisa dieksekusi — bukan topik umum.${opts.reference ? `\n\nOwner melampirkan referensi desain. Pilih ide & format yang cocok dieksekusi dengan gaya ini:\n${opts.reference}` : ""}`;
   const out = await callStructured(brandSystemPrompt(brand), prompt, IdeasSchema);
   return out.ideas.slice(0, opts.count);
 }
 
-export async function generatePost(brand: Brand, idea: Idea): Promise<Draft> {
+export async function generatePost(brand: Brand, idea: Idea, ref?: RefContext | null): Promise<Draft> {
   if (!config.hasAI) return demoPost(brand, idea);
   const prompt = `Buat konten lengkap (copy + art direction) dari ide yang sudah di-ACC berikut.
 
@@ -245,12 +253,12 @@ Pilar: ${idea.pillar}
 
 ${formatRules(idea.format)}
 
-Pastikan alur slide enak dibaca berurutan, visualnya bervariasi, dan caption melengkapi (bukan mengulang persis) isi slide.`;
-  const out = await callStructured(brandSystemPrompt(brand), prompt, PostSchema);
+Pastikan alur slide enak dibaca berurutan, visualnya bervariasi, dan caption melengkapi (bukan mengulang persis) isi slide.${ref ? "\nKarena ada referensi: kemiripan dengan referensi lebih penting daripada aturan variasi layout." : ""}`;
+  const out = await callStructured(brandSystemPrompt(brand), withRef(prompt, ref), PostSchema);
   return toDraft(out, idea.format);
 }
 
-export async function revisePost(brand: Brand, post: Post, instruction: string): Promise<Draft> {
+export async function revisePost(brand: Brand, post: Post, instruction: string, ref?: RefContext | null): Promise<Draft> {
   if (!config.hasAI) {
     return {
       title: post.title,
@@ -266,7 +274,7 @@ Owner meminta revisi: "${instruction}"
 
 Terapkan revisi tersebut. Pertahankan bagian yang tidak diminta untuk diubah. Untuk slide yang fotonya tetap, isi image.query/prompt seperti semula dan image.change = false. Set image.change = true hanya bila foto perlu diganti (atau slide baru butuh foto).
 ${formatRules(post.format)}`;
-  const out = await callStructured(brandSystemPrompt(brand), prompt, PostSchema);
+  const out = await callStructured(brandSystemPrompt(brand), withRef(prompt, ref), PostSchema);
   return toDraft(out, post.format, post.slides);
 }
 
@@ -275,9 +283,10 @@ export async function reviewDesign(
   brand: Brand,
   post: Pick<Post, "slides" | "format" | "caption">,
   renders: string[], // base64 JPEG per slide
+  ref?: RefContext | null,
 ): Promise<{ verdict: "approve" | "revise"; notes: string; slides: DraftSlide[] } | null> {
   if (!config.hasAI) return null;
-  const content: Anthropic.Beta.BetaContentBlockParam[] = [];
+  const content: Anthropic.Beta.BetaContentBlockParam[] = ref ? [...ref.images, { type: "text", text: ref.text }] : [];
   renders.forEach((data, i) => {
     content.push({ type: "text", text: `Slide ${i + 1}:` });
     content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data } });
@@ -287,7 +296,7 @@ export async function reviewDesign(
     text: `Di atas adalah hasil render carousel/post yang akan diposting. Data slide (JSON):
 ${JSON.stringify(slidesForPrompt(post.slides), null, 2)}
 
-Review sebagai art director agency yang galak tapi adil. Cek: (1) hook cover cukup kuat & visualnya eye-catching, (2) teks terbaca, tidak terlalu panjang, tidak terpotong/bertumpuk, (3) variasi layout & ritme visual, (4) foto relevan dengan isi slide, (5) konsistensi brand, (6) alur cerita antar slide.
+Review sebagai art director agency yang galak tapi adil.${ref ? " Owner minta hasilnya SANGAT MIRIP dengan gambar referensi di awal: bandingkan langsung dan perbaiki bagian yang belum mirip (komposisi, kepadatan teks, gaya)." : ""} Cek: (1) hook cover cukup kuat & visualnya eye-catching, (2) teks terbaca, tidak terlalu panjang, tidak terpotong/bertumpuk, (3) variasi layout & ritme visual, (4) foto relevan dengan isi slide, (5) konsistensi brand, (6) alur cerita antar slide.
 Bila sudah layak posting, verdict "approve" dan kembalikan slide apa adanya (image.change = false). Bila ada yang perlu diperbaiki, verdict "revise" dan kembalikan slide versi perbaikan — set image.change = true hanya untuk foto yang tidak relevan/jelek. Jangan mengubah jumlah slide kecuali benar-benar perlu.
 ${formatRules(post.format)}`,
   });

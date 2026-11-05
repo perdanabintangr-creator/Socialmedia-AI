@@ -17,7 +17,7 @@ import { DEFAULT_BRAND, type Brand, type Chat, type ChatMessage, type Idea, type
  * `accounts()` untuk data lintas workspace: pengguna & workspace.
  */
 
-export type NewIdea = Omit<Idea, "id" | "workspace_id" | "created_at" | "status" | "feedback" | "post_id">;
+export type NewIdea = Omit<Idea, "id" | "workspace_id" | "created_at" | "status" | "feedback" | "post_id" | "reference"> & { reference?: Idea["reference"] };
 export type NewPost = Omit<
   Post,
   | "id"
@@ -30,8 +30,9 @@ export type NewPost = Omit<
   | "error"
   | "revision_count"
   | "scheduled_at"
->;
-export type NewMessage = Omit<ChatMessage, "id" | "workspace_id" | "created_at" | "chat_id"> & { chat_id?: string | null };
+  | "reference"
+> & { reference?: Post["reference"] };
+export type NewMessage = Omit<ChatMessage, "id" | "workspace_id" | "created_at" | "chat_id" | "attachments"> & { chat_id?: string | null; attachments?: string[] };
 export type NewLink = Pick<TrackedLink, "platform" | "kind" | "url" | "handle"> & { post_id?: string | null };
 export type NewUser = Pick<User, "name" | "email" | "password_hash" | "role" | "status" | "workspace_id">;
 
@@ -188,7 +189,7 @@ class SupabaseWorkspace implements WorkspaceRepo {
     let q = sb().from("messages").select("*").eq("workspace_id", this.id);
     if (chatId) q = q.eq("chat_id", chatId);
     const rows = check(await q.order("created_at", { ascending: false }).limit(limit)) as ChatMessage[];
-    return rows.reverse();
+    return rows.reverse().map((m) => ({ ...m, attachments: m.attachments ?? [] }));
   }
   async addMessage(m: NewMessage) {
     const msg = check(await sb().from("messages").insert({ ...m, workspace_id: this.id }).select("*").single()) as ChatMessage;
@@ -391,6 +392,7 @@ class LocalWorkspace implements WorkspaceRepo {
     const now = Date.now();
     const created: Idea[] = ideas.map((i, n) => ({
       ...i,
+      reference: i.reference ?? null,
       id: randomUUID(),
       workspace_id: this.id,
       status: "pending",
@@ -418,6 +420,7 @@ class LocalWorkspace implements WorkspaceRepo {
     const now = new Date().toISOString();
     const created: Post = {
       ...post,
+      reference: post.reference ?? null,
       id: randomUUID(),
       workspace_id: this.id,
       scheduled_at: null,
@@ -451,11 +454,12 @@ class LocalWorkspace implements WorkspaceRepo {
   async listMessages(limit: number, chatId?: string) {
     return this.mine((await readLocal()).messages)
       .filter((m) => !chatId || m.chat_id === chatId)
-      .slice(-limit);
+      .slice(-limit)
+      .map((m) => ({ ...m, attachments: m.attachments ?? [] }));
   }
   async addMessage(m: NewMessage) {
     const now = new Date().toISOString();
-    const msg: ChatMessage = { ...m, chat_id: m.chat_id ?? null, id: randomUUID(), workspace_id: this.id, created_at: now };
+    const msg: ChatMessage = { ...m, attachments: m.attachments ?? [], chat_id: m.chat_id ?? null, id: randomUUID(), workspace_id: this.id, created_at: now };
     await mutateLocal((d) => {
       d.messages = [...(d.messages ?? []), msg].slice(-5000);
       if (m.chat_id) d.chats = (d.chats ?? []).map((c) => (c.id === m.chat_id && c.workspace_id === this.id ? { ...c, updated_at: now } : c));

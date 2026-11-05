@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowUp, CalendarCheck, Images, Lightbulb, Loader2, Megaphone, Sparkles, TrendingUp } from "lucide-react";
 import { startChatAction } from "@/app/studio-actions";
+import { AttachButton, DropOverlay, RefTray, useReferences } from "@/components/reference-input";
 
 const FORMATS = [
   { key: "carousel", label: "Carousel", hint: " (format carousel)" },
@@ -26,14 +27,18 @@ export function HomePrompt() {
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const ref = useRef<HTMLTextAreaElement>(null);
+  const refs = useReferences();
 
   const submit = (raw: string) => {
     const msg = raw.trim();
-    if (!msg || pending) return;
+    if ((!msg && !refs.items.length) || pending) return;
     const hint = FORMATS.find((f) => f.key === format)?.hint ?? "";
     setError(null);
+    const fd = new FormData();
+    fd.set("text", msg ? msg + hint : hint ? `Buatkan konten yang mirip dengan referensi ini${hint}` : "");
+    refs.appendTo(fd);
     start(async () => {
-      const res = await startChatAction(msg + hint);
+      const res = await startChatAction(fd);
       if (!res.ok || !res.chatId) return setError(res.error ?? "Gagal memulai percakapan");
       router.push(`/chat/${res.chatId}`);
     });
@@ -46,8 +51,10 @@ export function HomePrompt() {
           e.preventDefault();
           submit(text);
         }}
-        className="rounded-3xl bg-white p-3 shadow-lift ring-1 ring-line transition focus-within:ring-2 focus-within:ring-brand-400"
+        {...refs.dropZone}
+        className="relative rounded-3xl bg-white p-3 shadow-lift ring-1 ring-line transition focus-within:ring-2 focus-within:ring-brand-400"
       >
+        <DropOverlay show={refs.dragging} />
         <div className="flex gap-3 px-2 pt-1">
           <span className="bg-social mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-xl text-white">
             <Sparkles size={16} />
@@ -56,6 +63,7 @@ export function HomePrompt() {
             ref={ref}
             value={text}
             onChange={(e) => setText(e.target.value)}
+            onPaste={refs.onPaste}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
@@ -65,11 +73,17 @@ export function HomePrompt() {
             rows={2}
             autoFocus
             aria-label="Ceritakan kebutuhan kontenmu"
-            placeholder="Ceritakan kebutuhan kontenmu, mis. “buatkan carousel promo beli 2 gratis 1 untuk akhir bulan”"
+            placeholder="Ceritakan kebutuhan kontenmu, mis. “buatkan carousel promo beli 2 gratis 1”. Punya contoh desain? Tempel (Ctrl+V) atau seret gambarnya ke sini."
             className="min-h-[60px] flex-1 resize-none bg-transparent py-1.5 text-[15px] leading-relaxed outline-none placeholder:text-slate-400 focus-visible:outline-none"
           />
         </div>
-        <div className="mt-2 flex items-center gap-2 pl-12">
+        {(refs.items.length > 0 || refs.note) && (
+          <div className="mt-2 pl-12">
+            <RefTray refs={refs} />
+          </div>
+        )}
+        <div className="mt-2 flex flex-wrap items-center gap-2 pl-12">
+          <AttachButton refs={refs} />
           {FORMATS.map((f) => (
             <button
               key={f.key}
@@ -83,7 +97,7 @@ export function HomePrompt() {
           ))}
           <button
             type="submit"
-            disabled={!text.trim() || pending}
+            disabled={(!text.trim() && !refs.items.length) || pending}
             className="bg-social ml-auto inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:brightness-105 disabled:opacity-30 disabled:saturate-0"
           >
             {pending ? <Loader2 size={16} className="animate-spin" /> : <ArrowUp size={16} />} Kirim
