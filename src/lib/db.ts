@@ -4,7 +4,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { config } from "./config";
-import { DEFAULT_BRAND, type Brand, type Chat, type ChatMessage, type Idea, type Job, type Post, type TrackedLink, type User, type Workspace } from "./types";
+import { DEFAULT_BRAND, type Brand, type Chat, type ChatMessage, type Idea, type Job, type Post, type TrackedLink, type UsageLog, type User, type Workspace } from "./types";
 
 /**
  * Lapisan data. Dua mode:
@@ -34,6 +34,7 @@ export type NewPost = Omit<
 > & { reference?: Post["reference"] };
 export type NewMessage = Omit<ChatMessage, "id" | "workspace_id" | "created_at" | "chat_id" | "attachments"> & { chat_id?: string | null; attachments?: string[] };
 export type NewLink = Pick<TrackedLink, "platform" | "kind" | "url" | "handle"> & { post_id?: string | null };
+export type NewUsage = Omit<UsageLog, "id" | "workspace_id" | "created_at">;
 export type NewUser = Pick<User, "name" | "email" | "password_hash" | "role" | "status" | "workspace_id">;
 
 export interface WorkspaceRepo {
@@ -66,6 +67,8 @@ export interface WorkspaceRepo {
   createLink(l: NewLink): Promise<TrackedLink>;
   updateLink(id: string, patch: Partial<TrackedLink>): Promise<void>;
   deleteLink(id: string): Promise<void>;
+  addUsage(u: NewUsage): Promise<void>;
+  listUsage(since: string, limit?: number): Promise<UsageLog[]>; // terbaru dulu
 }
 
 export interface AccountRepo {
@@ -84,6 +87,8 @@ export interface AccountRepo {
   deleteWorkspace(id: string): Promise<void>;
   /** Link yang terakhir dicek sebelum `before` (untuk pembaruan terjadwal), lintas workspace. */
   listStaleLinks(before: string, limit: number): Promise<TrackedLink[]>;
+  /** Log biaya semua workspace sejak tanggal tertentu (untuk admin). */
+  listUsageAll(since: string, limit?: number): Promise<UsageLog[]>;
 }
 
 const JOB_STALE_MS = 6 * 60_000; // job lebih lama dari ini dianggap macet
@@ -113,6 +118,9 @@ export function mergeBrand(data: Partial<Brand> | null | undefined): Brand {
     colors: { ...DEFAULT_BRAND.colors, ...(data?.colors ?? {}) },
   };
 }
+
+/** Kolom numeric dari Postgres datang sebagai string. */
+const numUsage = (u: UsageLog): UsageLog => ({ ...u, ai_usd: Number(u.ai_usd), image_usd: Number(u.image_usd) });
 
 const wsKey = (ws: string, key: string) => `ws/${ws}/${key.replace(/\.\./g, "").replace(/^\/+/, "")}`;
 
@@ -263,6 +271,15 @@ class SupabaseWorkspace implements WorkspaceRepo {
   async deleteLink(id: string) {
     check(await sb().from("tracked_links").delete().eq("workspace_id", this.id).eq("id", id));
   }
+  async addUsage(u: NewUsage) {
+    check(await sb().from("usage_logs").insert({ ...u, workspace_id: this.id }));
+  }
+  async listUsage(since: string, limit = 500) {
+    const rows = check(
+      await sb().from("usage_logs").select("*").eq("workspace_id", this.id).gte("created_at", since).order("created_at", { ascending: false }).limit(limit),
+    ) as UsageLog[];
+    return rows.map(numUsage);
+  }
 }
 
 class SupabaseAccounts implements AccountRepo {
@@ -312,6 +329,9 @@ class SupabaseAccounts implements AccountRepo {
     // Konten workspace ikut terhapus (foreign key ON DELETE CASCADE).
     check(await sb().from("workspaces").delete().eq("id", id));
   }
+  async listUsageAll(since: string, limit = 2000) {
+    return (check(await sb().from("usage_logs").select("*").gte("created_at", since).order("created_at", { ascending: false }).limit(limit)) as UsageLog[]).map(numUsage);
+  }
   async listStaleLinks(before: string, limit: number) {
     return check(
       await sb()
@@ -336,6 +356,7 @@ interface LocalData {
   users?: User[];
   workspaces?: Workspace[];
   links?: TrackedLink[];
+  usage?: UsageLog[];
 }
 
 export const LOCAL_DIR = path.join(process.cwd(), ".data");
@@ -553,9 +574,27 @@ class LocalWorkspace implements WorkspaceRepo {
       d.links = (d.links ?? []).filter((l) => !(l.id === id && l.workspace_id === this.id));
     });
   }
+  async addUsage(u: NewUsage) {
+    const row: UsageLog = { ...u, id: randomUUID(), workspace_id: this.id, created_at: new Date().toISOString() };
+    await mutateLocal((d) => {
+      d.usage = [...(d.usage ?? []), row].slice(-5000);
+    });
+  }
+  async listUsage(since: string, limit = 500) {
+    return this.mine((await readLocal()).usage)
+      .filter((u) => u.created_at >= since)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      .slice(0, limit);
+  }
 }
 
 class LocalAccounts implements AccountRepo {
+  async listUsageAll(since: string, limit = 2000) {
+    return ((await readLocal()).usage ?? [])
+      .filter((u) => u.created_at >= since)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      .slice(0, limit);
+  }
   async listStaleLinks(before: string, limit: number) {
     return ((await readLocal()).links ?? [])
       .filter((l) => !l.checked_at || l.checked_at < before)

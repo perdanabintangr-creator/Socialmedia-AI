@@ -1,6 +1,7 @@
 import { PhonePreview } from "@/components/phone-preview";
 import { publishTarget } from "@/lib/pipeline";
 import { requireWorkspace } from "@/lib/session";
+import { fmtIdr, fmtUsd } from "@/lib/cost";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActionForm, Disclosure, Submit } from "@/components/forms";
@@ -47,11 +48,13 @@ function defaultSchedule(time: string) {
 }
 
 export default async function PostPage({ params }: { params: Promise<{ id: string }> }) {
-  const { w } = await requireWorkspace();
+  const { w, user } = await requireWorkspace();
   const target = await publishTarget(w.id);
   const { id } = await params;
   const [post, brand] = await Promise.all([w.getPost(id), w.getBrand()]);
   if (!post) notFound();
+  // Biaya hanya untuk admin (pelanggan tidak perlu melihat modal AI).
+  const usage = user.role === "admin" ? (await w.listUsage(new Date(Date.now() - 365 * 86_400_000).toISOString())).filter((u) => u.post_id === post.id) : [];
   const editable = post.status === "review" || post.status === "failed";
   const v = encodeURIComponent(post.updated_at);
   const images = post.media_urls.length
@@ -183,6 +186,19 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                   </span>
                 )}
               </div>
+            </Card>
+          )}
+          {usage.length > 0 && (
+            <Card>
+              <h2 className="text-sm font-bold">Biaya pembuatan (admin)</h2>
+              <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm">
+                <span className="text-2xl font-extrabold tabular-nums">{fmtUsd(usage.reduce((a, u) => a + u.ai_usd + u.image_usd, 0))}</span>
+                <span className="text-slate-500">≈ {fmtIdr(usage.reduce((a, u) => a + u.ai_usd + u.image_usd, 0))}</span>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">
+                Claude {fmtUsd(usage.reduce((a, u) => a + u.ai_usd, 0))} · {usage.reduce((a, u) => a + u.images, 0)} gambar {fmtUsd(usage.reduce((a, u) => a + u.image_usd, 0))} ·{" "}
+                {usage.length} pekerjaan (termasuk revisi)
+              </p>
             </Card>
           )}
           {post.design_notes && (

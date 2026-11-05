@@ -7,6 +7,7 @@ import type { WorkspaceRepo } from "@/lib/db";
 import { workspaceOrThrow } from "@/lib/session";
 import { analyzeExamples } from "@/lib/ai";
 import { sourceImage } from "@/lib/images";
+import { metered } from "@/lib/cost";
 import { approveAndPublish, buildPostFromIdea, createIdeas, parseWib, publishTarget, revisePostWith } from "@/lib/pipeline";
 import { readMedia } from "@/lib/media";
 import { randomUUID } from "crypto";
@@ -144,7 +145,7 @@ export async function generateIdeasAction(_: ActionState, fd: FormData): Promise
   const { w } = await workspaceOrThrow();
   try {
     const count = Math.min(10, Math.max(1, Number(str(fd, "count")) || 6));
-    const ideas = await createIdeas(w, str(fd, "brief"), count);
+    const ideas = await metered(w, "ideas", () => createIdeas(w, str(fd, "brief"), count));
     revalidatePath("/", "layout");
     return { ok: `${ideas.length} ide baru siap di-review` };
   } catch (e) {
@@ -156,7 +157,7 @@ export async function approveIdeaAction(id: string): Promise<ActionState> {
   const { w } = await workspaceOrThrow();
   let postId: string;
   try {
-    const post = await buildPostFromIdea(w, id);
+    const post = await metered(w, "build_post", () => buildPostFromIdea(w, id));
     postId = post.id;
   } catch (e) {
     return fail(e);
@@ -235,7 +236,7 @@ export async function revisePostAction(id: string, _: ActionState, fd: FormData)
           ? `Revisi khusus SLIDE ${part} saja, slide lain dan caption biarkan sama: ${base}`
           : base;
     if (!instruction) return { error: "Tulis dulu revisi yang diinginkan" };
-    await revisePostWith(w, id, instruction);
+    await metered(w, "revise", () => revisePostWith(w, id, instruction));
     revalidatePath(`/posts/${id}`);
     return { ok: "Revisi selesai — cek hasilnya" };
   } catch (e) {
@@ -271,7 +272,7 @@ export async function replaceImageAction(postId: string, index: number, _: Actio
       query: custom || slide.image?.query || plainHeadline(slide),
       prompt: custom ? `${custom}. Context: ${plainHeadline(slide)}` : slide.image?.prompt || plainHeadline(slide),
     };
-    const image = await sourceImage(w, { ...brand, imageSource: brand.imageSource === "brand" || brand.imageSource === "none" ? "auto" : brand.imageSource }, req, `${post.id}-${index}`, Date.now() % 97);
+    const image = await metered(w, "image", () => sourceImage(w, { ...brand, imageSource: brand.imageSource === "brand" || brand.imageSource === "none" ? "auto" : brand.imageSource }, req, `${post.id}-${index}`, Date.now() % 97), () => post.id);
     if (!image) return { error: "Tidak ada sumber gambar aktif (isi OPENAI/GEMINI atau PEXELS API key), atau tidak ditemukan." };
     await saveSlide(w, post, index, { ...slide, image });
     return { ok: "Gambar diganti" };

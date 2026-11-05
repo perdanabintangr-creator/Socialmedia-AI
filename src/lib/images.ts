@@ -2,6 +2,7 @@ import "server-only";
 import sharp from "sharp";
 import { config } from "./config";
 import { generateImage } from "./image-gen";
+import { recordImage } from "./cost";
 import type { WorkspaceRepo } from "./db";
 import type { Brand, SlideImage } from "./types";
 
@@ -90,6 +91,7 @@ export async function sourceImage(w: WorkspaceRepo, brand: Brand, req: ImageRequ
     try {
       const out = await generateImage(aiPrompt(brand, req), refs);
       if (out.notes) console.warn("AI image memakai cadangan:", out.notes);
+      recordImage(out.provider, out.model, out.costUsd);
       return { ...base, url: await store(w, out.data, key), source: "ai" };
     } catch (e) {
       console.error("AI image gagal, coba stok foto:", e);

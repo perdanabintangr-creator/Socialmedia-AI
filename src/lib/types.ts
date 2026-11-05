@@ -344,3 +344,20 @@ export function styledBrand(brand: Brand, ref: PostReference | null | undefined)
     imageStyle: ref.imageStyle || brand.imageStyle,
   };
 }
+
+// ---------------------------------------------------------------- Biaya
+
+export interface UsageLog {
+  id: string;
+  workspace_id: string;
+  kind: string;
+  post_id: string | null;
+  ai_usd: number;
+  image_usd: number;
+  images: number;
+  ai_calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  detail: string | null;
+  created_at: string;
+}

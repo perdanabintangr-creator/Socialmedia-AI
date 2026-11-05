@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import sharp from "sharp";
 import { accounts, type WorkspaceRepo } from "./db";
 import { generateIdeas, generatePost, reviewDesign, revisePost, type Draft, type RefContext } from "./ai";
+import { setMeterPost } from "./cost";
 import { referenceImageBlocks, referenceImageBuffers, referencePrompt } from "./reference";
 import { renderSlidePng, renderSlidesJpeg } from "./render";
 import { sourceImage } from "./images";
@@ -45,9 +46,33 @@ async function refContext(ref: PostReference | null): Promise<RefContext | null>
 }
 
 /** Isi gambar untuk slide yang membutuhkannya (paralel, maks 3 sekaligus). */
-export async function materialize(w: WorkspaceRepo, brand: Brand, draft: Pick<Draft, "slides">, key: string, refs: Buffer[] = []): Promise<Slide[]> {
+/**
+ * Mode hemat: batas foto AI baru per konten (cover didahulukan). Slide yang tidak kebagian
+ * otomatis memakai versi grafis. Foto milik brand (assetId) gratis dan tidak dihitung.
+ * Atur lewat env MAX_AI_IMAGES_PER_POST (default 4) dan MAX_AI_IMAGE_SWAPS (default 2).
+ */
+export const MAX_NEW_IMAGES = Number(process.env.MAX_AI_IMAGES_PER_POST) || 4;
+const MAX_SWAPS = Number(process.env.MAX_AI_IMAGE_SWAPS) || 2;
+
+export async function materialize(
+  w: WorkspaceRepo,
+  brand: Brand,
+  draft: Pick<Draft, "slides">,
+  key: string,
+  refs: Buffer[] = [],
+  maxNew = MAX_NEW_IMAGES,
+): Promise<Slide[]> {
   const out = draft.slides.map((d) => d.slide);
-  const jobs = draft.slides.map((d, i) => ({ d, i })).filter(({ d }) => d.imageRequest);
+  let budget = maxNew;
+  const jobs = draft.slides
+    .map((d, i) => ({ d, i }))
+    .filter(({ d }) => {
+      if (!d.imageRequest) return false;
+      if (d.imageRequest.assetId && brand.assets.some((a) => a.id === d.imageRequest!.assetId)) return true;
+      if (budget <= 0) return false;
+      budget--;
+      return true;
+    });
   for (let n = 0; n < jobs.length; n += 3) {
     await Promise.all(
       jobs.slice(n, n + 3).map(async ({ d, i }) => {
@@ -77,7 +102,19 @@ async function artDirector(
     const review = await reviewDesign(brand, post, renders, ref);
     if (!review) return { slides: post.slides, notes: null };
     if (review.verdict === "approve") return { slides: post.slides, notes: review.notes };
-    return { slides: await materialize(w, brand, review, `${key}-qa`, refImgs), notes: review.notes };
+    // Mode hemat: art director hanya boleh mengganti maks. MAX_SWAPS foto; sisanya foto lama dipertahankan.
+    let swaps = 0;
+    const capped = {
+      slides: review.slides.map((d, i) => {
+        if (!d.imageRequest) return d;
+        if (swaps < MAX_SWAPS) {
+          swaps++;
+          return d;
+        }
+        return { slide: { ...d.slide, image: post.slides[i]?.image ?? null }, imageRequest: null };
+      }),
+    };
+    return { slides: await materialize(w, brand, capped, `${key}-qa`, refImgs, MAX_SWAPS), notes: review.notes };
   } catch (e) {
     console.error("Review art director gagal (konten tetap dipakai):", e);
     return { slides: post.slides, notes: null };
@@ -130,6 +167,7 @@ export async function buildPostFromIdea(w: WorkspaceRepo, ideaId: string, progre
     design_notes: reviewed.notes,
     reference: ref,
   });
+  setMeterPost(post.id);
   await w.updateIdea(ideaId, { status: "approved", post_id: post.id });
   return post;
 }
@@ -144,6 +182,7 @@ export async function revisePostWith(
   const post = await w.getPost(postId);
   if (!post) throw new Error("Konten tidak ditemukan");
   if (!["review", "failed"].includes(post.status)) throw new Error("Konten ini sudah di-ACC, tidak bisa direvisi lagi");
+  setMeterPost(post.id);
   const ref = newRef ?? post.reference ?? null;
   const brand = styledBrand(await w.getBrand(), ref);
   const draft = await revisePost(brand, post, instruction, await refContext(ref));

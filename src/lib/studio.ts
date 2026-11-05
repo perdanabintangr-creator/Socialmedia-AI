@@ -15,6 +15,7 @@ import {
   type Progress,
 } from "./pipeline";
 import { analyzeReference, describeReference } from "./reference";
+import { metered } from "./cost";
 import type { Idea, Job, Post, PostFormat, PostReference } from "./types";
 
 /**
@@ -194,7 +195,8 @@ export async function activeJob(w: WorkspaceRepo): Promise<Job | null> {
 export async function startTask(w: WorkspaceRepo, task: Task): Promise<() => Promise<void>> {
   const [agent, label] = taskRef(task) ? (["rupa", "Rupa sedang mempelajari referensimu…"] as const) : FIRST_AGENT[task.type];
   const job = await w.createJob({ agent, label });
-  return () => runTask(w, job, task);
+  const kind = task.type === "approve" ? "other" : task.type === "build_from_idea" ? "build_post" : task.type;
+  return () => metered(w, kind, () => runTask(w, job, task));
 }
 
 const NEXT_LABEL: Partial<Record<AgentId, [AgentId, string]>> = {

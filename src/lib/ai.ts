@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { config } from "./config";
+import { recordAI } from "./cost";
 import { ICON_NAMES } from "./icons";
 import { SLIDE_LAYOUTS, TEMPLATE_KEYS, normalizeSlide, type Brand, type Idea, type Post, type PostFormat, type Slide } from "./types";
 import type { ImageRequest } from "./images";
@@ -104,7 +105,7 @@ ${LAYOUT_GUIDE}
 # Aturan art direction
 - Variasikan layout: jangan pakai layout yang sama lebih dari 2 slide berturut-turut. Kombinasikan foto, ikon, list, angka, dan perbandingan seperti carousel agency.
 - Cover harus paling kuat secara visual: utamakan cover_photo atau cover_split (pakai foto), atau cover_type untuk opini.
-- Pakai foto di cover dan di 1-3 slide lain yang memang terbantu oleh visual (orang, suasana kerja, produk, contoh nyata). Slide konseptual pakai point_icon / list / steps / compare.
+- Anggaran foto AI maksimal 4 per konten (foto brand tidak dihitung): pakai foto di cover dan di 1-3 slide lain yang memang terbantu oleh visual (orang, suasana kerja, produk, contoh nyata). Slide konseptual pakai point_icon / list / steps / compare.
 - Untuk slide berfoto, isi image.query (stok, bahasa Inggris) DAN image.prompt (AI image, bahasa Inggris): subjek spesifik, konteks Indonesia bila ada manusia, setting, sudut kamera, cahaya, mood. Sisakan ruang kosong agar teks terbaca. Tidak ada teks di dalam gambar.
 - Untuk slide tanpa foto, kosongkan image.query dan image.prompt.
 - Highlight 1-3 kata paling penting di headline dengan *bintang*. Jangan highlight seluruh kalimat.
@@ -142,6 +143,7 @@ export async function callStructured<T extends z.ZodType>(
       output_config: { effort, format: betaZodOutputFormat(schema) },
       messages: [{ role: "user", content }],
     });
+    recordAI(res.model, res.usage);
     if (res.stop_reason === "refusal") {
       throw new Error("AI menolak permintaan ini. Coba ubah brief atau instruksinya.");
     }
@@ -277,7 +279,7 @@ ${JSON.stringify({ title: post.title, slides: slidesForPrompt(post.slides), capt
 
 Owner meminta revisi: "${instruction}"
 
-Terapkan revisi tersebut. Pertahankan bagian yang tidak diminta untuk diubah. Untuk slide yang fotonya tetap, isi image.query/prompt seperti semula dan image.change = false. Set image.change = true hanya bila foto perlu diganti (atau slide baru butuh foto).
+Terapkan revisi tersebut. Pertahankan bagian yang tidak diminta untuk diubah. Hemat biaya: JANGAN mengganti foto kecuali owner memintanya secara eksplisit (mis. "ganti foto", "bedakan orangnya") atau slide baru memang butuh foto. Untuk slide yang fotonya tetap, isi image.query/prompt seperti semula dan image.change = false. Set image.change = true hanya bila foto perlu diganti (atau slide baru butuh foto).
 ${formatRules(post.format)}`;
   const out = await callStructured(brandSystemPrompt(brand), withRef(prompt, ref), PostSchema);
   return toDraft(out, post.format, post.slides);

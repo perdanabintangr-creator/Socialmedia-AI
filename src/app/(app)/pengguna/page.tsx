@@ -70,6 +70,12 @@ export default async function UsersPage() {
           <span className="text-slate-400">›</span>
         </Link>
       )}
+      {isAdmin && (
+        <Link href="/pengguna/biaya" className="flex items-center justify-between rounded-2xl bg-white px-5 py-4 text-sm font-semibold shadow-soft ring-1 ring-line hover:ring-brand-200">
+          Biaya AI (per bulan, per klien, per konten)
+          <span className="text-slate-400">›</span>
+        </Link>
+      )}
 
       {isAdmin && (
         <Card className="p-0">
