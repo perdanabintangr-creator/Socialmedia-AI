@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { LogOut } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { SideNav, TabBar } from "@/components/app-nav";
@@ -8,63 +8,69 @@ import { logoutAction } from "@/app/auth-actions";
 
 export default async function AppLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const { user, w } = await requireWorkspace();
-  const [brand, ideas, posts] = await Promise.all([w.getBrand(), w.listIdeas(), w.listPosts()]);
-  if (!brand.onboarded) redirect("/onboarding");
+  const [brand, ideas, posts, chats] = await Promise.all([w.getBrand(), w.listIdeas(), w.listPosts(), w.listChats(30)]);
+  const path = (await headers()).get("x-pathname") ?? "";
+  const fullBleed = path.startsWith("/chat/");
 
   const badges = {
     "/ideas": ideas.filter((i) => i.status === "pending").length,
     "/posts": posts.filter((p) => p.status === "review" || p.status === "failed").length,
   };
   const initials = (brand.name || user.name).split(/\s+/).map((x) => x[0]).slice(0, 2).join("").toUpperCase();
+  const plan = user.role === "admin" ? "Admin" : "Gratis";
 
   return (
-    <div className="min-h-dvh lg:grid lg:grid-cols-[256px_minmax(0,1fr)]">
+    <div className="min-h-dvh lg:grid lg:grid-cols-[272px_minmax(0,1fr)]">
       {/* Sidebar (desktop) */}
-      <aside className="sticky top-0 hidden h-dvh flex-col gap-6 border-r border-line bg-canvas px-4 py-5 lg:flex">
-        <Link href="/studio" className="px-2">
-          <Logo size={30} />
-        </Link>
-
-        <div className="flex items-center gap-3 rounded-2xl bg-white p-3 shadow-soft ring-1 ring-line">
-          {brand.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={brand.logoUrl} alt="" className="h-9 w-9 rounded-lg bg-slate-50 object-contain p-1 ring-1 ring-line" />
-          ) : (
-            <span className="grid h-9 w-9 place-items-center rounded-lg text-xs font-bold text-white" style={{ background: brand.colors.primary }}>
-              {initials}
-            </span>
-          )}
-          <div className="min-w-0">
-            <div className="truncate text-sm font-bold">{brand.name}</div>
-            <div className="truncate text-xs text-slate-500">Workspace</div>
-          </div>
+      <aside className="sticky top-0 hidden h-dvh flex-col gap-5 border-r border-line bg-canvas px-4 py-5 lg:flex">
+        <div className="flex items-center justify-between px-1">
+          <Link href="/beranda">
+            <Logo size={30} />
+          </Link>
         </div>
 
-        <SideNav badges={badges} />
+        <SideNav badges={badges} chats={chats.map((c) => ({ id: c.id, title: c.title }))} />
 
-        <div className="mt-auto flex items-center gap-3 rounded-xl px-2 py-2">
-          <span className="grid h-8 w-8 place-items-center rounded-full bg-slate-200 text-xs font-bold text-slate-600">{user.name.slice(0, 1).toUpperCase()}</span>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold">{user.name}</div>
-            <div className="truncate text-xs text-slate-500">{user.email}</div>
+        <div className="space-y-2 border-t border-line pt-4">
+          <Link href="/brand" className="flex items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-white/70">
+            {brand.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={brand.logoUrl} alt="" className="h-8 w-8 rounded-lg bg-white object-contain p-0.5 ring-1 ring-line" />
+            ) : (
+              <span className="grid h-8 w-8 place-items-center rounded-lg text-[11px] font-bold text-white" style={{ background: brand.colors.primary }}>
+                {initials}
+              </span>
+            )}
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold">{brand.name}</span>
+          </Link>
+          <div className="flex items-center gap-3 rounded-xl px-2 py-1.5">
+            <Link href="/pengguna" className="flex min-w-0 flex-1 items-center gap-3">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">{user.name.slice(0, 1).toUpperCase()}</span>
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold">{user.name}</span>
+                <span className="mt-0.5 inline-flex rounded-full bg-white px-2 py-px text-[11px] font-semibold text-slate-500 ring-1 ring-line">{plan}</span>
+              </span>
+            </Link>
+            <form action={logoutAction}>
+              <button aria-label="Keluar" title="Keluar" className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-white hover:text-ink">
+                <LogOut size={16} />
+              </button>
+            </form>
           </div>
-          <form action={logoutAction}>
-            <button aria-label="Keluar" title="Keluar" className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-white hover:text-ink">
-              <LogOut size={16} />
-            </button>
-          </form>
         </div>
       </aside>
 
       {/* Header (mobile) */}
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-line bg-canvas/85 px-4 py-3 backdrop-blur-xl lg:hidden">
-        <Link href="/studio">
+        <Link href="/beranda">
           <Logo size={28} />
         </Link>
-        <span className="max-w-[45%] truncate rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 ring-1 ring-line">{brand.name}</span>
+        <Link href="/brand" className="max-w-[45%] truncate rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 ring-1 ring-line">
+          {brand.name}
+        </Link>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl overflow-x-clip px-4 pt-6 pb-28 sm:px-6 lg:px-10 lg:pt-10 lg:pb-12">{children}</main>
+      <main className={fullBleed ? "min-w-0" : "mx-auto w-full max-w-6xl overflow-x-clip px-4 pt-6 pb-28 sm:px-6 lg:px-10 lg:pt-10 lg:pb-12"}>{children}</main>
       <TabBar badges={badges} />
     </div>
   );

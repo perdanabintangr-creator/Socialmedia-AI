@@ -101,5 +101,14 @@ export async function completeOnboardingAction(input: OnboardingInput): Promise<
     onboarded: true,
   });
   revalidatePath("/", "layout");
-  redirect("/studio");
+  redirect("/beranda");
+}
+
+/** Customer minta tim kami membantu menghubungkan Instagram/TikTok. */
+export async function requestSocialAction(): Promise<{ ok?: string; error?: string }> {
+  const { w } = await workspaceOrThrow();
+  const brand = await w.getBrand();
+  await w.saveBrand({ ...brand, socialRequested: true });
+  revalidatePath("/", "layout");
+  return { ok: "Permintaan terkirim. Tim kami akan memandu kamu." };
 }

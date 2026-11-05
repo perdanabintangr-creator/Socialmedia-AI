@@ -1,18 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { Check, Clock, ExternalLink, Loader2, Palette, PenLine, Send, Smartphone, Sparkles, X } from "lucide-react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, useTransition } from "react";
+import { ArrowUp, Check, Clock, ExternalLink, Loader2, Palette, PenLine, Send, Smartphone, Sparkles, X } from "lucide-react";
 import { PhonePreview } from "./phone-preview";
 import { AGENTS, AGENT_LIST, type AgentId } from "@/lib/agents";
 import type { ChatView, IdeaCard, PostCard, StudioState } from "@/lib/studio-view";
 import { chatApproveIdeaAction, chatApprovePostAction, chatRejectIdeaAction, sendChatAction, type StudioResult } from "@/app/studio-actions";
 
 const ICONS = { PenLine, Palette, Send };
+const ChatIdCtx = createContext("");
 
-const SUGGESTIONS = [
+export const SUGGESTIONS = [
   "Buatkan 5 ide konten minggu ini",
-  "Bikin carousel tips branding untuk UMKM",
+  "Bikin carousel tips untuk pelanggan baru",
   "Apa jadwal posting minggu ini?",
   "ACC, jadwalkan besok jam 7 malam",
 ];
@@ -36,24 +37,26 @@ export function Avatar({ id, size = 36 }: { id: AgentId; size?: number }) {
   );
 }
 
-export function Studio({ initial }: { initial: StudioState }) {
+/** Satu percakapan dengan tim agen. */
+export function ChatRoom({ chatId, title, initial }: { chatId: string; title: string; initial: StudioState }) {
   const [state, setState] = useState(initial);
   const [text, setText] = useState("");
   const [sending, startSend] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [fastUntil, setFastUntil] = useState(0);
+  const [fastUntil, setFastUntil] = useState(() => Date.now() + 15_000);
+  const [preview, setPreview] = useState<PostCard | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const lastCount = useRef(initial.messages.length);
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch("/api/studio", { cache: "no-store" });
+      const res = await fetch(`/api/studio?chat=${encodeURIComponent(chatId)}`, { cache: "no-store" });
       if (res.ok) setState(await res.json());
     } catch {
       /* jaringan putus sesaat — coba lagi di polling berikutnya */
     }
-  }, []);
+  }, [chatId]);
 
   // Polling: cepat saat agen bekerja, santai saat diam.
   const busy = Boolean(state.job) || sending || Date.now() < fastUntil;
@@ -62,12 +65,10 @@ export function Studio({ initial }: { initial: StudioState }) {
     return () => clearInterval(id);
   }, [busy, refresh]);
 
-  // Saat dibuka: langsung ke pesan terbaru.
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, []);
 
-  // Auto-scroll saat ada pesan baru.
   useEffect(() => {
     if (state.messages.length !== lastCount.current || sending) {
       lastCount.current = state.messages.length;
@@ -91,127 +92,109 @@ export function Studio({ initial }: { initial: StudioState }) {
     setText("");
     setState((s) => ({
       ...s,
-      messages: [...s.messages, { id: `tmp-${Date.now()}`, workspace_id: "", role: "user", agent: null, kind: "text", text: m, created_at: new Date().toISOString() }],
+      messages: [...s.messages, { id: `tmp-${Date.now()}`, workspace_id: "", chat_id: chatId, role: "user", agent: null, kind: "text", text: m, created_at: new Date().toISOString() }],
     }));
-    run(() => sendChatAction(m));
+    run(() => sendChatAction(chatId, m));
   };
 
-  const startRevise = (title: string) => {
-    setText(`Revisi “${title}”: `);
+  const startRevise = (t: string) => {
+    setText(`Revisi “${t}”: `);
     inputRef.current?.focus();
   };
 
   const working = state.job ? AGENTS[state.job.agent] : null;
-  const [preview, setPreview] = useState<PostCard | null>(null);
+  const empty = state.messages.length === 0;
 
   return (
-    <div className="grid h-[calc(100dvh-12.5rem)] min-h-[480px] lg:h-[calc(100dvh-5rem)] gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
-      {/* Tim */}
-      <aside className="hidden flex-col gap-3 lg:flex">
-        <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-          <h2 className="text-sm font-semibold text-slate-500">Tim kontenmu</h2>
-          <ul className="mt-3 space-y-3">
-            {AGENT_LIST.map((a) => {
-              const active = state.job?.agent === a.id;
-              return (
-                <li key={a.id} className="flex items-start gap-3">
-                  <div className="relative">
-                    <Avatar id={a.id} size={40} />
-                    <span className={`absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full ring-2 ring-white ${active ? "animate-pulse bg-amber-400" : "bg-emerald-400"}`} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold">
-                      {a.name} <span className="font-normal text-slate-400">· {a.role}</span>
-                    </div>
-                    <div className="text-xs text-slate-500">{active ? state.job!.label : a.does}</div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-        <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-          <h2 className="text-sm font-semibold text-slate-500">Coba ketik</h2>
-          <div className="mt-2 flex flex-col gap-1.5">
-            {SUGGESTIONS.map((s) => (
-              <button key={s} onClick={() => send(s)} disabled={sending || Boolean(state.job)} className="rounded-lg bg-slate-50 px-3 py-2 text-left text-xs text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100 disabled:opacity-50">
-                {s}
-              </button>
-            ))}
+    <ChatIdCtx.Provider value={chatId}>
+      <div className="flex h-[calc(100dvh-7.75rem)] flex-col lg:h-dvh">
+        <header className="flex items-center gap-3 border-b border-line bg-canvas/90 px-4 py-3 backdrop-blur sm:px-6 lg:px-10">
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-[15px] font-bold">{title}</h1>
+            <p className="truncate text-xs text-slate-500">{working ? state.job!.label : "Kata, Rupa & Siar siap kerja"}</p>
           </div>
-        </div>
-      </aside>
-
-      {/* Chat */}
-      <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-        <header className="flex items-center gap-3 border-b border-slate-100 px-4 py-3">
           <div className="flex -space-x-2">
             {AGENT_LIST.map((a) => (
-              <span key={a.id} className="rounded-xl ring-2 ring-white">
+              <span key={a.id} className="relative rounded-xl ring-2 ring-canvas" title={`${a.name} · ${a.role}`}>
                 <Avatar id={a.id} size={30} />
+                {state.job?.agent === a.id && <span className="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 animate-pulse rounded-full bg-amber-400 ring-2 ring-canvas" />}
               </span>
             ))}
-          </div>
-          <div className="min-w-0">
-            <div className="text-sm font-semibold">Studio Konten</div>
-            <div className="truncate text-xs text-slate-500">{working ? state.job!.label : "Kata, Rupa, Siar • siap kerja"}</div>
           </div>
         </header>
 
-        <div ref={listRef} className="flex-1 space-y-4 overflow-y-auto bg-slate-50/60 px-3 py-4 sm:px-5">
-          {state.messages.map((m) => (
-            <Message key={m.id} m={m} postingTime={state.postingTime} disabled={sending || Boolean(state.job)} run={run} onRevise={startRevise} onPreview={setPreview} />
-          ))}
-          {(working || sending) && (
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              {working ? <Avatar id={working.id} size={28} /> : <Loader2 size={18} className="animate-spin" />}
-              <span>{working ? state.job!.label : "Mengirim…"}</span>
-              <span className="flex gap-1">
-                {[0, 1, 2].map((i) => (
-                  <span key={i} className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" style={{ animationDelay: `${i * 150}ms` }} />
-                ))}
-              </span>
-            </div>
-          )}
+        <div ref={listRef} className="flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 sm:px-6">
+            {empty && !sending && (
+              <div className="py-10 text-center">
+                <div className="mx-auto flex w-fit -space-x-2">
+                  {AGENT_LIST.map((a) => (
+                    <span key={a.id} className="rounded-2xl ring-4 ring-canvas">
+                      <Avatar id={a.id} size={48} />
+                    </span>
+                  ))}
+                </div>
+                <h2 className="mt-5 text-xl font-bold">Mau bikin konten apa?</h2>
+                <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">Kata menulis, Rupa mendesain, Siar menjadwalkan. Kasih arahan singkat atau pilih salah satu di bawah.</p>
+                <div className="mx-auto mt-6 grid max-w-xl gap-2 sm:grid-cols-2">
+                  {SUGGESTIONS.slice(0, 3).map((s) => (
+                    <button key={s} onClick={() => send(s)} className="rounded-xl bg-white px-4 py-3 text-left text-sm font-medium text-slate-700 shadow-soft ring-1 ring-line hover:ring-brand-300">
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {state.messages.map((m) => (
+              <Message key={m.id} m={m} postingTime={state.postingTime} disabled={sending || Boolean(state.job)} run={run} onRevise={startRevise} onPreview={setPreview} />
+            ))}
+            {(working || sending) && (
+              <div className="flex items-center gap-2.5 text-sm text-slate-500">
+                {working ? <Avatar id={working.id} size={30} /> : <Loader2 size={18} className="animate-spin" />}
+                <span>{working ? state.job!.label : "Mengirim…"}</span>
+                <span className="flex gap-1">
+                  {[0, 1, 2].map((i) => (
+                    <span key={i} className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" style={{ animationDelay: `${i * 150}ms` }} />
+                  ))}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="border-t border-slate-100 p-3">
-          {error && <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 ring-1 ring-red-200">{error}</p>}
-          <div className="mb-2 flex gap-1.5 overflow-x-auto lg:hidden">
-            {SUGGESTIONS.map((s) => (
-              <button key={s} onClick={() => send(s)} disabled={sending || Boolean(state.job)} className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700 disabled:opacity-50">
-                {s}
-              </button>
-            ))}
-          </div>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              send(text);
-            }}
-            className="flex items-end gap-2"
-          >
-            <textarea
-              ref={inputRef}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                  e.preventDefault();
-                  send(text);
-                }
+        <div className="px-4 pb-4 sm:px-6 lg:px-10 lg:pb-6">
+          <div className="mx-auto max-w-3xl">
+            {error && <p role="alert" className="mb-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700 ring-1 ring-red-200">{error}</p>}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                send(text);
               }}
-              rows={1}
-              placeholder="Kasih arahan ke tim…"
-              aria-label="Pesan untuk tim"
-              className="max-h-40 min-h-[44px] flex-1 resize-none rounded-xl border-0 bg-slate-100 px-4 py-3 text-sm focus:bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none"
-            />
-            <button type="submit" disabled={!text.trim() || sending} aria-label="Kirim" className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-600 text-white hover:bg-brand-500 disabled:opacity-40">
-              {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-            </button>
-          </form>
+              className="flex items-end gap-2 rounded-2xl bg-white p-2 shadow-lift ring-1 ring-line focus-within:ring-2 focus-within:ring-brand-400"
+            >
+              <textarea
+                ref={inputRef}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    send(text);
+                  }
+                }}
+                rows={1}
+                placeholder="Balas atau kasih arahan baru…"
+                aria-label="Pesan untuk tim"
+                className="max-h-40 min-h-[44px] flex-1 resize-none bg-transparent px-3 py-2.5 text-[15px] outline-none placeholder:text-slate-400 focus-visible:outline-none"
+              />
+              <button type="submit" disabled={!text.trim() || sending} aria-label="Kirim" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-ink text-white transition hover:bg-ink/85 disabled:opacity-30">
+                {sending ? <Loader2 size={18} className="animate-spin" /> : <ArrowUp size={18} />}
+              </button>
+            </form>
+            <p className="mt-2 text-center text-[11px] text-slate-400">Enter untuk kirim · Shift + Enter untuk baris baru</p>
+          </div>
         </div>
-      </section>
+      </div>
 
       {preview && (
         <div role="dialog" aria-modal="true" aria-label="Preview di HP" className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-ink/60 p-4 backdrop-blur-sm" onClick={() => setPreview(null)}>
@@ -231,7 +214,7 @@ export function Studio({ initial }: { initial: StudioState }) {
           </div>
         </div>
       )}
-    </div>
+    </ChatIdCtx.Provider>
   );
 }
 
@@ -267,6 +250,7 @@ function Message({ m, postingTime, disabled, run, onRevise, onPreview }: { m: Ch
 }
 
 function Ideas({ ideas, disabled, run }: { ideas: IdeaCard[]; disabled: boolean; run: Run }) {
+  const chatId = useContext(ChatIdCtx);
   return (
     <div className="mt-2 grid gap-2 sm:grid-cols-2">
       {ideas.map((i) => (
@@ -280,10 +264,10 @@ function Ideas({ ideas, disabled, run }: { ideas: IdeaCard[]; disabled: boolean;
           <div className="mt-3 flex gap-2">
             {i.status === "pending" && (
               <>
-                <button disabled={disabled} onClick={() => run(() => chatApproveIdeaAction(i.id))} className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">
+                <button disabled={disabled} onClick={() => run(() => chatApproveIdeaAction(chatId, i.id))} className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">
                   <Check size={14} /> ACC
                 </button>
-                <button disabled={disabled} onClick={() => run(() => chatRejectIdeaAction(i.id))} className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-red-600 ring-1 ring-red-200 hover:bg-red-50 disabled:opacity-50">
+                <button disabled={disabled} onClick={() => run(() => chatRejectIdeaAction(chatId, i.id))} className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-red-600 ring-1 ring-red-200 hover:bg-red-50 disabled:opacity-50">
                   <X size={14} /> Tolak
                 </button>
               </>
@@ -316,6 +300,7 @@ const STATUS_LABEL: Record<PostCard["status"], [string, string]> = {
 };
 
 function PostPreview({ post, postingTime, disabled, run, onRevise, onPreview }: { post: PostCard; postingTime: string; disabled: boolean; run: Run; onRevise: (title: string) => void; onPreview: (p: PostCard) => void }) {
+  const chatId = useContext(ChatIdCtx);
   const [when, setWhen] = useState(() => defaultSchedule(postingTime));
   const v = encodeURIComponent(post.version);
   const images = post.media_urls.length ? post.media_urls : Array.from({ length: post.slides }, (_, i) => `/api/render/${post.id}/${i}?v=${v}`);
@@ -345,10 +330,10 @@ function PostPreview({ post, postingTime, disabled, run, onRevise, onPreview }: 
         {editable && (
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} aria-label="Jadwal (WIB)" className="rounded-lg border-0 bg-slate-100 px-2 py-1.5 text-xs ring-1 ring-slate-200" />
-            <button disabled={disabled} onClick={() => run(() => chatApprovePostAction(post.id, "schedule", when))} className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">
+            <button disabled={disabled} onClick={() => run(() => chatApprovePostAction(chatId, post.id, "schedule", when))} className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">
               <Check size={14} /> ACC & jadwalkan
             </button>
-            <button disabled={disabled} onClick={() => run(() => chatApprovePostAction(post.id, "now", ""))} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-50 disabled:opacity-50">
+            <button disabled={disabled} onClick={() => run(() => chatApprovePostAction(chatId, post.id, "now", ""))} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-50 disabled:opacity-50">
               Posting sekarang
             </button>
             <button disabled={disabled} onClick={() => onRevise(post.title)} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50 disabled:opacity-50">

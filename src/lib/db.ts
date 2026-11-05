@@ -4,7 +4,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { config } from "./config";
-import { DEFAULT_BRAND, type Brand, type ChatMessage, type Idea, type Job, type Post, type User, type Workspace } from "./types";
+import { DEFAULT_BRAND, type Brand, type Chat, type ChatMessage, type Idea, type Job, type Post, type User, type Workspace } from "./types";
 
 /**
  * Lapisan data. Dua mode:
@@ -31,7 +31,7 @@ export type NewPost = Omit<
   | "revision_count"
   | "scheduled_at"
 >;
-export type NewMessage = Omit<ChatMessage, "id" | "workspace_id" | "created_at">;
+export type NewMessage = Omit<ChatMessage, "id" | "workspace_id" | "created_at" | "chat_id"> & { chat_id?: string | null };
 export type NewUser = Pick<User, "name" | "email" | "password_hash" | "role" | "status" | "workspace_id">;
 
 export interface WorkspaceRepo {
@@ -48,8 +48,14 @@ export interface WorkspaceRepo {
   updatePost(id: string, patch: Partial<Post>): Promise<void>;
   /** key relatif; otomatis disimpan di bawah folder workspace. */
   uploadFile(key: string, data: Buffer, contentType: string): Promise<string>;
-  listMessages(limit: number): Promise<ChatMessage[]>; // urut lama → baru
+  /** urut lama → baru; dengan chatId hanya pesan di percakapan itu */
+  listMessages(limit: number, chatId?: string): Promise<ChatMessage[]>;
   addMessage(m: NewMessage): Promise<ChatMessage>;
+  listChats(limit: number): Promise<Chat[]>; // terbaru dulu
+  getChat(id: string): Promise<Chat | null>;
+  createChat(title: string): Promise<Chat>;
+  updateChat(id: string, patch: Partial<Pick<Chat, "title">>): Promise<void>;
+  deleteChat(id: string): Promise<void>;
   getActiveJob(): Promise<Job | null>;
   createJob(j: Pick<Job, "agent" | "label">): Promise<Job>;
   updateJob(id: string, patch: Partial<Job>): Promise<void>;
@@ -170,14 +176,34 @@ class SupabaseWorkspace implements WorkspaceRepo {
     if (error) throw new Error(`Storage: ${error.message}`);
     return sb().storage.from(BUCKET).getPublicUrl(full).data.publicUrl;
   }
-  async listMessages(limit: number) {
-    const rows = check(
-      await sb().from("messages").select("*").eq("workspace_id", this.id).order("created_at", { ascending: false }).limit(limit),
-    ) as ChatMessage[];
+  async listMessages(limit: number, chatId?: string) {
+    let q = sb().from("messages").select("*").eq("workspace_id", this.id);
+    if (chatId) q = q.eq("chat_id", chatId);
+    const rows = check(await q.order("created_at", { ascending: false }).limit(limit)) as ChatMessage[];
     return rows.reverse();
   }
   async addMessage(m: NewMessage) {
-    return check(await sb().from("messages").insert({ ...m, workspace_id: this.id }).select("*").single()) as ChatMessage;
+    const msg = check(await sb().from("messages").insert({ ...m, workspace_id: this.id }).select("*").single()) as ChatMessage;
+    if (m.chat_id) await sb().from("chats").update({ updated_at: new Date().toISOString() }).eq("workspace_id", this.id).eq("id", m.chat_id);
+    return msg;
+  }
+  async listChats(limit: number) {
+    return check(
+      await sb().from("chats").select("*").eq("workspace_id", this.id).order("updated_at", { ascending: false }).limit(limit),
+    ) as Chat[];
+  }
+  async getChat(id: string) {
+    if (!UUID.test(id)) return null;
+    return check(await sb().from("chats").select("*").eq("workspace_id", this.id).eq("id", id).maybeSingle()) as Chat | null;
+  }
+  async createChat(title: string) {
+    return check(await sb().from("chats").insert({ title, workspace_id: this.id }).select("*").single()) as Chat;
+  }
+  async updateChat(id: string, patch: Partial<Pick<Chat, "title">>) {
+    check(await sb().from("chats").update(patch).eq("workspace_id", this.id).eq("id", id));
+  }
+  async deleteChat(id: string) {
+    check(await sb().from("chats").delete().eq("workspace_id", this.id).eq("id", id));
   }
   async getActiveJob() {
     const job = check(
@@ -266,6 +292,7 @@ interface LocalData {
   ideas: Idea[];
   posts: Post[];
   messages?: ChatMessage[];
+  chats?: Chat[];
   jobs?: Job[];
   users?: User[];
   workspaces?: Workspace[];
@@ -382,15 +409,46 @@ class LocalWorkspace implements WorkspaceRepo {
     await fs.writeFile(full, data);
     return `${config.appUrl}/api/media/${safe}`;
   }
-  async listMessages(limit: number) {
-    return this.mine((await readLocal()).messages).slice(-limit);
+  async listMessages(limit: number, chatId?: string) {
+    return this.mine((await readLocal()).messages)
+      .filter((m) => !chatId || m.chat_id === chatId)
+      .slice(-limit);
   }
   async addMessage(m: NewMessage) {
-    const msg: ChatMessage = { ...m, id: randomUUID(), workspace_id: this.id, created_at: new Date().toISOString() };
+    const now = new Date().toISOString();
+    const msg: ChatMessage = { ...m, chat_id: m.chat_id ?? null, id: randomUUID(), workspace_id: this.id, created_at: now };
     await mutateLocal((d) => {
       d.messages = [...(d.messages ?? []), msg].slice(-5000);
+      if (m.chat_id) d.chats = (d.chats ?? []).map((c) => (c.id === m.chat_id && c.workspace_id === this.id ? { ...c, updated_at: now } : c));
     });
     return msg;
+  }
+  async listChats(limit: number) {
+    return this.mine((await readLocal()).chats)
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+      .slice(0, limit);
+  }
+  async getChat(id: string) {
+    return this.mine((await readLocal()).chats).find((c) => c.id === id) ?? null;
+  }
+  async createChat(title: string) {
+    const now = new Date().toISOString();
+    const chat: Chat = { id: randomUUID(), workspace_id: this.id, title, created_at: now, updated_at: now };
+    await mutateLocal((d) => {
+      d.chats = [...(d.chats ?? []), chat];
+    });
+    return chat;
+  }
+  async updateChat(id: string, patch: Partial<Pick<Chat, "title">>) {
+    await mutateLocal((d) => {
+      d.chats = (d.chats ?? []).map((c) => (c.id === id && c.workspace_id === this.id ? { ...c, ...patch } : c));
+    });
+  }
+  async deleteChat(id: string) {
+    await mutateLocal((d) => {
+      d.chats = (d.chats ?? []).filter((c) => !(c.id === id && c.workspace_id === this.id));
+      d.messages = (d.messages ?? []).filter((m) => !(m.chat_id === id && m.workspace_id === this.id));
+    });
   }
   async getActiveJob() {
     const job = this.mine((await readLocal()).jobs).filter((j) => j.status === "running").at(-1) ?? null;
@@ -478,6 +536,7 @@ class LocalAccounts implements AccountRepo {
       d.ideas = keep(d.ideas);
       d.posts = keep(d.posts);
       d.messages = keep(d.messages);
+      d.chats = keep(d.chats);
       d.jobs = keep(d.jobs);
       if (d.brands) delete d.brands[id];
       d.users = (d.users ?? []).map((u) => (u.workspace_id === id ? { ...u, workspace_id: null } : u));
@@ -496,4 +555,15 @@ let acc: AccountRepo | null = null;
 export function accounts(): AccountRepo {
   if (!acc) acc = config.hasSupabase ? new SupabaseAccounts() : new LocalAccounts();
   return acc;
+}
+
+/**
+ * Repo workspace yang terkunci ke satu percakapan: pesan dibaca & ditulis hanya di chat ini.
+ * Semua fungsi lain (brand, ide, konten, job) tetap per workspace.
+ */
+export function inChat(w: WorkspaceRepo, chatId: string): WorkspaceRepo {
+  const scoped = Object.create(w) as WorkspaceRepo;
+  scoped.listMessages = (limit: number) => w.listMessages(limit, chatId);
+  scoped.addMessage = (m: NewMessage) => w.addMessage({ ...m, chat_id: chatId });
+  return scoped;
 }

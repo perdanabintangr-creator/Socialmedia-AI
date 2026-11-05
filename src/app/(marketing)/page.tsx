@@ -3,7 +3,6 @@ import {
   ArrowRight,
   CalendarClock,
   Check,
-  Images,
   LayoutTemplate,
   Lock,
   MessagesSquare,
@@ -16,6 +15,7 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { PLANS } from "@/lib/pricing";
+import { HeroDemo } from "@/components/hero-demo";
 import { currentUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -104,7 +104,7 @@ export default async function LandingPage() {
           </nav>
           <div className="ml-auto flex items-center gap-2 md:ml-0">
             {user ? (
-              <Link href="/studio" className="inline-flex items-center gap-1.5 rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white hover:bg-ink/85">
+              <Link href="/beranda" className="inline-flex items-center gap-1.5 rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white hover:bg-ink/85">
                 Buka Studio <ArrowRight size={15} />
               </Link>
             ) : (
@@ -122,8 +122,10 @@ export default async function LandingPage() {
         <div className="pointer-events-none absolute -top-40 left-1/2 h-[560px] w-[900px] -translate-x-1/2 rounded-full bg-brand-200/50 blur-[140px]" />
         <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-5 pt-16 pb-20 lg:grid-cols-[1.05fr_1fr] lg:pt-24">
           <div className="animate-fade-up">
-            <span className="inline-flex items-center gap-2 rounded-full bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-600 shadow-soft ring-1 ring-line">
-              <Sparkles size={14} className="text-brand-600" /> Untuk brand yang belum punya tim sosmed
+            <span className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-soft ring-1 ring-line">
+              <Sparkles size={15} className="text-brand-600" /> Lebih hemat dari gaji admin sosmed
+              <span className="text-slate-300">·</span>
+              <span className="font-extrabold text-brand-600">mulai {PLANS[0].price}{PLANS[0].period}</span>
             </span>
             <h1 className="mt-6 text-[42px] leading-[1.05] font-extrabold tracking-tight sm:text-6xl">
               Tim sosmed AI kamu.
@@ -134,7 +136,7 @@ export default async function LandingPage() {
               Kata, Rupa, dan Siar menyiapkan ide, menulis, mendesain, sampai menjadwalkan posting Instagram & TikTok. Kamu cukup kasih arahan lewat chat.
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
-              <Link href={user ? "/studio" : "/daftar"} className="inline-flex items-center gap-2 rounded-xl bg-ink px-6 py-3.5 text-[15px] font-semibold text-white shadow-lift hover:bg-ink/85">
+              <Link href={user ? "/beranda" : "/daftar"} className="inline-flex items-center gap-2 rounded-xl bg-ink px-6 py-3.5 text-[15px] font-semibold text-white shadow-lift hover:bg-ink/85">
                 {user ? "Buka Studio" : "Coba gratis sekarang"} <ArrowRight size={17} />
               </Link>
               <a href="#cara-kerja" className="inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3.5 text-[15px] font-semibold text-ink ring-1 ring-line hover:bg-slate-50">
@@ -150,9 +152,36 @@ export default async function LandingPage() {
             </ul>
           </div>
 
-          <HeroVisual />
+          <HeroDemo />
         </div>
       </section>
+
+      {/* Pita kata kunci */}
+      <div className="overflow-hidden border-y border-line bg-white py-6" aria-hidden="true">
+        <div className="flex w-max animate-[marquee_38s_linear_infinite] gap-10 text-4xl font-extrabold tracking-tight whitespace-nowrap text-transparent sm:text-6xl [-webkit-text-stroke:1.5px_var(--color-slate-300)]">
+          {[0, 1].map((k) => (
+            <span key={k} className="flex gap-10">
+              {["CAROUSEL", "CAPTION", "HOOK", "BRAND KIT", "JADWAL OTOMATIS", "ON-BRAND"].map((w) => (
+                <span key={w} className="flex items-center gap-10">
+                  {w} <span className="text-brand-400 [-webkit-text-stroke:0]">✦</span>
+                </span>
+              ))}
+            </span>
+          ))}
+        </div>
+        <div className="mt-3 flex w-max animate-[marquee-rev_32s_linear_infinite] gap-10 text-4xl font-extrabold tracking-tight whitespace-nowrap sm:text-6xl">
+          {[0, 1].map((k) => (
+            <span key={k} className="flex gap-10">
+              {["INSTAGRAM", "TIKTOK", "KONSISTEN", "SEKELAS AGENCY", "TINGGAL ACC"].map((w) => (
+                <span key={w} className="flex items-center gap-10">
+                  <span className="bg-gradient-to-r from-brand-600 to-sky-500 bg-clip-text text-transparent">{w}</span>
+                  <span className="h-3 w-3 rounded-full bg-sky-400" />
+                </span>
+              ))}
+            </span>
+          ))}
+        </div>
+      </div>
 
       {/* Cara kerja */}
       <section id="cara-kerja" className="scroll-mt-20 border-y border-line bg-canvas">
@@ -292,7 +321,7 @@ export default async function LandingPage() {
             <ShieldCheck size={28} className="mx-auto text-brand-300" />
             <h2 className="mx-auto mt-4 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-4xl">Biarkan tim AI yang sibuk. Kamu fokus jualan.</h2>
             <p className="mx-auto mt-4 max-w-xl text-white/70">Siapkan Brand Kit dalam 5 menit dan dapatkan ide konten pertamamu hari ini.</p>
-            <Link href={user ? "/studio" : "/daftar"} className="mt-8 inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3.5 font-semibold text-ink hover:bg-white/90">
+            <Link href={user ? "/beranda" : "/daftar"} className="mt-8 inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3.5 font-semibold text-ink hover:bg-white/90">
               {user ? "Buka Studio" : "Coba gratis sekarang"} <ArrowRight size={17} />
             </Link>
           </div>
@@ -315,55 +344,6 @@ function SectionHead({ eyebrow, title, sub, dark }: { eyebrow: string; title: st
       <p className={`text-sm font-bold tracking-wide uppercase ${dark ? "text-brand-300" : "text-brand-600"}`}>{eyebrow}</p>
       <h2 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-[40px] sm:leading-[1.1]">{title}</h2>
       {sub && <p className={`mt-4 text-lg ${dark ? "text-white/60" : "text-slate-600"}`}>{sub}</p>}
-    </div>
-  );
-}
-
-/** Ilustrasi hero: mockup HP berisi slide + percakapan tim. */
-function HeroVisual() {
-  return (
-    <div className="relative mx-auto w-full max-w-md lg:max-w-none" aria-hidden="true">
-      <div className="relative mx-auto w-[260px] rounded-[42px] bg-ink p-2.5 shadow-lift sm:w-[290px]">
-        <div className="overflow-hidden rounded-[34px] bg-white">
-          <div className="flex items-center gap-2 px-3.5 py-3">
-            <span className="h-7 w-7 rounded-full bg-gradient-to-br from-amber-300 to-orange-400 ring-2 ring-white" />
-            <span className="text-xs font-bold">kopisenja.id</span>
-            <span className="ml-auto text-lg leading-none text-slate-400">···</span>
-          </div>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/showcase/1.webp" alt="" width={540} height={675} className="aspect-[4/5] w-full object-cover" />
-          <div className="flex items-center justify-center gap-1 py-2">
-            {[0, 1, 2, 3, 4].map((i) => (
-              <span key={i} className={`h-1.5 rounded-full ${i === 0 ? "w-4 bg-brand-600" : "w-1.5 bg-slate-300"}`} />
-            ))}
-          </div>
-          <div className="px-3.5 pb-4 text-[11px] leading-relaxed text-slate-600">
-            <span className="font-bold text-ink">kopisenja.id</span> Nomor 3 paling sering terjadi. Simpan biar nggak lupa ya!
-          </div>
-        </div>
-      </div>
-
-      <div className="absolute top-28 -left-2 w-56 animate-fade-up rounded-2xl bg-white p-3 text-xs shadow-lift ring-1 ring-line sm:-left-6" style={{ animationDelay: "0.2s" }}>
-        <div className="flex items-center gap-2 font-bold">
-          <span className="grid h-6 w-6 place-items-center rounded-lg bg-gradient-to-br from-amber-300 to-orange-400 text-white">
-            <PenLine size={12} />
-          </span>
-          Kata
-        </div>
-        <p className="mt-1.5 leading-relaxed text-slate-600">Naskah 6 slide siap. Aku oper ke Rupa ya.</p>
-      </div>
-      <div className="absolute top-[76%] -right-1 w-52 animate-fade-up rounded-2xl bg-white p-3 text-xs shadow-lift ring-1 ring-line sm:-right-4" style={{ animationDelay: "0.4s" }}>
-        <div className="flex items-center gap-2 font-bold">
-          <span className="grid h-6 w-6 place-items-center rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 text-white">
-            <Images size={12} />
-          </span>
-          Rupa
-        </div>
-        <p className="mt-1.5 leading-relaxed text-slate-600">Desain sudah kucek ulang. Tinggal kamu ACC.</p>
-      </div>
-      <div className="absolute -bottom-4 left-6 flex animate-fade-up items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-lift sm:left-10" style={{ animationDelay: "0.6s" }}>
-        <Check size={14} /> ACC · Terjadwal Kamis 19.00
-      </div>
     </div>
   );
 }

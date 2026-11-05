@@ -39,7 +39,7 @@ export default async function Dashboard() {
   return (
     <div className="space-y-6">
       <PageTitle title={`Halo, tim ${brand.name} 👋`} subtitle="AI menyiapkan ide, menulis, mendesain, dan memposting. Tugas kamu: ACC.">
-        <Link href="/studio" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500">
+        <Link href="/beranda" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500">
           Buka Studio (chat tim)
         </Link>
       </PageTitle>

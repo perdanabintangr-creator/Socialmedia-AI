@@ -7,16 +7,21 @@ Tim agen AI yang menjalankan sosial media brand end-to-end: **brief → ide → 
 
 ## Halaman untuk customer
 
+Alurnya mengikuti pola Marqthink: **landing → masuk → Beranda → chat**.
+
 | Halaman | Isi |
 |---|---|
-| `/` | Landing page publik: hero, cara kerja, tim AI, contoh hasil (render asli), fitur, harga, FAQ |
-| `/daftar`, `/login`, `/lupa-password` | Akun customer. Pendaftar langsung aktif dan mendapat workspace sendiri |
-| `/onboarding` | 6 langkah: bisnis → audiens & tujuan → gaya bahasa → logo (warna diambil otomatis) & gaya desain → sosmed → ringkasan |
-| `/studio` | Chat dengan tim agen; kartu konten bisa dibuka **di mockup HP** |
-| `/posts/[id]` | Review konten di **mockup Instagram/TikTok** (bisa digeser), ACC & jadwal, revisi per slide atau caption saja |
-| `/posts`, `/ideas`, `/dashboard`, `/brand`, `/pengguna` | Konten, ide, ringkasan, Brand Kit, akun |
+| `/` | Landing page publik: label harga, demo chat yang bergerak, pita kata kunci berjalan, cara kerja, tim AI, contoh hasil (render asli), fitur, harga, FAQ |
+| `/login`, `/daftar`, `/lupa-password` | Kartu di tengah, tombol lihat password, dan **Lanjut dengan Google** (muncul bila `GOOGLE_CLIENT_ID/SECRET` diisi). Pendaftar langsung aktif dan mendapat workspace sendiri |
+| `/beranda` | Sapaan sesuai jam (WIB), kotak perintah besar (tiap kiriman membuka **percakapan baru**), 4 aksi cepat, checklist "Mulai di sini", dan percakapan terakhir |
+| `/chat/[id]` | Satu percakapan dengan Kata, Rupa & Siar. Kartu ide/konten, ACC & jadwal, preview mockup HP |
+| `/posts`, `/posts/[id]` | Hasil konten; review di mockup Instagram/TikTok, revisi per slide atau caption |
+| `/kalender` | Kalender bulanan konten yang di-ACC/terjadwal/terbit (agenda di HP) |
+| `/ideas`, `/brand`, `/onboarding`, `/pengguna` | Bank ide, Brand Kit, wizard Brand Kit, akun & akun sosmed |
 
-Harga di landing page masih **contoh**; ubah di `src/lib/pricing.ts`. Gambar contoh di landing (`public/showcase/`) adalah hasil render asli mesin desain dengan brand fiktif.
+Sidebar desktop berisi tombol **Chat baru**, menu utama, **riwayat percakapan**, brand, dan profil dengan badge paket. Di HP, navigasinya berupa tab bar bawah.
+
+Harga di landing masih **contoh**; ubah di `src/lib/pricing.ts`.
 
 ## Studio: ngobrol dengan tim agen AI
 

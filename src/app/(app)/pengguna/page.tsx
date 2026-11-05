@@ -1,7 +1,9 @@
 import { accounts } from "@/lib/db";
-import { publicUser, requireAdmin, requireUser } from "@/lib/session";
+import { publicUser, requireAdmin, requireWorkspace } from "@/lib/session";
+import { publishTarget } from "@/lib/pipeline";
 import { ActionForm, Submit } from "@/components/forms";
 import { Card, Field, PageTitle, formatWIB, inputCls } from "@/components/ui";
+import { requestSocialAction } from "@/app/onboarding-actions";
 import { changePasswordAction, deleteUserAction, setPublishKeyAction, setUserRoleAction, setUserStatusAction } from "@/app/auth-actions";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +15,8 @@ const STATUS = {
 } as const;
 
 export default async function UsersPage() {
-  const me = await requireUser();
+  const { user: me, w } = await requireWorkspace();
+  const [brand, target] = await Promise.all([w.getBrand(), publishTarget(w.id)]);
   const isAdmin = me.role === "admin";
   const [allUsers, workspaces] = isAdmin ? await Promise.all([accounts().listUsers(), accounts().listWorkspaces()]) : [[], []];
   const users = allUsers.map(publicUser);
@@ -25,6 +28,24 @@ export default async function UsersPage() {
   return (
     <div className="space-y-6">
       <PageTitle title={isAdmin ? "Pengguna & klien" : "Akun"} subtitle={isAdmin ? "Setujui klien baru dan kelola akses. Isi konten tiap workspace bersifat pribadi milik klien." : "Pengaturan akun kamu."} />
+
+      <Card className="scroll-mt-24" >
+        <div id="sosmed" className="scroll-mt-24" />
+        <h2 className="font-semibold">Akun sosmed</h2>
+        <p className="mt-1 text-sm text-slate-500">Instagram (Business/Creator) dan TikTok untuk posting otomatis setelah kamu ACC.</p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold ${target.connected ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" : "bg-slate-100 text-slate-600"}`}>
+            <span className={`h-2 w-2 rounded-full ${target.connected ? "bg-emerald-500" : "bg-slate-400"}`} />
+            {target.connected ? "Terhubung" : brand.socialRequested ? "Menunggu dihubungkan oleh tim kami" : "Belum terhubung"}
+          </span>
+          {!target.connected && !brand.socialRequested && (
+            <ActionForm action={requestSocialAction}>
+              <Submit variant="primary" pendingText="Mengirim…" className="py-2 text-xs">Minta dihubungkan</Submit>
+            </ActionForm>
+          )}
+        </div>
+        {!target.connected && <p className="mt-3 text-xs text-slate-500">Sambil menunggu, desain final tetap bisa dibuat dan diunduh untuk diposting manual.</p>}
+      </Card>
 
       <Card>
         <h2 className="font-semibold">Akun saya</h2>

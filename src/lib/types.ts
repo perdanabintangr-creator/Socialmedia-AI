@@ -203,9 +203,18 @@ export function normalizeSlide(s: Partial<Slide> & { layout?: string }): Slide {
 
 export type ChatKind = "text" | "ideas" | "post" | "error";
 
+export interface Chat {
+  id: string;
+  workspace_id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ChatMessage {
   id: string;
   workspace_id: string;
+  chat_id: string | null;
   role: "user" | "agent";
   agent: "kata" | "rupa" | "siar" | null;
   kind: ChatKind;

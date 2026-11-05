@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function OnboardingPage({ searchParams }: { searchParams: Promise<{ ulang?: string }> }) {
   const { user, w } = await requireWorkspace();
   const brand = await w.getBrand();
-  if (brand.onboarded && !(await searchParams).ulang) redirect("/studio");
+  if (brand.onboarded && !(await searchParams).ulang) redirect("/beranda");
   return (
     <Onboarding
       firstName={user.name.split(" ")[0]}

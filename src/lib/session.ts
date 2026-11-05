@@ -34,7 +34,7 @@ export async function requireUser() {
 
 export async function requireAdmin() {
   const user = await requireUser();
-  if (user.role !== "admin") redirect("/studio");
+  if (user.role !== "admin") redirect("/beranda");
   return user;
 }
 

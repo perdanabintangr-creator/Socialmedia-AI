@@ -41,7 +41,7 @@ export async function loginAction(_: ActionState, fd: FormData): Promise<ActionS
 
   await accounts().updateUser(user.id, { last_login_at: new Date().toISOString() });
   await startSession(user.id);
-  redirect("/studio");
+  redirect("/beranda");
 }
 
 export async function registerAction(_: ActionState, fd: FormData): Promise<ActionState> {
@@ -81,7 +81,7 @@ export async function registerAction(_: ActionState, fd: FormData): Promise<Acti
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Gagal mendaftar" };
   }
-  redirect("/onboarding");
+  redirect("/beranda");
 }
 
 export async function logoutAction() {

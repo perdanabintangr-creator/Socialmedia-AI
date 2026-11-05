@@ -340,13 +340,3 @@ export async function approvePostFromChat(w: WorkspaceRepo, postId: string, sche
   await userSays(w, `ACC “${post.title}” — ${scheduleAt ? `jadwalkan ${fmtWib(scheduleAt.toISOString())}` : "posting sekarang"}`);
   return startTask(w, { type: "approve", postId, scheduleAt });
 }
-
-export async function greetIfEmpty(w: WorkspaceRepo) {
-  const msgs = await w.listMessages(1);
-  if (msgs.length) return;
-  const brand = await w.getBrand();
-  await say(w, 
-    "kata",
-    `Halo tim ${brand.name}! Kami bertiga siap jadi tim kontenmu: aku (Kata) urus ide & naskah, Rupa urus desain, Siar urus jadwal & posting. Mau mulai dari mana? Kasih arahan aja, misalnya “buatkan 5 ide konten minggu ini”.`,
-  );
-}
