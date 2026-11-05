@@ -141,50 +141,52 @@ export default async function LandingPage() {
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="relative -mt-16 pt-28 sm:pt-32">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-[720px] bg-[radial-gradient(60%_50%_at_50%_0%,rgb(255_61_139/0.13),transparent_70%),radial-gradient(45%_45%_at_15%_30%,rgb(116_95_253/0.16),transparent_70%),radial-gradient(40%_40%_at_85%_35%,rgb(255_154_61/0.14),transparent_70%)]" />
-        <div className="relative mx-auto max-w-4xl px-5 text-center">
-          <span className="inline-flex -rotate-2 flex-wrap items-center justify-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold shadow-soft ring-1 ring-black/5">
-            <span className="bg-social grid h-5 w-5 place-items-center rounded-full text-white">
-              <Sparkles size={11} />
-            </span>
-            Tim sosmed AI untuk brand & UMKM
-            <span className="hidden text-slate-300 sm:inline">·</span>
-            <span className="text-social hidden sm:inline">
-              mulai {PLANS[0].price}
-              {PLANS[0].period}
-            </span>
-          </span>
-          <h1 className="mt-7 text-[42px] leading-[1.02] font-extrabold tracking-[-0.035em] sm:text-7xl">
-            Konten jadi. Posting jalan.
-            <br />
-            <span className="text-social">Likes berdatangan.</span>
-          </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-600">
-            Kasih arahan lewat chat, tim AI menyiapkan ide, desain, dan caption, lalu memposting otomatis ke Instagram & TikTok. Kamu cukup tekan{" "}
-            <b className="text-ink">ACC</b>.
-          </p>
-          <div className="mt-9 flex flex-wrap justify-center gap-3">
-            <Link href={cta.href} className="bg-social inline-flex items-center gap-2 rounded-2xl px-7 py-4 text-[15px] font-bold text-white shadow-lift hover:brightness-105">
-              {user ? "Buka Studio" : "Coba gratis sekarang"} <ArrowRight size={17} />
-            </Link>
-            <a href="#proses" className="inline-flex items-center gap-2.5 rounded-2xl bg-white px-6 py-4 text-[15px] font-bold shadow-soft ring-1 ring-black/5 hover:bg-slate-50">
-              <span className="grid h-6 w-6 place-items-center rounded-full bg-ink text-white">
-                <Play size={11} className="ml-px fill-white" />
+      {/* Hero: muat dalam satu layar — teks kiri, panggung 3D kanan */}
+      <section className="relative -mt-[76px] flex min-h-[100svh] items-center pt-28 pb-10 lg:pt-24 lg:pb-6">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(50%_45%_at_75%_40%,rgb(255_61_139/0.12),transparent_70%),radial-gradient(45%_45%_at_10%_30%,rgb(116_95_253/0.15),transparent_70%),radial-gradient(35%_35%_at_95%_80%,rgb(255_154_61/0.13),transparent_70%)]" />
+        <div className="relative mx-auto grid w-full max-w-7xl items-center gap-6 px-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-12">
+          <div className="text-center lg:text-left">
+            <span className="inline-flex -rotate-2 flex-wrap items-center justify-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold shadow-soft ring-1 ring-black/5">
+              <span className="bg-social grid h-5 w-5 place-items-center rounded-full text-white">
+                <Sparkles size={11} />
               </span>
-              Lihat prosesnya
-            </a>
+              Tim sosmed AI untuk brand & UMKM
+              <span className="hidden text-slate-300 sm:inline">·</span>
+              <span className="text-social hidden sm:inline">
+                mulai {PLANS[0].price}
+                {PLANS[0].period}
+              </span>
+            </span>
+            <h1 className="mt-6 text-[42px] leading-[1.02] font-extrabold tracking-[-0.035em] sm:text-6xl xl:text-[76px] xl:leading-[0.98]">
+              Konten jadi.
+              <br />
+              Posting jalan.
+              <br />
+              <span className="text-social">Likes berdatangan.</span>
+            </h1>
+            <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-slate-600 lg:mx-0 lg:max-w-[30rem]">
+              Kasih arahan lewat chat, tim AI menyiapkan ide, desain, dan caption, lalu memposting otomatis ke Instagram & TikTok. Kamu cukup tekan{" "}
+              <b className="text-ink">ACC</b>.
+            </p>
+            <div className="mt-8 flex flex-wrap justify-center gap-3 lg:justify-start">
+              <Link href={cta.href} className="bg-social inline-flex items-center gap-2 rounded-2xl px-7 py-4 text-[15px] font-bold text-white shadow-lift hover:brightness-105">
+                {user ? "Buka Studio" : "Coba gratis sekarang"} <ArrowRight size={17} />
+              </Link>
+              <a href="#proses" className="inline-flex items-center gap-2.5 rounded-2xl bg-white px-6 py-4 text-[15px] font-bold shadow-soft ring-1 ring-black/5 hover:bg-slate-50">
+                <span className="grid h-6 w-6 place-items-center rounded-full bg-ink text-white">
+                  <Play size={11} className="ml-px fill-white" />
+                </span>
+                Lihat prosesnya
+              </a>
+            </div>
+            <ul className="mt-7 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-slate-500 lg:justify-start">
+              {["Instagram & TikTok", "Bahasa Indonesia", "Tanpa kartu kredit"].map((t) => (
+                <li key={t} className="flex items-center gap-1.5">
+                  <Check size={15} className="text-emerald-600" /> {t}
+                </li>
+              ))}
+            </ul>
           </div>
-          <ul className="mt-7 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-slate-500">
-            {["Instagram & TikTok", "Bahasa Indonesia", "Tanpa kartu kredit"].map((t) => (
-              <li key={t} className="flex items-center gap-1.5">
-                <Check size={15} className="text-emerald-600" /> {t}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="relative mt-6 px-3">
           <HeroStage />
         </div>
       </section>

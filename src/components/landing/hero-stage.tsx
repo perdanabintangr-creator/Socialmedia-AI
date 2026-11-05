@@ -8,10 +8,10 @@ const fmt = (n: number) => new Intl.NumberFormat("id-ID").format(n);
 
 /** Kartu postingan yang melayang di ruang 3D di sekitar HP. */
 const CARDS = [
-  { src: "/showcase/1.webp", pos: "left-[2%] top-[14%]", t: "rotateY(32deg) rotateZ(-4deg) translateZ(-120px)", w: "w-44", delay: "0s" },
-  { src: "/showcase/3.webp", pos: "left-[17%] top-[46%]", t: "rotateY(22deg) rotateZ(3deg) translateZ(-20px)", w: "w-40", delay: "-2s" },
-  { src: "/showcase/5.webp", pos: "right-[2%] top-[10%]", t: "rotateY(-32deg) rotateZ(4deg) translateZ(-120px)", w: "w-44", delay: "-4s" },
-  { src: "/showcase/2.webp", pos: "right-[16%] top-[48%]", t: "rotateY(-22deg) rotateZ(-3deg) translateZ(-20px)", w: "w-40", delay: "-1s" },
+  { src: "/showcase/1.webp", pos: "-left-[3%] top-[6%]", t: "rotateY(30deg) rotateZ(-5deg) translateZ(-150px)", w: "w-40", delay: "0s" },
+  { src: "/showcase/3.webp", pos: "left-0 top-[52%]", t: "rotateY(24deg) rotateZ(3deg) translateZ(-70px)", w: "w-36", delay: "-2s" },
+  { src: "/showcase/5.webp", pos: "right-[1%] top-[4%]", t: "rotateY(-30deg) rotateZ(5deg) translateZ(-150px)", w: "w-40", delay: "-4s" },
+  { src: "/showcase/2.webp", pos: "right-[3%] top-[48%]", t: "rotateY(-24deg) rotateZ(-3deg) translateZ(-70px)", w: "w-36", delay: "-1s" },
 ];
 
 const HEARTS = [
@@ -49,7 +49,7 @@ export function HeroStage() {
 
   return (
     <div
-      className="relative mx-auto h-[540px] w-full max-w-6xl sm:h-[600px] [perspective:1600px]"
+      className="relative mx-auto h-[540px] w-full max-w-[640px] sm:h-[590px] [perspective:1600px] lg:[@media(max-height:800px)]:scale-[0.86]"
       onMouseMove={onMove}
       onMouseLeave={onLeave}
       role="img"
@@ -105,7 +105,7 @@ export function HeroStage() {
         </div>
 
         {/* notifikasi melayang */}
-        <Bubble className="top-[4%] left-1 sm:top-[16%] sm:left-[calc(50%-430px)]" z={140} delay="-1s">
+        <Bubble className="top-[4%] left-0 sm:top-[30%]" z={150} delay="-1s">
           <span className="bg-social grid h-8 w-8 place-items-center rounded-full text-white">
             <Heart size={15} className="fill-white" />
           </span>
@@ -113,7 +113,7 @@ export function HeroStage() {
             <b className="tabular-nums">+{fmt(likes - 1100)}</b> suka baru
           </span>
         </Bubble>
-        <Bubble className="top-[52%] right-1 sm:top-[38%] sm:right-auto sm:left-[calc(50%+165px)]" z={160} delay="-3s">
+        <Bubble className="top-[52%] right-0 sm:top-[36%]" z={170} delay="-3s">
           <span className="grid h-8 w-8 place-items-center rounded-full bg-sky-500 text-white">
             <MessageCircle size={15} />
           </span>
@@ -122,7 +122,7 @@ export function HeroStage() {
             <span className="block text-[11px] text-slate-500">komentar baru</span>
           </span>
         </Bubble>
-        <Bubble className="bottom-[16%] left-[calc(50%-260px)] hidden sm:flex" z={120} delay="-5s">
+        <Bubble className="bottom-[9%] left-[2%] hidden sm:flex" z={130} delay="-5s">
           <span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-500 text-white">
             <UserPlus size={15} />
           </span>
@@ -130,7 +130,7 @@ export function HeroStage() {
             <b>+86</b> followers
           </span>
         </Bubble>
-        <Bubble className="right-[calc(50%-270px)] bottom-[8%] hidden sm:flex" z={100} delay="-2s">
+        <Bubble className="right-[2%] bottom-[16%] hidden sm:flex" z={110} delay="-2s">
           <span className="grid h-8 w-8 place-items-center rounded-full bg-amber-500 text-white">
             <Repeat2 size={15} />
           </span>
