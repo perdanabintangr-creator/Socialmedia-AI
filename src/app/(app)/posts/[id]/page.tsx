@@ -24,6 +24,8 @@ const LAYOUT_LABEL: Record<SlideLayout, string> = {
   stat: "Angka / chart",
   quote: "Kutipan",
   cta: "Penutup / CTA",
+  promo_hero: "Promo • foto + angka",
+  promo_offer: "Promo • angka besar",
 };
 
 const SOURCE_LABEL = { ai: "AI image", stock: "Stok foto", brand: "Foto brand", upload: "Upload", demo: "Demo" } as const;
@@ -209,6 +211,7 @@ function EditForm({ post }: { post: Post }) {
                 <option value="mix">Editorial (cover gelap, isi terang)</option>
                 <option value="bold">Bold (warna penuh + bentuk dekoratif)</option>
                 <option value="clean">Clean (minimalis terang)</option>
+                <option value="promo">Promo (gaya iklan)</option>
               </select>
             </Field>
           </div>
@@ -236,9 +239,9 @@ function EditForm({ post }: { post: Post }) {
               <input name={`slide_${i}_headline`} defaultValue={s.headline} placeholder="Judul (pakai *kata* untuk highlight)" className={`${inputCls} mt-2 font-semibold`} />
               <textarea name={`slide_${i}_body`} defaultValue={s.body} rows={2} placeholder="Teks pendukung" className={`${inputCls} mt-2`} />
               <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_1fr_120px]">
-                <input name={`slide_${i}_labelA`} defaultValue={s.labelA} placeholder="Label kolom kiri (perbandingan)" className={inputCls} />
-                <input name={`slide_${i}_labelB`} defaultValue={s.labelB} placeholder="Label kolom kanan" className={inputCls} />
-                <input name={`slide_${i}_stat`} defaultValue={s.stat} placeholder="Angka" className={inputCls} />
+                <input name={`slide_${i}_labelA`} defaultValue={s.labelA} placeholder="Label kolom kiri / label promo (mis. Cashback)" className={inputCls} />
+                <input name={`slide_${i}_labelB`} defaultValue={s.labelB} placeholder="Label kolom kanan / tombol promo (mis. Pakai sekarang)" className={inputCls} />
+                <input name={`slide_${i}_stat`} defaultValue={s.stat} placeholder="Angka (mis. 50%)" className={inputCls} />
               </div>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
                 <textarea name={`slide_${i}_items`} defaultValue={s.items.join("\n")} rows={3} placeholder="Item list / langkah / kolom kiri (1 per baris)" className={inputCls} />

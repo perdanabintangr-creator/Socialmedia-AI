@@ -1,5 +1,5 @@
 /* eslint-disable @next/next/no-img-element, jsx-a11y/alt-text */
-import type { Brand, Slide, SlideLayout, TemplateKey } from "./types";
+import type { Brand, FontKey, Slide, SlideLayout, TemplateKey } from "./types";
 import { Icon } from "./icons";
 
 export const CANVAS = { width: 1080, height: 1350 }; // 4:5, aman untuk IG feed & TikTok photo
@@ -13,6 +13,7 @@ export const IMAGE_BOX: Partial<Record<SlideLayout, { w: number; h: number }>> =
   point_photo: { w: 912, h: 500 },
   quote: { w: 168, h: 168 },
   cta: { w: 1080, h: 1350 },
+  promo_hero: { w: 1080, h: 860 },
 };
 
 export type Img = { src: string; w: number; h: number };
@@ -57,7 +58,11 @@ interface Theme {
   line: string;
   dark: boolean;
   hl: "marker" | "color";
+  upper: boolean; // judul kapital (font poster)
 }
+
+/** Font poster yang memang dirancang untuk huruf kapital. */
+const CAPS_FONTS: FontKey[] = ["anton", "bebas-neue", "archivo-black"];
 
 function makeTheme(brand: Brand, bg: string, preferFg: string): Theme {
   const c = brand.colors;
@@ -76,6 +81,7 @@ function makeTheme(brand: Brand, bg: string, preferFg: string): Theme {
     line: alpha(fg, dark ? 0.18 : 0.12),
     dark,
     hl: dark ? "color" : "marker",
+    upper: CAPS_FONTS.includes(brand.headingFont),
   };
 }
 
@@ -86,6 +92,11 @@ function themeFor(brand: Brand, template: TemplateKey, layout: SlideLayout, inde
   const isBookend = layout.startsWith("cover") || layout === "cta";
   if (template === "bold") {
     const bg = isBookend || index % 2 === 0 ? c.primary : c.secondary;
+    return makeTheme(brand, bg, "#FFFFFF");
+  }
+  if (template === "promo") {
+    // Gaya iklan: latar warna penuh yang berganti, slide promo selalu warna utama.
+    const bg = isBookend || layout.startsWith("promo") || index % 2 === 0 ? c.primary : c.secondary;
     return makeTheme(brand, bg, "#FFFFFF");
   }
   if (template === "clean") {
@@ -153,8 +164,9 @@ function Rich({
         fontWeight: weight,
         fontSize: size,
         lineHeight,
-        letterSpacing: letterSpacing ?? -size * 0.02,
+        letterSpacing: letterSpacing ?? (t.upper ? 0 : -size * 0.02),
         color: color ?? t.fg,
+        textTransform: t.upper && family === "Heading" ? "uppercase" : "none",
       }}
     >
       {words.map((x, i) => (
@@ -224,8 +236,40 @@ function DotGrid({ color, style }: { color: string; style: React.CSSProperties }
   );
 }
 
+/** Bentuk ledakan / starburst khas iklan promo. */
+function Burst({ size, color, spikes = 20, depth = 0.8, rotate = 0, style }: { size: number; color: string; spikes?: number; depth?: number; rotate?: number; style: React.CSSProperties }) {
+  const pts: string[] = [];
+  for (let i = 0; i < spikes * 2; i++) {
+    const r = i % 2 ? 50 * depth : 50;
+    const a = (i * Math.PI) / spikes - Math.PI / 2;
+    pts.push(`${(50 + r * Math.cos(a)).toFixed(2)},${(50 + r * Math.sin(a)).toFixed(2)}`);
+  }
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" style={{ position: "absolute", transform: `rotate(${rotate}deg)`, ...style }}>
+      <polygon points={pts.join(" ")} fill={color} />
+    </svg>
+  );
+}
+
+function Wave({ color, style, width = 1080, height = 260 }: { color: string; style: React.CSSProperties; width?: number; height?: number }) {
+  return (
+    <svg width={width} height={height} viewBox="0 0 1080 260" preserveAspectRatio="none" style={{ position: "absolute", ...style }}>
+      <path d="M0 90 C 160 10 300 170 480 100 S 820 10 1080 80 V 260 H 0 Z" fill={color} />
+    </svg>
+  );
+}
+
 function Decor({ t, template, layout }: { t: Theme; template: TemplateKey; layout: SlideLayout }) {
-  if (layout === "cover_photo" || layout === "cover_split") return null;
+  if (layout === "cover_photo" || layout === "cover_split" || layout.startsWith("promo")) return null;
+  if (template === "promo") {
+    return (
+      <>
+        <Wave color={alpha(t.dark ? "#FFFFFF" : t.pillBg, t.dark ? 0.08 : 0.16)} style={{ left: 0, bottom: 0 }} />
+        <Burst size={128} color={t.pillBg} rotate={14} style={{ right: 64, top: 136 }} />
+        <SparkleShape size={44} color={alpha(t.fg, 0.55)} style={{ right: 214, top: 120 }} />
+      </>
+    );
+  }
   if (template === "bold") {
     return (
       <>
@@ -265,12 +309,14 @@ export function effectiveLayout(layout: SlideLayout, hasImg: boolean): SlideLayo
   if (hasImg) return layout;
   if (layout === "cover_photo" || layout === "cover_split") return "cover_type";
   if (layout === "point_photo") return "point_icon";
+  if (layout === "promo_hero") return "promo_offer";
   return layout;
 }
 
 export function SlideView({ brand, slide, template, index, total, logos, img }: SlideProps) {
   const layout = effectiveLayout(slide.layout, Boolean(img));
   const photoBg = Boolean(img) && (layout === "cover_photo" || layout === "cta");
+  // promo_hero: foto subjek di atas latar warna — tema tetap warna utama, bukan tema foto gelap
   const t = themeFor(brand, template, layout, index, photoBg);
   const headerDark = t.dark || layout === "cover_split";
   const logo = headerDark ? logos.onDark ?? logos.onLight : logos.onLight ?? logos.onDark;
@@ -290,6 +336,8 @@ export function SlideView({ brand, slide, template, index, total, logos, img }: 
       case "stat": return <Stat t={t} s={slide} />;
       case "quote": return <QuoteSlide t={t} s={slide} img={img} />;
       case "cta": return <Cta t={t} s={slide} img={img} brand={brand} />;
+      case "promo_hero": return <PromoHero t={t} s={slide} img={img!} />;
+      case "promo_offer": return <PromoOffer t={t} s={slide} />;
     }
   })();
 
@@ -634,6 +682,98 @@ function Cta({ t, s, img, brand }: P & { img: Img | null; brand: Brand }) {
               {label}
             </div>
           ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- promo / iklan
+
+/** Angka promo di dalam starburst (mis. "Cashback 50%"). */
+function OfferBurst({ t, label, stat, size, style }: { t: Theme; label: string; stat: string; size: number; style: React.CSSProperties }) {
+  const st = plain(stat);
+  return (
+    <div style={{ position: "absolute", width: size, height: size, display: "flex", alignItems: "center", justifyContent: "center", ...style }}>
+      <Burst size={size} color={t.pillBg} rotate={-8} style={{ left: 0, top: 0 }} />
+      <Burst size={size * 0.9} color={alpha(t.pillFg, 0.12)} spikes={20} depth={0.84} rotate={1} style={{ left: size * 0.05, top: size * 0.05 }} />
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", transform: "rotate(-8deg)", color: t.pillFg }}>
+        {plain(label) ? (
+          <div style={{ fontFamily: "Heading", fontWeight: 800, fontSize: Math.round(size * 0.1), textTransform: "uppercase", letterSpacing: 1, lineHeight: 1 }}>{plain(label)}</div>
+        ) : null}
+        <div style={{ fontFamily: "Heading", fontWeight: 800, fontSize: fit(st, Math.round(size * 0.34), Math.round(size * 0.18), 4), lineHeight: 0.95, letterSpacing: t.upper ? 0 : -3, marginTop: 6 }}>{st}</div>
+      </div>
+    </div>
+  );
+}
+
+function CtaPill({ t, text, size = 36 }: { t: Theme; text: string; size?: number }) {
+  if (!plain(text)) return null;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, background: t.pillBg, color: t.pillFg, fontSize: size, fontWeight: 800, padding: "20px 38px", borderRadius: 9999, boxShadow: `0 10px 30px ${alpha("#000000", 0.2)}` }}>
+      {plain(text)}
+      <Icon name="ArrowRight" size={size} color={t.pillFg} strokeWidth={2.8} />
+    </div>
+  );
+}
+
+/** Iklan promo: subjek (orang/produk) besar di latar warna + angka promo dalam starburst. */
+function PromoHero({ t, s, img }: P & { img: Img }) {
+  const hasStat = Boolean(plain(s.stat));
+  const top = CANVAS.height - img.h;
+  return (
+    <>
+      <img src={img.src} width={img.w} height={img.h} style={{ position: "absolute", left: 0, top }} />
+      {/* sambungkan foto ke latar supaya terlihat menyatu (seperti subjek cut-out) */}
+      <div style={{ position: "absolute", left: 0, top, width: CANVAS.width, height: 240, backgroundImage: `linear-gradient(180deg, ${t.bg} 0%, ${alpha(t.bg, 0)} 100%)` }} />
+      <div style={{ position: "absolute", left: 0, bottom: 0, width: CANVAS.width, height: 260, backgroundImage: `linear-gradient(0deg, ${alpha("#000000", 0.45)} 0%, ${alpha("#000000", 0)} 100%)` }} />
+      <div style={{ position: "absolute", left: PAD, top: 150, width: hasStat ? 560 : INNER, display: "flex", flexDirection: "column" }}>
+        <Sticker t={t} text={s.kicker} rotate={-4} size={28} />
+        <Rich t={t} text={s.headline} size={fit(s.headline, hasStat ? 92 : 108, 58, 22)} lineHeight={t.upper ? 0.98 : 1.02} />
+      </div>
+      {hasStat ? <OfferBurst t={t} label={s.labelA} stat={s.stat} size={380} style={{ left: CANVAS.width - 380 - 36, top: 150 }} /> : null}
+      <div style={{ position: "absolute", left: PAD, bottom: 132, width: 620, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 18 }}>
+        {plain(s.body) ? (
+          <div style={{ display: "flex", background: "#FFFFFF", color: "#14161F", fontSize: 28, fontWeight: 700, padding: "14px 22px", borderRadius: 18, lineHeight: 1.25, boxShadow: `0 10px 30px ${alpha("#000000", 0.18)}` }}>{plain(s.body)}</div>
+        ) : null}
+        <CtaPill t={t} text={s.labelB} />
+      </div>
+    </>
+  );
+}
+
+/** Iklan promo tanpa foto: judul tebal, angka raksasa dalam starburst, benefit, tombol. */
+function PromoOffer({ t, s }: P) {
+  const hasStat = Boolean(plain(s.stat));
+  const items = s.items.map(plain).filter(Boolean).slice(0, 3);
+  return (
+    <>
+      <Wave color={alpha(t.dark ? "#FFFFFF" : t.pillBg, t.dark ? 0.08 : 0.16)} style={{ left: 0, bottom: 0 }} />
+      <SparkleShape size={60} color={t.pillBg} style={{ left: 70, top: 640 }} />
+      <SparkleShape size={36} color={alpha(t.fg, 0.6)} style={{ right: 90, top: 560 }} />
+      <div style={{ ...content, justifyContent: "center" }}>
+        <Sticker t={t} text={s.kicker} rotate={-4} size={28} />
+        <Rich t={t} text={s.headline} size={fit(s.headline, hasStat ? 96 : 120, 60, 26)} lineHeight={t.upper ? 0.98 : 1.04} />
+        {hasStat ? (
+          <div style={{ display: "flex", position: "relative", width: INNER, height: 440, marginTop: 10 }}>
+            <OfferBurst t={t} label={s.labelA} stat={s.stat} size={430} style={{ left: (INNER - 430) / 2, top: 6 }} />
+          </div>
+        ) : (
+          <div style={{ height: 40 }} />
+        )}
+        {items.length ? (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginTop: hasStat ? 0 : 20 }}>
+            {items.map((it, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, background: t.surface, border: `2px solid ${t.line}`, borderRadius: 9999, padding: "12px 22px", fontSize: 28, fontWeight: 700, color: t.fg }}>
+                <Icon name="Check" size={28} color={t.accent} strokeWidth={3} />
+                {it}
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <div style={{ display: "flex", alignItems: "center", gap: 24, marginTop: 30 }}>
+          <CtaPill t={t} text={s.labelB} />
+          {plain(s.body) ? <div style={{ display: "flex", flex: 1, fontSize: 24, color: t.muted, lineHeight: 1.3 }}>{plain(s.body)}</div> : null}
         </div>
       </div>
     </>

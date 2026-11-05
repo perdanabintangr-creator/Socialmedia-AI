@@ -21,6 +21,7 @@ const TEMPLATES: { key: TemplateKey; label: string; desc: string }[] = [
   { key: "mix", label: "Editorial", desc: "Cover gelap, isi terang. Elegan & mudah dibaca." },
   { key: "bold", label: "Bold", desc: "Warna penuh & bentuk dekoratif. Paling mencolok." },
   { key: "clean", label: "Clean", desc: "Minimalis terang. Rapi & profesional." },
+  { key: "promo", label: "Promo", desc: "Gaya iklan: warna kontras, starburst & stiker. Cocok untuk jualan." },
 ];
 
 const STEPS = ["Bisnis", "Audiens", "Gaya bahasa", "Visual", "Sosmed", "Selesai"];

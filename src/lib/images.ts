@@ -17,13 +17,22 @@ export interface ImageRequest {
   query: string; // kata kunci stok (Inggris)
   prompt: string; // prompt AI image (Inggris)
   assetId: string; // id foto brand
+  layout?: string; // layout slide (promo_hero butuh subjek di latar polos warna utama)
 }
 
 const NO_TEXT = "No text, no letters, no words, no logos, no watermark.";
 
+/** Gambar referensi owner hanya dipakai sebagai contoh gaya, bukan untuk disalin. */
+const REF_NOTE =
+  "The attached image(s) are STYLE REFERENCES from the client: match their photography style, lighting, color grading, framing, pose energy and overall mood as closely as possible. Create a completely new, original image with a different person or product. Do not copy any face, logo, brand mark, packaging or text from the references.";
+
 function aiPrompt(brand: Brand, req: ImageRequest) {
+  const promo = req.layout === "promo_hero";
   return [
     req.prompt || req.query,
+    promo
+      ? `Advertising key visual: the subject stands/poses in the lower two thirds, waist-up, on a plain seamless solid ${brand.colors.primary} background (exact same flat color edge to edge, no gradient, no props behind), clean studio lighting, crisp edges like a cut-out. Keep the top third empty.`
+      : "",
     `Art direction: ${brand.imageStyle}`,
     `Subtle color harmony with brand colors ${brand.colors.primary}, ${brand.colors.secondary} and ${brand.colors.accent}.`,
     "Vertical 4:5 composition, high-end social media agency quality, magazine-grade lighting.",
@@ -31,7 +40,25 @@ function aiPrompt(brand: Brand, req: ImageRequest) {
   ].join(" ");
 }
 
-async function generateOpenAI(prompt: string): Promise<Buffer> {
+async function generateOpenAI(prompt: string, refs: Buffer[] = []): Promise<Buffer> {
+  if (refs.length) {
+    // Endpoint edits menerima gambar sebagai acuan gaya/komposisi.
+    const fd = new FormData();
+    fd.set("model", process.env.OPENAI_IMAGE_MODEL || "gpt-image-1");
+    fd.set("prompt", `${prompt} ${REF_NOTE}`);
+    fd.set("size", "1024x1536");
+    fd.set("quality", process.env.OPENAI_IMAGE_QUALITY || "medium");
+    refs.forEach((b, i) => fd.append("image[]", new Blob([new Uint8Array(b)], { type: "image/jpeg" }), `ref-${i + 1}.jpg`));
+    const res = await fetch("https://api.openai.com/v1/images/edits", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+      body: fd,
+    });
+    const json = (await res.json().catch(() => null)) as { data?: { b64_json?: string }[]; error?: { message?: string } } | null;
+    const b64 = json?.data?.[0]?.b64_json;
+    if (!res.ok || !b64) throw new Error(`OpenAI image (referensi): ${json?.error?.message ?? res.status}`);
+    return Buffer.from(b64, "base64");
+  }
   const res = await fetch("https://api.openai.com/v1/images/generations", {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
@@ -49,13 +76,20 @@ async function generateOpenAI(prompt: string): Promise<Buffer> {
   return Buffer.from(b64, "base64");
 }
 
-async function generateGemini(prompt: string): Promise<Buffer> {
+async function generateGemini(prompt: string, refs: Buffer[] = []): Promise<Buffer> {
   const model = process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image";
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
     headers: { "x-goog-api-key": process.env.GEMINI_API_KEY!, "Content-Type": "application/json" },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
+      contents: [
+        {
+          parts: [
+            ...refs.map((b) => ({ inlineData: { mimeType: "image/jpeg", data: b.toString("base64") } })),
+            { text: refs.length ? `${prompt} ${REF_NOTE}` : prompt },
+          ],
+        },
+      ],
       generationConfig: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: "4:5" } },
     }),
   });
@@ -98,7 +132,10 @@ async function demoImage(brand: Brand, seed: number) {
   return sharp(Buffer.from(svg)).jpeg({ quality: 85 }).toBuffer();
 }
 
-export async function sourceImage(w: WorkspaceRepo, brand: Brand, req: ImageRequest, key: string, seed = 0): Promise<SlideImage | null> {
+/**
+ * @param refs gambar referensi desain dari owner (JPEG kecil) — dikirim ke AI image sebagai contoh gaya.
+ */
+export async function sourceImage(w: WorkspaceRepo, brand: Brand, req: ImageRequest, key: string, seed = 0, refs: Buffer[] = []): Promise<SlideImage | null> {
   const base = { query: req.query, prompt: req.prompt, credit: "" };
   const mode = brand.imageSource;
   if (mode === "none") return null;
@@ -107,16 +144,14 @@ export async function sourceImage(w: WorkspaceRepo, brand: Brand, req: ImageRequ
   if (asset) return { ...base, url: asset.url, source: "brand" };
   if (mode === "brand") return null;
 
-  if (!config.hasAI) {
-    // Mode demo: pakai foto brand bergantian, kalau tidak ada pakai gambar abstrak.
-    if (brand.assets.length) return { ...base, url: brand.assets[seed % brand.assets.length].url, source: "brand" };
-    return { ...base, url: await store(w, await demoImage(brand, seed + 1), key), source: "demo" };
-  }
+  // Mode demo tanpa API gambar: pakai foto brand bergantian.
+  if (!config.hasAI && !config.imageProvider && brand.assets.length) return { ...base, url: brand.assets[seed % brand.assets.length].url, source: "brand" };
 
+  // AI image boleh jalan walau ANTHROPIC_API_KEY belum diisi (kunci gambar terpisah).
   if ((mode === "auto" || mode === "ai") && config.imageProvider && (req.prompt || req.query)) {
     try {
       const prompt = aiPrompt(brand, req);
-      const data = config.imageProvider === "gemini" ? await generateGemini(prompt) : await generateOpenAI(prompt);
+      const data = config.imageProvider === "gemini" ? await generateGemini(prompt, refs) : await generateOpenAI(prompt, refs);
       return { ...base, url: await store(w, data, key), source: "ai" };
     } catch (e) {
       console.error("AI image gagal, coba stok foto:", e);
@@ -130,6 +165,7 @@ export async function sourceImage(w: WorkspaceRepo, brand: Brand, req: ImageRequ
       console.error("Stok foto gagal:", e);
     }
   }
+  if (!config.hasAI) return { ...base, url: await store(w, await demoImage(brand, seed + 1), key), source: "demo" };
   return null;
 }
 

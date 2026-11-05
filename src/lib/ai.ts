@@ -4,7 +4,7 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { config } from "./config";
 import { ICON_NAMES } from "./icons";
-import { SLIDE_LAYOUTS, normalizeSlide, type Brand, type Idea, type Post, type PostFormat, type Slide } from "./types";
+import { SLIDE_LAYOUTS, TEMPLATE_KEYS, normalizeSlide, type Brand, type Idea, type Post, type PostFormat, type Slide } from "./types";
 import type { ImageRequest } from "./images";
 
 const MODEL = "claude-opus-5-5";
@@ -32,11 +32,11 @@ const SlideOut = z.object({
   kicker: z.string().describe("Label kecil / sticker, maks 4 kata. Boleh kosong"),
   headline: z.string().describe("Teks utama, maks ~10 kata. Bungkus 1-3 kata kunci dengan *bintang* untuk highlight"),
   body: z.string().describe("Teks pendukung maks ~25 kata. Untuk quote: nama/sumber kutipan"),
-  stat: z.string().describe("Hanya layout stat: angka besar, mis. '73%' atau '3x'. Selain itu kosong"),
+  stat: z.string().describe("stat: angka besar, mis. '73%'. promo_hero/promo_offer: angka promo, mis. '50%', '2+1', 'Rp10rb'. Selain itu kosong"),
   items: z.array(z.string()).describe("list/steps: 3-5 item pendek (maks 7 kata). compare: poin kolom kiri. Selain itu []"),
   itemsB: z.array(z.string()).describe("compare: poin kolom kanan. Selain itu []"),
-  labelA: z.string().describe("compare: judul kolom kiri (mis. 'Mitos'). Selain itu kosong"),
-  labelB: z.string().describe("compare: judul kolom kanan (mis. 'Fakta'). Selain itu kosong"),
+  labelA: z.string().describe("compare: judul kolom kiri (mis. 'Mitos'). promo_*: label kecil di atas angka promo (mis. 'Cashback', 'Diskon'). Selain itu kosong"),
+  labelB: z.string().describe("compare: judul kolom kanan (mis. 'Fakta'). promo_*: teks tombol ajakan (mis. 'Pesan sekarang'). Selain itu kosong"),
   icon: z.enum(ICON_NAMES).describe("Ikon yang paling mewakili isi slide (dipakai di point_icon)"),
   image: z.object({
     assetId: z.string().describe("id foto brand yang cocok, atau kosong"),
@@ -74,7 +74,10 @@ const LAYOUT_GUIDE = `# Layout yang tersedia (pilih per slide)
 - compare: dua kolom, mis. Mitos vs Fakta / Salah vs Benar / Before vs After (labelA, labelB, items, itemsB). Kolom kanan = yang benar.
 - stat: angka besar (persen otomatis jadi ring chart) + judul. Hanya bila angkanya fakta yang aman.
 - quote: kutipan besar + nama sumber (body). Opsional foto bulat.
-- cta: penutup ajakan follow/save/share; opsional foto latar.`;
+- cta: penutup ajakan follow/save/share; opsional foto latar.
+- promo_hero: gaya IKLAN PROMO. Foto orang/produk besar di bagian bawah di atas latar warna utama, judul kapital di kiri atas, angka promo (stat + labelA) dalam starburst di kanan atas, catatan S&K kecil (body) dan tombol (labelB). BUTUH foto: image.prompt harus berisi subjek (mis. orang Indonesia tersenyum memegang HP / produk) di atas LATAR POLOS SATU WARNA, subjek di 2/3 bawah, ruang kosong di atas.
+- promo_offer: iklan promo tanpa foto: judul tebal, angka promo raksasa dalam starburst (stat + labelA), 1-3 benefit singkat (items), tombol (labelB), S&K kecil (body).
+Untuk konten jualan/diskon/promo/cashback, pakai promo_hero untuk cover dan promo_offer untuk slide penawaran.`;
 
 export function brandSystemPrompt(brand: Brand): string {
   const assets = brand.assets.length
@@ -188,7 +191,7 @@ function toDraftSlides(out: SlideOutT[], format: PostFormat, previous?: Slide[])
     });
     return {
       slide,
-      imageRequest: wantsImage && !keepOld ? { assetId: o.image.assetId, query: o.image.query, prompt: o.image.prompt } : null,
+      imageRequest: wantsImage && !keepOld ? { assetId: o.image.assetId, query: o.image.query, prompt: o.image.prompt, layout: o.layout } : null,
     };
   });
 }
@@ -228,8 +231,10 @@ export interface RefContext {
 const withRef = (prompt: string, ref?: RefContext | null): Anthropic.Beta.BetaContentBlockParam[] | string =>
   ref ? [...ref.images, { type: "text", text: `${ref.text}\n\n${prompt}` }] : prompt;
 
+const PROMO_WORDS = /promo|diskon|cashback|gratis|potongan|sale|beli \d|harga spesial|voucher/i;
+
 export async function generateIdeas(brand: Brand, opts: { brief: string; count: number; recentTitles: string[]; reference?: string }) {
-  if (!config.hasAI) return demoIdeas(brand, opts.count);
+  if (!config.hasAI) return demoIdeas(brand, opts.count, opts.brief);
   const prompt = `Buat ${opts.count} ide konten baru untuk minggu ini.
 
 Brief dari owner: ${opts.brief || "(tidak ada brief khusus — seimbangkan pilar konten)"}
@@ -307,7 +312,7 @@ ${formatRules(post.format)}`,
 const StyleSchema = z.object({
   styleNotes: z.string().describe("Ringkasan gaya visual & copywriting dari contoh post, berupa poin-poin praktis"),
   imageStyle: z.string().describe("Art direction foto/ilustrasi dalam 1-2 kalimat (dipakai sebagai pedoman gambar)"),
-  suggestedTemplate: z.enum(["mix", "bold", "clean"]),
+  suggestedTemplate: z.enum(TEMPLATE_KEYS),
 });
 
 export async function analyzeExamples(
@@ -336,8 +341,20 @@ export async function analyzeExamples(
 
 // ------------------------------------------------------------------ mode demo
 
-function demoIdeas(brand: Brand, count: number) {
+function demoIdeas(brand: Brand, count: number, brief = "") {
   const pillars = brand.pillars.length ? brand.pillars : ["Edukasi"];
+  if (count === 1 && PROMO_WORDS.test(brief)) {
+    return [
+      {
+        title: "[DEMO] Promo spesial akhir bulan",
+        hook: "Akhir bulan, dompet tetap aman.",
+        angle: "Penawaran promo dengan angka besar, benefit singkat, dan tombol ajakan (mode demo).",
+        pillar: "Promo",
+        format: "carousel" as const,
+        rationale: "Contoh konten promo untuk mencoba mode iklan.",
+      },
+    ];
+  }
   const base = [
     { title: "5 kesalahan yang bikin konten sepi engagement", format: "carousel" as const },
     { title: "Satu kebiasaan kecil yang menghemat 2 jam kerja", format: "single" as const },
@@ -361,7 +378,21 @@ function demoIdeas(brand: Brand, count: number) {
 
 function demoPost(brand: Brand, idea: Idea): Draft {
   const title = idea.title.replace("[DEMO] ", "");
-  const photo = (q: string): ImageRequest => ({ assetId: "", query: q, prompt: q });
+  const photo = (q: string, layout?: string): ImageRequest => ({ assetId: "", query: q, prompt: q, layout });
+  if (idea.reference?.template === "promo" || PROMO_WORDS.test(`${idea.title} ${idea.angle}`)) {
+    const raw: [Partial<Slide>, ImageRequest | null][] = [
+      [{ layout: "promo_hero", kicker: "Promo minggu ini", headline: "Akhir bulan *tetap hemat*", stat: "50%", labelA: "Cashback", labelB: "Pesan sekarang", body: "Contoh S&K · mode demo" }, photo("smiling Indonesian woman holding smartphone", "promo_hero")],
+      [{ layout: "promo_offer", kicker: "Spesial", headline: "Beli 2 *gratis 1*", stat: "2+1", labelA: "Semua menu", items: ["Semua cabang", "Tiap Jumat", "Bisa takeaway"], labelB: "Klaim promo", body: "Contoh syarat & ketentuan." }, null],
+      [{ layout: "list", kicker: "Cara klaim", headline: "Gampang *banget*", items: ["Datang ke outlet", "Tunjukkan postingan ini", "Nikmati promonya"] }, null],
+      [{ layout: "cta", headline: "Jangan sampai *kelewatan*", body: brand.cta }, null],
+    ];
+    return {
+      title,
+      slides: (idea.format === "single" ? raw.slice(0, 1) : raw).map(([s, req]) => ({ slide: normalizeSlide(s), imageRequest: req })),
+      caption: `${idea.hook}\n\nIni caption contoh dari mode demo. Setelah ANTHROPIC_API_KEY diisi, copy promo & art direction dibuat AI sesuai brief dan referensimu.\n\n${brand.cta} 👉 ${brand.handle}`,
+      hashtags: ["promo", "diskon", "hemat"],
+    };
+  }
   const raw: [Partial<Slide>, ImageRequest | null][] =
     idea.format === "single"
       ? [[{ layout: "cover_photo", kicker: idea.pillar, headline: `${title.split(" ").slice(0, -2).join(" ")} *${title.split(" ").slice(-2).join(" ")}*`, body: idea.hook }, photo("creative team working")]]

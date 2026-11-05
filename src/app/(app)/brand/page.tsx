@@ -4,18 +4,13 @@ import { config } from "@/lib/config";
 import { ActionForm, Submit } from "@/components/forms";
 import { Card, Field, PageTitle, inputCls } from "@/components/ui";
 import { analyzeExamplesAction, saveBrandAction } from "@/app/actions";
-import type { Brand, FontKey } from "@/lib/types";
+import { FONT_KEYS, FONT_OPTIONS, TEMPLATE_KEYS, type Brand, type FontKey } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-const FONTS: [FontKey, string][] = [
-  ["plus-jakarta-sans", "Plus Jakarta Sans"],
-  ["poppins", "Poppins"],
-  ["montserrat", "Montserrat"],
-  ["inter", "Inter"],
-  ["playfair-display", "Playfair Display (serif)"],
-];
+const FONTS: [FontKey, string][] = FONT_KEYS.map((k) => [k, FONT_OPTIONS[k].body ? FONT_OPTIONS[k].label : `${FONT_OPTIONS[k].label} (judul)`]);
+const BODY_FONTS = FONTS.filter(([k]) => FONT_OPTIONS[k].body);
 const COLORS: [keyof Brand["colors"], string, string][] = [
   ["primary", "Utama", "Latar slide cover & CTA"],
   ["secondary", "Sekunder", "Aksen di slide terang"],
@@ -24,13 +19,13 @@ const COLORS: [keyof Brand["colors"], string, string][] = [
   ["text", "Teks", "Warna teks di latar terang"],
 ];
 
-const TEMPLATE_LABEL = { mix: "Editorial", bold: "Bold", clean: "Clean" } as const;
+const TEMPLATE_LABEL = { mix: "Editorial", bold: "Bold", clean: "Clean", promo: "Promo" } as const;
 
 export default async function BrandPage({ searchParams }: { searchParams: Promise<{ template?: string }> }) {
   const { w } = await requireWorkspace();
   const brand = await w.getBrand();
   const { template } = await searchParams;
-  const tpl = (["mix", "bold", "clean"] as const).find((x) => x === template) ?? brand.defaultTemplate;
+  const tpl = TEMPLATE_KEYS.find((x) => x === template) ?? brand.defaultTemplate;
   const v = Date.now();
 
   return (
@@ -46,7 +41,7 @@ export default async function BrandPage({ searchParams }: { searchParams: Promis
             </p>
           </div>
           <div className="flex gap-1">
-            {(["mix", "bold", "clean"] as const).map((k) => (
+            {TEMPLATE_KEYS.map((k) => (
               <Link key={k} href={`/brand?template=${k}`} className={`rounded-full px-3 py-1 text-xs font-semibold ${k === tpl ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"}`}>
                 {TEMPLATE_LABEL[k]}{k === brand.defaultTemplate ? " ✓" : ""}
               </Link>
@@ -54,7 +49,7 @@ export default async function BrandPage({ searchParams }: { searchParams: Promis
           </div>
         </div>
         <div className="mt-3 flex gap-3 overflow-x-auto pb-1">
-          {Array.from({ length: 11 }, (_, i) => (
+          {Array.from({ length: 13 }, (_, i) => (
             <a key={i} href={`/api/preview/${i}?template=${tpl}`} target="_blank" className="shrink-0">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={`/api/preview/${i}?template=${tpl}&v=${v}`} alt="" loading="lazy" className="aspect-[4/5] w-[200px] rounded-lg bg-slate-100 ring-1 ring-slate-200" />
@@ -104,7 +99,7 @@ export default async function BrandPage({ searchParams }: { searchParams: Promis
             </Field>
             <Field label="Font isi">
               <select name="bodyFont" defaultValue={brand.bodyFont} className={inputCls}>
-                {FONTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                {BODY_FONTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
               </select>
             </Field>
             <Field label="Template default">
@@ -112,6 +107,7 @@ export default async function BrandPage({ searchParams }: { searchParams: Promis
                 <option value="mix">Editorial (cover gelap, isi terang)</option>
                 <option value="bold">Bold (warna penuh + bentuk dekoratif)</option>
                 <option value="clean">Clean (minimalis terang)</option>
+                <option value="promo">Promo (gaya iklan: warna kontras, starburst, stiker)</option>
               </select>
             </Field>
           </div>

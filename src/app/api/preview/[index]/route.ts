@@ -31,6 +31,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ index: string }
     { layout: "stat", kicker: "Fakta", stat: "73%", headline: "orang memutuskan *follow* dari slide pertama", body: "Ilustrasi angka untuk contoh desain." },
     { layout: "quote", kicker: "Founder", headline: "Konsisten lebih penting daripada *sempurna*.", body: brand.name, image: await photo(4) },
     { layout: "cta", headline: "Simpan & *bagikan* ke tim kamu", body: brand.cta },
+    { layout: "promo_hero", kicker: "Promo minggu ini", headline: "Ngopi hemat *akhir bulan*", stat: "50%", labelA: "Cashback", labelB: "Pesan sekarang", body: "Berlaku s.d. 30 Nov · S&K berlaku", image: await photo(5) },
+    { layout: "promo_offer", kicker: "Spesial member", headline: "Beli 2 *gratis 1*", stat: "2+1", labelA: "Semua menu", items: ["Semua cabang", "Tiap Jumat", "Bisa takeaway"], labelB: "Klaim promo", body: "Tunjukkan postingan ini ke kasir." },
   ];
   const slides = raw.map(normalizeSlide);
   const png = await renderSlidePng(brand, { slides, template: t ?? brand.defaultTemplate }, Number(index) % slides.length);

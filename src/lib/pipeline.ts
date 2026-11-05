@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import sharp from "sharp";
 import { accounts, type WorkspaceRepo } from "./db";
 import { generateIdeas, generatePost, reviewDesign, revisePost, type Draft, type RefContext } from "./ai";
-import { referenceImageBlocks, referencePrompt } from "./reference";
+import { referenceImageBlocks, referenceImageBuffers, referencePrompt } from "./reference";
 import { renderSlidePng, renderSlidesJpeg } from "./render";
 import { sourceImage } from "./images";
 import { publish } from "./publisher";
@@ -45,13 +45,13 @@ async function refContext(ref: PostReference | null): Promise<RefContext | null>
 }
 
 /** Isi gambar untuk slide yang membutuhkannya (paralel, maks 3 sekaligus). */
-export async function materialize(w: WorkspaceRepo, brand: Brand, draft: Pick<Draft, "slides">, key: string): Promise<Slide[]> {
+export async function materialize(w: WorkspaceRepo, brand: Brand, draft: Pick<Draft, "slides">, key: string, refs: Buffer[] = []): Promise<Slide[]> {
   const out = draft.slides.map((d) => d.slide);
   const jobs = draft.slides.map((d, i) => ({ d, i })).filter(({ d }) => d.imageRequest);
   for (let n = 0; n < jobs.length; n += 3) {
     await Promise.all(
       jobs.slice(n, n + 3).map(async ({ d, i }) => {
-        out[i] = { ...out[i], image: await sourceImage(w, brand, d.imageRequest!, `${key}-${i}`, i) };
+        out[i] = { ...out[i], image: await sourceImage(w, brand, d.imageRequest!, `${key}-${i}`, i, refs) };
       }),
     );
   }
@@ -65,6 +65,7 @@ async function artDirector(
   post: Pick<Post, "slides" | "format" | "caption" | "template">,
   key: string,
   ref: RefContext | null = null,
+  refImgs: Buffer[] = [],
 ): Promise<{ slides: Slide[]; notes: string | null }> {
   if (!brand.autoReview || !config.hasAI) return { slides: post.slides, notes: null };
   try {
@@ -76,7 +77,7 @@ async function artDirector(
     const review = await reviewDesign(brand, post, renders, ref);
     if (!review) return { slides: post.slides, notes: null };
     if (review.verdict === "approve") return { slides: post.slides, notes: review.notes };
-    return { slides: await materialize(w, brand, review, `${key}-qa`), notes: review.notes };
+    return { slides: await materialize(w, brand, review, `${key}-qa`, refImgs), notes: review.notes };
   } catch (e) {
     console.error("Review art director gagal (konten tetap dipakai):", e);
     return { slides: post.slides, notes: null };
@@ -98,6 +99,7 @@ export async function buildPostFromIdea(w: WorkspaceRepo, ideaId: string, progre
   const ref = idea.reference ?? null;
   const brand = styledBrand(await w.getBrand(), ref);
   const ctx = await refContext(ref);
+  const refImgs = await referenceImageBuffers(ref);
   const template = ref?.template ?? brand.defaultTemplate;
 
   const draft = await generatePost(brand, idea, ctx);
@@ -107,14 +109,14 @@ export async function buildPostFromIdea(w: WorkspaceRepo, ideaId: string, progre
   );
 
   const key = randomUUID();
-  const slides = await materialize(w, brand, draft, key);
+  const slides = await materialize(w, brand, draft, key, refImgs);
   const photos = countPhotos(slides);
   await progress(
     "rupa",
     `Layout & visual sudah tersusun${photos ? ` (${photos} foto)` : ""}${ref ? ", warna & gaya kusamakan dengan referensi" : ""}.${brand.autoReview && config.hasAI ? " Aku cek ulang hasil rendernya dulu sebelum kukirim." : ""}`,
   );
 
-  const reviewed = await artDirector(w, brand, { slides, format: idea.format, caption: draft.caption, template }, key, ctx);
+  const reviewed = await artDirector(w, brand, { slides, format: idea.format, caption: draft.caption, template }, key, ctx, refImgs);
   const post = await w.createPost({
     idea_id: idea.id,
     title: draft.title || idea.title,
@@ -146,7 +148,7 @@ export async function revisePostWith(
   const brand = styledBrand(await w.getBrand(), ref);
   const draft = await revisePost(brand, post, instruction, await refContext(ref));
   await progress("kata", `Revisi naskah sudah kuterapkan${newRef ? " mengikuti referensi baru" : ""}. Rupa, tolong sesuaikan visualnya.`);
-  const slides = await materialize(w, brand, draft, `${post.id}-r${post.revision_count + 1}`);
+  const slides = await materialize(w, brand, draft, `${post.id}-r${post.revision_count + 1}`, await referenceImageBuffers(ref));
   const patch = {
     title: draft.title,
     caption: draft.caption,

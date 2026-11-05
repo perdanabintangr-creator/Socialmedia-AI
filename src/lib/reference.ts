@@ -7,7 +7,7 @@ import { config } from "./config";
 import { brandSystemPrompt, callStructured } from "./ai";
 import { readMedia } from "./media";
 import type { WorkspaceRepo } from "./db";
-import { SLIDE_LAYOUTS, type Brand, type FontKey, type PostReference, type SlideLayout, type TemplateKey } from "./types";
+import { BODY_FONT_KEYS, FONT_KEYS, FONT_OPTIONS, SLIDE_LAYOUTS, TEMPLATE_KEYS, type Brand, type FontKey, type PostReference, type SlideLayout, type TemplateKey } from "./types";
 
 /**
  * Referensi desain: owner menempel / mengunggah contoh ("bikin seperti ini").
@@ -122,7 +122,9 @@ export function rolesFromPalette(sw: Swatch[]): { colors: Brand["colors"]; templ
     const accent = vivid.find((s) => contrastOf(s.hex, bg) >= 2.5)?.hex ?? (bgLum < 0.3 ? "#FFD24D" : "#14161F");
     const background = relLum(lightest) > 0.75 ? lightest : "#F7F6F2";
     const text = relLum(darkest) < 0.08 ? darkest : "#14161F";
-    return { colors: { primary: bg, secondary, accent, background, text }, template: "bold" };
+    // Banyak warna mencolok (≥ 2 selain latar) = gaya iklan promo; selain itu bold biasa.
+    const loud = vivid.filter((v) => v.sat > 0.45 && v.share > 0.02).length >= 2;
+    return { colors: { primary: bg, secondary, accent, background, text }, template: loud ? "promo" : "bold" };
   }
   const text = contrastOf(darkest, bg) >= 4.5 ? darkest : "#14161F";
   const primary = vivid[0]?.hex ?? (others.find((s) => s.lum < 0.5)?.hex ?? text);
@@ -133,7 +135,6 @@ export function rolesFromPalette(sw: Swatch[]): { colors: Brand["colors"]; templ
 
 // ---------------------------------------------------------------- analisis AI
 
-const FONTS = ["plus-jakarta-sans", "poppins", "montserrat", "inter", "playfair-display"] as const satisfies readonly FontKey[];
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
 const RefSchema = z.object({
@@ -145,8 +146,11 @@ const RefSchema = z.object({
   imageStyle: z.string().describe("Art direction foto/ilustrasi di referensi dalam bahasa Inggris (subjek, cahaya, warna, mood). Kosong bila referensi tidak memakai foto"),
   usesPhotos: z.boolean(),
   layouts: z.array(z.enum(SLIDE_LAYOUTS)).describe("Untuk tiap gambar referensi secara berurutan: layout tersedia yang paling mirip"),
-  template: z.enum(["mix", "bold", "clean"]).describe("bold: latar warna solid/gelap berganti; clean: latar terang minimalis; mix: cover gelap, isi terang"),
-  headingFont: z.enum(FONTS).describe("Font judul tersedia yang paling mirip dengan tipografi referensi"),
+  template: z
+    .enum(TEMPLATE_KEYS)
+    .describe("promo: iklan/jualan dengan warna kontras, starburst, stiker, angka diskon; bold: latar warna solid/gelap berganti; clean: latar terang minimalis; mix: cover gelap, isi terang"),
+  headingFont: z.enum(FONT_KEYS as [FontKey, ...FontKey[]]).describe("Font judul tersedia yang paling mirip dengan tipografi judul referensi"),
+  bodyFont: z.enum(BODY_FONT_KEYS as [FontKey, ...FontKey[]]).describe("Font isi tersedia yang paling mirip dengan teks kecil di referensi"),
   palette: z.object({
     primary: z.string().describe("Hex warna utama/panel (latar cover/slide berwarna)"),
     secondary: z.string().describe("Hex warna kedua"),
@@ -168,6 +172,7 @@ export async function analyzeReference(brand: Brand, urls: string[], useRefColor
     imageStyle: "",
     colors: useRefColors ? roles.colors : null,
     headingFont: null,
+    bodyFont: null,
     template: roles.template,
     layouts: [],
   };
@@ -182,7 +187,8 @@ export async function analyzeReference(brand: Brand, urls: string[], useRefColor
   content.push({
     type: "text",
     text: `Owner ingin konten baru yang SANGAT MIRIP dengan referensi di atas (gaya, bukan isi). Bedah referensi ini seperti senior designer sebelum mengerjakan brief:
-- Layout tersedia di sistem kami: ${LAYOUT_NAMES}. Petakan tiap gambar ke layout paling mirip.
+- Layout tersedia di sistem kami: ${LAYOUT_NAMES}. Petakan tiap gambar ke layout paling mirip (iklan promo dengan foto orang/produk + angka diskon → promo_hero; poster diskon tanpa foto → promo_offer).
+- Font tersedia: ${FONT_KEYS.map((k) => `${k} (${FONT_OPTIONS[k].style})`).join("; ")}.
 - Palet dari analisis piksel (sebagai acuan): utama ${roles.colors.primary}, kedua ${roles.colors.secondary}, aksen ${roles.colors.accent}, latar ${roles.colors.background}, teks ${roles.colors.text}. Koreksi bila perannya kurang tepat.
 - Fokus pada hal yang bisa ditiru: komposisi, hierarki teks, kepadatan, dekorasi, gaya foto, gaya copy.`,
   });
@@ -198,6 +204,7 @@ export async function analyzeReference(brand: Brand, urls: string[], useRefColor
       imageStyle: out.usesPhotos ? out.imageStyle : "",
       colors: useRefColors ? aiColors : null,
       headingFont: out.headingFont,
+      bodyFont: out.bodyFont,
       template: out.template,
       layouts: out.layouts.slice(0, 10) as SlideLayout[],
     };
@@ -239,4 +246,18 @@ export function describeReference(ref: PostReference): string {
   if (ref.colors) parts.push(`palet ${ref.colors.primary}, ${ref.colors.accent} & ${ref.colors.background}`);
   if (ref.layouts.length) parts.push(`${ref.layouts.length} pola slide`);
   return parts.join(", ");
+}
+
+/** Gambar referensi sebagai JPEG kecil untuk generator gambar (maks 3, hemat biaya & ukuran request). */
+export async function referenceImageBuffers(ref: PostReference | null): Promise<Buffer[]> {
+  if (!ref || !config.imageProvider) return [];
+  const out: Buffer[] = [];
+  for (const url of ref.urls.slice(0, 3)) {
+    try {
+      out.push(await sharp(await readMedia(url)).resize(768, 768, { fit: "inside", withoutEnlargement: true }).jpeg({ quality: 82 }).toBuffer());
+    } catch {
+      // lewati gambar yang tidak terbaca
+    }
+  }
+  return out;
 }

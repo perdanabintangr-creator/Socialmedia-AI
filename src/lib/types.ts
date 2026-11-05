@@ -1,12 +1,28 @@
 export type Platform = "instagram" | "tiktok";
 export type PostFormat = "single" | "carousel";
 
-export type FontKey =
-  | "plus-jakarta-sans"
-  | "poppins"
-  | "montserrat"
-  | "inter"
-  | "playfair-display";
+/**
+ * Pustaka font desain (file .woff di assets/fonts). `body: false` = font display khusus judul
+ * (satu ketebalan, terlalu padat untuk paragraf).
+ */
+export const FONT_OPTIONS = {
+  "plus-jakarta-sans": { label: "Plus Jakarta Sans", style: "sans modern, rapi", weights: [500, 700, 800], body: true },
+  poppins: { label: "Poppins", style: "sans geometris bulat, ramah", weights: [500, 700, 800], body: true },
+  montserrat: { label: "Montserrat", style: "sans geometris lebar, kuat", weights: [500, 700, 800], body: true },
+  inter: { label: "Inter", style: "sans netral, korporat", weights: [500, 700, 800], body: true },
+  "playfair-display": { label: "Playfair Display", style: "serif elegan, editorial/mewah", weights: [500, 700, 800], body: true },
+  outfit: { label: "Outfit", style: "sans geometris bersih, startup/fintech", weights: [400, 500, 700, 800], body: true },
+  rubik: { label: "Rubik", style: "sans sudut membulat, playful & tebal", weights: [400, 500, 700, 800], body: true },
+  "bricolage-grotesque": { label: "Bricolage Grotesque", style: "grotesque berkarakter, trendi", weights: [400, 500, 700, 800], body: true },
+  anton: { label: "Anton", style: "display sangat tebal & sempit, gaya iklan/poster", weights: [400], body: false },
+  "bebas-neue": { label: "Bebas Neue", style: "display kapital sempit, gaya headline promo", weights: [400], body: false },
+  "archivo-black": { label: "Archivo Black", style: "display super tebal lebar, gaya promo/diskon", weights: [400], body: false },
+  "lilita-one": { label: "Lilita One", style: "display bulat tebal, ceria/fun", weights: [400], body: false },
+  "dm-serif-display": { label: "DM Serif Display", style: "serif display kontras tinggi, fashion/beauty", weights: [400], body: false },
+} as const;
+export type FontKey = keyof typeof FONT_OPTIONS;
+export const FONT_KEYS = Object.keys(FONT_OPTIONS) as FontKey[];
+export const BODY_FONT_KEYS = FONT_KEYS.filter((k) => FONT_OPTIONS[k].body);
 
 export interface Brand {
   name: string;
@@ -53,7 +69,8 @@ export interface BrandAsset {
   description: string;
 }
 
-export type TemplateKey = "mix" | "bold" | "clean";
+export const TEMPLATE_KEYS = ["mix", "bold", "clean", "promo"] as const;
+export type TemplateKey = (typeof TEMPLATE_KEYS)[number];
 
 export const SLIDE_LAYOUTS = [
   "cover_photo", // foto full-bleed + judul besar
@@ -67,11 +84,13 @@ export const SLIDE_LAYOUTS = [
   "stat", // angka besar (+ ring chart bila persen)
   "quote", // kutipan (+ foto bulat opsional)
   "cta", // penutup / ajakan
+  "promo_hero", // iklan promo: foto orang/produk besar di latar warna + angka promo dalam starburst + tombol
+  "promo_offer", // iklan promo tanpa foto: angka diskon raksasa, benefit, tombol
 ] as const;
 export type SlideLayout = (typeof SLIDE_LAYOUTS)[number];
 
 /** Layout yang butuh foto. Tanpa foto, renderer otomatis memakai varian grafis. */
-export const PHOTO_LAYOUTS: SlideLayout[] = ["cover_photo", "cover_split", "point_photo"];
+export const PHOTO_LAYOUTS: SlideLayout[] = ["cover_photo", "cover_split", "point_photo", "promo_hero"];
 
 export interface SlideImage {
   url: string;
@@ -309,6 +328,7 @@ export interface PostReference {
   imageStyle: string; // art direction foto/ilustrasi
   colors: Brand["colors"] | null; // null = tetap pakai warna brand
   headingFont: FontKey | null;
+  bodyFont?: FontKey | null;
   template: TemplateKey | null;
   layouts: SlideLayout[]; // layout paling mirip untuk tiap gambar referensi
 }
@@ -320,6 +340,7 @@ export function styledBrand(brand: Brand, ref: PostReference | null | undefined)
     ...brand,
     colors: ref.colors ? { ...brand.colors, ...ref.colors } : brand.colors,
     headingFont: ref.headingFont ?? brand.headingFont,
+    bodyFont: ref.bodyFont ?? brand.bodyFont,
     imageStyle: ref.imageStyle || brand.imageStyle,
   };
 }

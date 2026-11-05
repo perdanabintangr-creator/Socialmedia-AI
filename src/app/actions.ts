@@ -11,7 +11,7 @@ import { approveAndPublish, buildPostFromIdea, createIdeas, parseWib, publishTar
 import { readMedia } from "@/lib/media";
 import { randomUUID } from "crypto";
 import { getPublishStatus } from "@/lib/publisher";
-import { SLIDE_LAYOUTS, normalizeSlide, type Brand, type FontKey, type ImageSourceMode, type Platform, type Post, type Slide, type SlideLayout, type TemplateKey } from "@/lib/types";
+import { BODY_FONT_KEYS, FONT_KEYS, SLIDE_LAYOUTS, TEMPLATE_KEYS, normalizeSlide, type Brand, type FontKey, type ImageSourceMode, type Platform, type Post, type Slide, type SlideLayout, type TemplateKey } from "@/lib/types";
 
 export type ActionState = { error?: string; ok?: string } | undefined;
 
@@ -25,8 +25,8 @@ const lines = (s: string) =>
 
 // ------------------------------------------------------------------ brand
 
-const FONTS: FontKey[] = ["plus-jakarta-sans", "poppins", "montserrat", "inter", "playfair-display"];
-const TEMPLATES: TemplateKey[] = ["mix", "bold", "clean"];
+const FONTS: FontKey[] = FONT_KEYS;
+const TEMPLATES: readonly TemplateKey[] = TEMPLATE_KEYS;
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
 async function uploadImage(w: WorkspaceRepo, file: File, folder: string) {
@@ -65,7 +65,7 @@ export async function saveBrandAction(_: ActionState, fd: FormData): Promise<Act
       styleNotes: str(fd, "styleNotes"),
       postingTime: /^\d{2}:\d{2}$/.test(str(fd, "postingTime")) ? str(fd, "postingTime") : current.postingTime,
       headingFont: FONTS.includes(headingFont) ? headingFont : current.headingFont,
-      bodyFont: FONTS.includes(bodyFont) ? bodyFont : current.bodyFont,
+      bodyFont: BODY_FONT_KEYS.includes(bodyFont) ? bodyFont : current.bodyFont,
       defaultTemplate: TEMPLATES.includes(template) ? template : current.defaultTemplate,
       colors: {
         primary: color("primary"),

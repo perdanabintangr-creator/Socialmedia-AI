@@ -49,6 +49,14 @@ disimpan di storage workspace (`src/lib/reference.ts`).
   Rupa mengikuti urutan layout, art director membandingkan hasil render dengan referensi.
 - Pilihan **Warna referensi / Warna brand**: palet referensi dipakai saat render (`styledBrand`), logo tetap milik brand.
 - Bisa juga untuk revisi: tempel referensi baru di chat saat konten menunggu ACC.
+- Gambar referensi ikut dikirim ke generator gambar (Gemini `inlineData` / OpenAI `images/edits`)
+  sebagai contoh gaya foto — wajah, logo, dan teks tidak disalin.
+
+### Mode promo & font
+- Layout `promo_hero` (subjek besar di latar warna + angka promo dalam starburst + tombol) dan
+  `promo_offer` (angka diskon raksasa, benefit, tombol); template `promo` (warna kontras, starburst, gelombang).
+- 13 font (`FONT_OPTIONS` di `src/lib/types.ts`), termasuk font poster Anton, Bebas Neue, Archivo Black
+  (judul otomatis kapital), Lilita One, DM Serif Display. Analisis referensi memilih font judul & isi.
 
 ## Performa (baca metrik dari link)
 

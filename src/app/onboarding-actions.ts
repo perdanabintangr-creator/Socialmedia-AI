@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import sharp from "sharp";
 import { workspaceOrThrow } from "@/lib/session";
-import type { TemplateKey } from "@/lib/types";
+import { TEMPLATE_KEYS, type TemplateKey } from "@/lib/types";
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 const toHex = (r: number, g: number, b: number) => "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("");
@@ -96,7 +96,7 @@ export async function completeOnboardingAction(input: OnboardingInput): Promise<
     pillars: pillars.length ? pillars : brand.pillars,
     logoUrl: input.logoUrl ?? brand.logoUrl,
     colors: { ...brand.colors, primary, accent, secondary: primary },
-    defaultTemplate: (["mix", "bold", "clean"] as const).includes(input.template) ? input.template : brand.defaultTemplate,
+    defaultTemplate: (TEMPLATE_KEYS as readonly string[]).includes(input.template) ? input.template : brand.defaultTemplate,
     socialRequested: input.socialRequested,
     onboarded: true,
   });

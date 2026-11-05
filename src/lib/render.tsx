@@ -5,13 +5,16 @@ import { ImageResponse } from "next/og";
 import sharp from "sharp";
 import { CANVAS, IMAGE_BOX, SlideView, effectiveLayout, type Img, type LogoImg } from "./templates";
 import { readMedia } from "./media";
-import { styledBrand, type Brand, type FontKey, type Post, type PostReference, type Slide } from "./types";
+import { FONT_OPTIONS, styledBrand, type Brand, type FontKey, type Post, type PostReference, type Slide } from "./types";
 
 const FONT_DIR = path.join(process.cwd(), "assets", "fonts");
 const fontCache = new Map<string, Buffer>();
 
-async function font(key: FontKey, weight: 500 | 700 | 800) {
-  const file = `${key}-latin-${weight}-normal.woff`;
+/** Ambil file font dengan ketebalan terdekat yang tersedia (font display hanya punya satu ketebalan). */
+async function font(key: FontKey, wanted: 500 | 700 | 800) {
+  const opt = FONT_OPTIONS[key] ?? FONT_OPTIONS["plus-jakarta-sans"];
+  const weight = [...opt.weights].sort((a, b) => Math.abs(a - wanted) - Math.abs(b - wanted))[0];
+  const file = `${opt === FONT_OPTIONS[key] ? key : "plus-jakarta-sans"}-latin-${weight}-normal.woff`;
   let data = fontCache.get(file);
   if (!data) {
     data = await fs.readFile(path.join(FONT_DIR, file));
