@@ -4,6 +4,7 @@ import { HomePrompt } from "@/components/home-prompt";
 import { publishTarget } from "@/lib/pipeline";
 import { requireWorkspace } from "@/lib/session";
 import { compact, engagementOf } from "@/lib/insights";
+import { quotaOf } from "@/lib/plans";
 import type { Post, TrackedLink } from "@/lib/types";
 
 export const metadata = { title: "Beranda" };
@@ -29,7 +30,7 @@ const ago = (iso: string) => {
 
 export default async function HomePage() {
   const { user, w } = await requireWorkspace();
-  const [brand, chats, posts, target, links] = await Promise.all([w.getBrand(), w.listChats(6), w.listPosts(), publishTarget(w.id), w.listLinks()]);
+  const [brand, chats, posts, target, links, quota] = await Promise.all([w.getBrand(), w.listChats(6), w.listPosts(), publishTarget(w.id), w.listLinks(), quotaOf(w)]);
 
   const steps = [
     {
@@ -61,6 +62,15 @@ export default async function HomePage() {
           {greeting()}, {user.name.split(" ")[0]}
         </h1>
         <p className="mt-2 text-[15px] text-slate-500">Mau bikin konten apa untuk {brand.name} hari ini?</p>
+        {Number.isFinite(quota.plan.quota) && (
+          <Link
+            href="/pengguna#paket"
+            className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ring-1 ${quota.ok ? "bg-white text-slate-600 ring-line hover:ring-brand-200" : "bg-red-50 text-red-700 ring-red-200"}`}
+          >
+            Paket {quota.plan.label} · sisa {quota.left} dari {quota.plan.quota} konten{quota.plan.per === "total" ? " coba gratis" : " bulan ini"}
+            {quota.plan.quality === "basic" && <span className="text-brand-600">· upgrade untuk foto AI ›</span>}
+          </Link>
+        )}
       </div>
 
       <div id="prompt" className="mt-10 scroll-mt-24">

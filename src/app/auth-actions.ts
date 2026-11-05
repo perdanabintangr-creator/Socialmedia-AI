@@ -1,5 +1,7 @@
 "use server";
 
+import { PLAN_KEYS, type PlanKey } from "@/lib/types";
+
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { accounts, db } from "@/lib/db";
@@ -155,6 +157,20 @@ export async function setPublishKeyAction(workspaceId: string, _: ActionState, f
     await accounts().setWorkspacePublishKey(workspaceId, key || null);
     revalidatePath("/pengguna");
     return { ok: key ? "Akun sosmed klien terhubung" : "Koneksi sosmed dilepas" };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Gagal" };
+  }
+}
+
+/** Admin: ubah paket langganan workspace klien. */
+export async function setWorkspacePlanAction(workspaceId: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    await requireAdmin();
+    const plan = str(fd, "plan") as PlanKey;
+    if (!(PLAN_KEYS as readonly string[]).includes(plan)) return { error: "Paket tidak dikenal" };
+    await accounts().setWorkspacePlan(workspaceId, plan);
+    revalidatePath("/pengguna");
+    return { ok: "Paket diperbarui" };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Gagal" };
   }

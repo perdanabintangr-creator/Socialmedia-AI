@@ -5,7 +5,10 @@ import { publishTarget } from "@/lib/pipeline";
 import { ActionForm, Submit } from "@/components/forms";
 import { Card, Field, PageTitle, formatWIB, inputCls } from "@/components/ui";
 import { requestSocialAction } from "@/app/onboarding-actions";
-import { changePasswordAction, deleteUserAction, setPublishKeyAction, setUserRoleAction, setUserStatusAction } from "@/app/auth-actions";
+import { changePasswordAction, deleteUserAction, setPublishKeyAction, setUserRoleAction, setUserStatusAction, setWorkspacePlanAction } from "@/app/auth-actions";
+import { PLAN_RULES, quotaOf } from "@/lib/plans";
+import { PLANS } from "@/lib/pricing";
+import { PLAN_KEYS, type PlanKey } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -17,18 +20,66 @@ const STATUS = {
 
 export default async function UsersPage() {
   const { user: me, w } = await requireWorkspace();
-  const [brand, target] = await Promise.all([w.getBrand(), publishTarget(w.id)]);
+  const [brand, target, quota] = await Promise.all([w.getBrand(), publishTarget(w.id), quotaOf(w)]);
+  const support = process.env.SUPPORT_EMAIL;
   const isAdmin = me.role === "admin";
   const [allUsers, workspaces] = isAdmin ? await Promise.all([accounts().listUsers(), accounts().listWorkspaces()]) : [[], []];
   const users = allUsers.map(publicUser);
   const wsName = new Map(workspaces.map((x) => [x.id, x.name]));
   const wsKey = new Map(workspaces.map((x) => [x.id, x.publish_key]));
+  const wsPlan = new Map(workspaces.map((x) => [x.id, (x.plan ?? "free") as PlanKey]));
   if (isAdmin) await requireAdmin();
   const pending = users.filter((u) => u.status === "pending");
 
   return (
     <div className="space-y-6">
       <PageTitle title={isAdmin ? "Pengguna & klien" : "Akun"} subtitle={isAdmin ? "Setujui klien baru dan kelola akses. Isi konten tiap workspace bersifat pribadi milik klien." : "Pengaturan akun kamu."} />
+
+      <Card>
+        <div id="paket" className="scroll-mt-24" />
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">Paket kamu: {quota.plan.label}</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              {quota.plan.quality === "full"
+                ? "Kualitas penuh: foto AI wajib di tiap konten, logo, paham brand, dan dicek ulang AI art director."
+                : "Kualitas dasar: desain grafis & tipografi tanpa foto AI."}
+            </p>
+          </div>
+          {Number.isFinite(quota.plan.quota) && (
+            <span className={`rounded-full px-3 py-1 text-sm font-semibold ${quota.ok ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" : "bg-red-50 text-red-700 ring-1 ring-red-200"}`}>
+              {quota.used} / {quota.plan.quota} konten {quota.plan.per === "total" ? "(coba gratis)" : "bulan ini"}
+            </span>
+          )}
+        </div>
+        {Number.isFinite(quota.plan.quota) && (
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+            <div className="bg-social h-full rounded-full" style={{ width: `${Math.min(100, (quota.used / quota.plan.quota) * 100)}%` }} />
+          </div>
+        )}
+        {!isAdmin && (
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {PLANS.map((p) => (
+              <div key={p.name} className={`rounded-2xl p-4 ring-1 ${p.name === quota.plan.label ? "bg-brand-50 ring-brand-300" : "ring-line"}`}>
+                <div className="font-bold">{p.name}</div>
+                <div className="mt-0.5 text-lg font-extrabold">
+                  {p.price}
+                  <span className="text-xs font-semibold text-slate-500">{p.period}</span>
+                </div>
+                <div className="mt-1 text-xs text-slate-500">{p.features[0]}</div>
+                {p.name !== quota.plan.label && support && (
+                  <a
+                    href={`mailto:${support}?subject=${encodeURIComponent(`Upgrade ke paket ${p.name}`)}&body=${encodeURIComponent(`Halo, saya ingin pindah ke paket ${p.name} untuk brand ${brand.name}.`)}`}
+                    className="mt-3 inline-flex rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white hover:bg-ink/85"
+                  >
+                    Pilih {p.name}
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       <Card className="scroll-mt-24" >
         <div id="sosmed" className="scroll-mt-24" />
@@ -103,6 +154,18 @@ export default async function UsersPage() {
                   </div>
                   <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${cls}`}>{label}</span>
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">{u.role === "admin" ? "Admin" : "Anggota"}</span>
+                  {u.workspace_id && u.role !== "admin" && (
+                    <ActionForm action={setWorkspacePlanAction.bind(null, u.workspace_id)} className="flex items-center gap-1.5">
+                      <select name="plan" defaultValue={wsPlan.get(u.workspace_id) ?? "free"} aria-label={`Paket ${u.name}`} className={`${inputCls} w-auto py-1 text-xs`}>
+                        {PLAN_KEYS.map((k) => (
+                          <option key={k} value={k}>
+                            {PLAN_RULES[k].label}
+                          </option>
+                        ))}
+                      </select>
+                      <Submit variant="ghost" pendingText="…" className="px-2.5 py-1 text-xs">Simpan paket</Submit>
+                    </ActionForm>
+                  )}
                   {u.workspace_id && u.role !== "admin" && (
                     <ActionForm action={setPublishKeyAction.bind(null, u.workspace_id)} className="flex w-full items-center gap-1.5 sm:w-auto">
                       <input

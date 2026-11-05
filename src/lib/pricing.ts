@@ -12,21 +12,32 @@ export interface Plan {
   cta: string;
 }
 
+/** Coba gratis: 3 konten kualitas dasar (lihat lib/plans.ts). Otak AI sama di semua paket. */
+export const FREE_TRIAL = "Coba gratis 3 konten, tanpa kartu kredit";
+
 export const PLANS: Plan[] = [
+  {
+    name: "Newbie",
+    price: "Rp49rb",
+    period: "/bulan",
+    tagline: "Desain grafis rapi untuk mulai rutin posting.",
+    features: ["12 konten per bulan", "Desain grafis & tipografi (tanpa foto AI)", "Carousel & single post", "Instagram & TikTok", "Revisi lewat chat"],
+    cta: "Mulai Newbie",
+  },
   {
     name: "Starter",
     price: "Rp149rb",
     period: "/bulan",
-    tagline: "Untuk usaha yang baru mulai rutin posting.",
-    features: ["12 konten per bulan", "Carousel & single post", "Instagram & TikTok", "1 brand", "Revisi lewat chat"],
+    tagline: "Kualitas visual penuh untuk usaha yang mulai serius.",
+    features: ["12 konten per bulan", "Foto AI di setiap konten + logo brand", "AI paham brand dari website kamu", "Dicek ulang AI art director", "Meniru referensi desain"],
     cta: "Mulai Starter",
   },
   {
     name: "Growth",
     price: "Rp349rb",
     period: "/bulan",
-    tagline: "Untuk brand yang ingin tampil konsisten setiap hari.",
-    features: ["40 konten per bulan", "Foto & ilustrasi AI", "Review otomatis oleh AI art director", "Kalender & jadwal otomatis", "Prioritas antrean"],
+    tagline: "Kualitas sama dengan Starter, untuk posting tiap hari.",
+    features: ["40 konten per bulan", "Semua kualitas visual Starter", "Mode promo & iklan", "Kalender & jadwal otomatis", "Pantau performa"],
     highlight: true,
     cta: "Pilih Growth",
   },
@@ -34,8 +45,8 @@ export const PLANS: Plan[] = [
     name: "Agency",
     price: "Rp990rb",
     period: "/bulan",
-    tagline: "Untuk agency & pemilik beberapa brand.",
-    features: ["150 konten per bulan", "Hingga 5 brand", "Semua fitur Growth", "Undang anggota tim", "Bantuan onboarding"],
+    tagline: "Kualitas sama, kuota besar untuk agency.",
+    features: ["150 konten per bulan", "Semua kualitas visual Starter", "Untuk banyak klien / brand", "Bantuan onboarding", "Prioritas dukungan"],
     cta: "Hubungi kami",
   },
 ];

@@ -19,7 +19,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { Logo } from "@/components/logo";
-import { PLANS } from "@/lib/pricing";
+import { FREE_TRIAL, PLANS } from "@/lib/pricing";
 import { HeroStage } from "@/components/landing/hero-stage";
 import { ProcessDemo } from "@/components/landing/process-demo";
 import { currentUser } from "@/lib/session";
@@ -340,7 +340,10 @@ export default async function LandingPage() {
       <section id="harga" className="scroll-mt-24 px-5 py-24">
         <div className="mx-auto max-w-6xl">
           <SectionHead eyebrow="Harga" title="Lebih hemat dari satu orang admin sosmed" sub="Pilih paket sesuai kebutuhan. Mulai coba gratis tanpa kartu kredit." />
-          <div className="mt-12 grid gap-5 lg:grid-cols-3">
+          <p className="mx-auto mt-6 w-fit rounded-full bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200">
+            {FREE_TRIAL} · otak AI sama di semua paket, beda di kualitas visual & jumlah konten
+          </p>
+          <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {PLANS.map((p) => (
               <div key={p.name} className={`relative flex flex-col rounded-[28px] p-7 ${p.highlight ? "bg-social text-white shadow-lift lg:-translate-y-3" : "bg-white shadow-soft ring-1 ring-line"}`}>
                 {p.highlight && <span className="absolute -top-3 left-7 rounded-full bg-ink px-3 py-1 text-xs font-bold text-white">Paling populer</span>}

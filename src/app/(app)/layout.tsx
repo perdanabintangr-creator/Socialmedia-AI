@@ -4,6 +4,7 @@ import { LogOut } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { SideNav, TabBar } from "@/components/app-nav";
 import { requireWorkspace } from "@/lib/session";
+import { planOf } from "@/lib/plans";
 import { logoutAction } from "@/app/auth-actions";
 
 export default async function AppLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -17,7 +18,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
     "/posts": posts.filter((p) => p.status === "review" || p.status === "failed").length,
   };
   const initials = (brand.name || user.name).split(/\s+/).map((x) => x[0]).slice(0, 2).join("").toUpperCase();
-  const plan = user.role === "admin" ? "Admin" : "Gratis";
+  const plan = (await planOf(w.id)).label;
 
   return (
     <div className="min-h-dvh lg:grid lg:grid-cols-[272px_minmax(0,1fr)]">

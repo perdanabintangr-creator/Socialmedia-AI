@@ -4,7 +4,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { config } from "./config";
-import { DEFAULT_BRAND, type Brand, type Chat, type ChatMessage, type Idea, type Job, type Post, type TrackedLink, type UsageLog, type User, type Workspace } from "./types";
+import { DEFAULT_BRAND, type Brand, type Chat, type ChatMessage, type Idea, type Job, type Post, type PlanKey, type TrackedLink, type UsageLog, type User, type Workspace } from "./types";
 
 /**
  * Lapisan data. Dua mode:
@@ -83,6 +83,7 @@ export interface AccountRepo {
   setWorkspaceOwner(id: string, ownerId: string): Promise<void>;
   getWorkspace(id: string): Promise<Workspace | null>;
   setWorkspacePublishKey(id: string, key: string | null): Promise<void>;
+  setWorkspacePlan(id: string, plan: PlanKey): Promise<void>;
   listWorkspaces(): Promise<Workspace[]>;
   deleteWorkspace(id: string): Promise<void>;
   /** Link yang terakhir dicek sebelum `before` (untuk pembaruan terjadwal), lintas workspace. */
@@ -321,6 +322,9 @@ class SupabaseAccounts implements AccountRepo {
   }
   async setWorkspacePublishKey(id: string, key: string | null) {
     check(await sb().from("workspaces").update({ publish_key: key }).eq("id", id));
+  }
+  async setWorkspacePlan(id: string, plan: PlanKey) {
+    check(await sb().from("workspaces").update({ plan }).eq("id", id));
   }
   async listWorkspaces() {
     return check(await sb().from("workspaces").select("*").order("created_at", { ascending: true })) as Workspace[];
@@ -632,7 +636,7 @@ class LocalAccounts implements AccountRepo {
     });
   }
   async createWorkspace(name: string) {
-    const ws: Workspace = { id: randomUUID(), name, owner_id: null, publish_key: null, created_at: new Date().toISOString() };
+    const ws: Workspace = { id: randomUUID(), name, owner_id: null, publish_key: null, plan: "free", created_at: new Date().toISOString() };
     await mutateLocal((d) => {
       d.workspaces = [...(d.workspaces ?? []), ws];
     });
@@ -645,6 +649,11 @@ class LocalAccounts implements AccountRepo {
   }
   async getWorkspace(id: string) {
     return ((await readLocal()).workspaces ?? []).find((w) => w.id === id) ?? null;
+  }
+  async setWorkspacePlan(id: string, plan: PlanKey) {
+    await mutateLocal((d) => {
+      d.workspaces = (d.workspaces ?? []).map((w) => (w.id === id ? { ...w, plan } : w));
+    });
   }
   async setWorkspacePublishKey(id: string, key: string | null) {
     await mutateLocal((d) => {

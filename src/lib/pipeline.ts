@@ -4,6 +4,7 @@ import sharp from "sharp";
 import { accounts, type WorkspaceRepo } from "./db";
 import { generateIdeas, generatePost, reviewDesign, revisePost, type Draft, type RefContext } from "./ai";
 import { setMeterPost } from "./cost";
+import { brandForPlan, planOf, visualConcept, type PlanRule } from "./plans";
 import { referenceImageBlocks, referenceImageBuffers, referencePrompt } from "./reference";
 import { renderSlidePng, renderSlidesJpeg } from "./render";
 import { sourceImage } from "./images";
@@ -124,6 +125,47 @@ async function artDirector(
 const countPhotos = (slides: Slide[]) => slides.filter((s) => s.image).length;
 const firstHook = (slides: Slide[]) => slides[0]?.headline.replace(/\*/g, "") ?? "";
 
+const PHOTO_OF: Partial<Record<Slide["layout"], Slide["layout"]>> = {
+  cover_type: "cover_photo",
+  point_icon: "point_photo",
+  stat: "point_photo",
+  quote: "point_photo",
+  promo_offer: "promo_hero",
+};
+
+/**
+ * Paket kualitas penuh wajib punya minimal N visual. Bila naskah AI kurang foto,
+ * cover lalu slide isi diubah ke layout berfoto dengan konsep visual sesuai bisnis.
+ */
+export function ensureVisuals(draft: Draft, plan: PlanRule, brand: Brand, template: string): Draft {
+  if (plan.quality !== "full" || !plan.minVisuals) return draft;
+  let have = draft.slides.filter((d) => d.imageRequest || d.slide.image).length;
+  if (have >= plan.minVisuals) return draft;
+  const concept = visualConcept(brand);
+  const order = draft.slides.map((_, i) => i).filter((i) => i !== draft.slides.length - 1 || draft.slides.length === 1);
+  const slides = [...draft.slides];
+  for (const i of order) {
+    if (have >= plan.minVisuals) break;
+    const d = slides[i];
+    if (d.imageRequest || d.slide.image) continue;
+    const to = i === 0 && template === "promo" ? "promo_hero" : PHOTO_OF[d.slide.layout];
+    if (!to && d.slide.layout !== "cover_photo" && d.slide.layout !== "point_photo" && d.slide.layout !== "cover_split") continue;
+    const headline = d.slide.headline.replace(/\*/g, "");
+    const asset = brand.assets[have % Math.max(1, brand.assets.length)];
+    slides[i] = {
+      slide: { ...d.slide, layout: to ?? d.slide.layout },
+      imageRequest: {
+        assetId: asset?.id ?? "",
+        query: brand.industry || brand.name,
+        prompt: `${concept} The scene visually supports this message: "${headline}". For brand ${brand.name}: ${brand.description}`.slice(0, 900),
+        layout: to ?? d.slide.layout,
+      },
+    };
+    have++;
+  }
+  return { ...draft, slides };
+}
+
 /** Ide yang sudah di-ACC → konten lengkap siap review. */
 export async function buildPostFromIdea(w: WorkspaceRepo, ideaId: string, progress: Progress = silent): Promise<Post> {
   const idea = await w.getIdea(ideaId);
@@ -134,19 +176,20 @@ export async function buildPostFromIdea(w: WorkspaceRepo, ideaId: string, progre
   }
   await w.updateIdea(ideaId, { status: "approved" });
   const ref = idea.reference ?? null;
-  const brand = styledBrand(await w.getBrand(), ref);
+  const plan = await planOf(w.id);
+  const brand = brandForPlan(styledBrand(await w.getBrand(), ref), plan);
   const ctx = await refContext(ref);
   const refImgs = await referenceImageBuffers(ref);
   const template = ref?.template ?? brand.defaultTemplate;
 
-  const draft = await generatePost(brand, idea, ctx);
+  const draft = ensureVisuals(await generatePost(brand, idea, ctx), plan, brand, template);
   await progress(
     "kata",
     `Naskah ${draft.slides.length > 1 ? `${draft.slides.length} slide` : "single post"} + caption sudah jadi${ref ? " mengikuti gaya referensimu" : ""}. Hook-nya: “${firstHook(draft.slides.map((d) => d.slide))}”. Aku oper ke Rupa ya.`,
   );
 
   const key = randomUUID();
-  const slides = await materialize(w, brand, draft, key, refImgs);
+  const slides = await materialize(w, brand, draft, key, refImgs, Math.min(MAX_NEW_IMAGES, plan.maxVisuals));
   const photos = countPhotos(slides);
   await progress(
     "rupa",
@@ -184,10 +227,11 @@ export async function revisePostWith(
   if (!["review", "failed"].includes(post.status)) throw new Error("Konten ini sudah di-ACC, tidak bisa direvisi lagi");
   setMeterPost(post.id);
   const ref = newRef ?? post.reference ?? null;
-  const brand = styledBrand(await w.getBrand(), ref);
+  const plan = await planOf(w.id);
+  const brand = brandForPlan(styledBrand(await w.getBrand(), ref), plan);
   const draft = await revisePost(brand, post, instruction, await refContext(ref));
   await progress("kata", `Revisi naskah sudah kuterapkan${newRef ? " mengikuti referensi baru" : ""}. Rupa, tolong sesuaikan visualnya.`);
-  const slides = await materialize(w, brand, draft, `${post.id}-r${post.revision_count + 1}`, await referenceImageBuffers(ref));
+  const slides = await materialize(w, brand, draft, `${post.id}-r${post.revision_count + 1}`, await referenceImageBuffers(ref), Math.min(MAX_NEW_IMAGES, plan.maxVisuals));
   const patch = {
     title: draft.title,
     caption: draft.caption,

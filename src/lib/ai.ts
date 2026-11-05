@@ -4,6 +4,7 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { config } from "./config";
 import { recordAI } from "./cost";
+import { visualConcept } from "./plans";
 import { ICON_NAMES } from "./icons";
 import { SLIDE_LAYOUTS, TEMPLATE_KEYS, normalizeSlide, type Brand, type Idea, type Post, type PostFormat, type Slide } from "./types";
 import type { ImageRequest } from "./images";
@@ -99,6 +100,13 @@ Art direction foto: ${brand.imageStyle}
 
 # Foto milik brand (pakai via image.assetId bila relevan — foto asli selalu lebih baik dari stok)
 ${assets}
+
+# Visual
+${
+  brand.imageSource === "none" || (brand.imageSource === "brand" && !brand.assets.length)
+    ? "Konten ini TANPA foto (paket dasar): kosongkan image.query & image.prompt, pakai layout grafis (cover_type, point_icon, list, steps, compare, stat, quote, cta, promo_offer). Buat tetap menarik lewat tipografi, ikon, angka, dan struktur."
+    : `Visual yang cocok untuk jenis bisnis ini: ${visualConcept(brand)}`
+}
 
 ${LAYOUT_GUIDE}
 

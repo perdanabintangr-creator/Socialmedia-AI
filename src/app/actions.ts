@@ -8,6 +8,8 @@ import { workspaceOrThrow } from "@/lib/session";
 import { analyzeExamples } from "@/lib/ai";
 import { sourceImage } from "@/lib/images";
 import { metered } from "@/lib/cost";
+import { brandGaps, quotaOf } from "@/lib/plans";
+import { importBrandFromWebsite } from "@/lib/brand-import";
 import { approveAndPublish, buildPostFromIdea, createIdeas, parseWib, publishTarget, revisePostWith } from "@/lib/pipeline";
 import { readMedia } from "@/lib/media";
 import { randomUUID } from "crypto";
@@ -115,6 +117,25 @@ export async function saveBrandAction(_: ActionState, fd: FormData): Promise<Act
   }
 }
 
+/** Brand Kit: isi otomatis dari website (logo, deskripsi, audiens, gaya bahasa, pilar). */
+export async function importWebsiteAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const { w } = await workspaceOrThrow();
+    const url = str(fd, "url");
+    if (!url) return { error: "Tempel alamat website dulu, mis. brandkamu.com" };
+    const brand = await w.getBrand();
+    const { brand: next, filled } = await metered(w, "other", () => importBrandFromWebsite(w, brand, url));
+    await w.saveBrand(next);
+    revalidatePath("/brand");
+    revalidatePath("/", "layout");
+    return filled.length
+      ? { ok: `Terisi dari website: ${filled.join(", ")}. Cek & rapikan di bawah bila perlu.` }
+      : { ok: "Website terbaca, tapi kolom Brand Kit kamu sudah terisi semua sehingga tidak ada yang diubah." };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
 export async function analyzeExamplesAction(): Promise<ActionState> {
   const { w } = await workspaceOrThrow();
   try {
@@ -157,6 +178,12 @@ export async function approveIdeaAction(id: string): Promise<ActionState> {
   const { w } = await workspaceOrThrow();
   let postId: string;
   try {
+    const q = await quotaOf(w);
+    if (!q.ok) return { error: q.message };
+    if (q.plan.quality === "full") {
+      const gaps = brandGaps(await w.getBrand());
+      if (gaps.length) return { error: `Lengkapi Brand Kit dulu: ${gaps.join(" & ")}.` };
+    }
     const post = await metered(w, "build_post", () => buildPostFromIdea(w, id));
     postId = post.id;
   } catch (e) {

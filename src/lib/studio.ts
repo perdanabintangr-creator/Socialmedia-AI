@@ -16,6 +16,7 @@ import {
 } from "./pipeline";
 import { analyzeReference, describeReference } from "./reference";
 import { metered } from "./cost";
+import { brandGaps, quotaOf } from "./plans";
 import type { Idea, Job, Post, PostFormat, PostReference } from "./types";
 
 /**
@@ -313,6 +314,7 @@ export async function handleMessage(w: WorkspaceRepo, text: string, attach?: Att
       await say(w, "kata", d.reply || "Siap, aku cari ide dulu.");
       return startTask(w, { type: "ideas", brief: d.brief || text, count: Math.min(10, Math.max(1, Math.round(d.count) || 5)), format, ref });
     case "create_post":
+      if (await gate(w)) return null;
       await say(w, ref ? "rupa" : "kata", ref ? "Referensinya sudah kuterima! Aku pelajari dulu gayanya ya." : d.reply || "Siap, kukerjakan.");
       return startTask(w, { type: "create_post", brief: d.brief || text, format, ref });
     case "revise": {
@@ -355,12 +357,34 @@ export async function handleMessage(w: WorkspaceRepo, text: string, attach?: Att
   }
 }
 
+/**
+ * Sebelum membuat konten: cek kuota paket & kelengkapan Brand Kit (paket kualitas penuh).
+ * Mengembalikan pesan penolakan (sudah dikirim ke chat) atau null bila boleh lanjut.
+ */
+async function gate(w: WorkspaceRepo): Promise<string | null> {
+  const q = await quotaOf(w);
+  if (!q.ok) {
+    await say(w, "siar", `${q.message} Lihat pilihan paket di menu Akun.`, { kind: "error" });
+    return q.message;
+  }
+  if (q.plan.quality === "full") {
+    const gaps = brandGaps(await w.getBrand());
+    if (gaps.length) {
+      const msg = `Sebelum kubuat desain kualitas penuh, aku perlu kenal brand kamu dulu: ${gaps.join(" & ")} masih kosong. Buka menu Brand Kit, tempel alamat website lalu klik "Isi otomatis dari website" (atau isi manual & upload logo), lalu kirim lagi permintaanmu ya.`;
+      await say(w, "rupa", msg, { kind: "error" });
+      return msg;
+    }
+  }
+  return null;
+}
+
 /** Klik tombol di kartu chat. */
 export async function approveIdeaFromChat(w: WorkspaceRepo, ideaId: string) {
   const idea = await w.getIdea(ideaId);
   if (!idea) throw new Error("Ide tidak ditemukan");
   if (await activeJob(w)) throw new Error("Tim masih mengerjakan tugas lain, tunggu sebentar ya");
   await userSays(w, `ACC ide: “${idea.title}”`);
+  if (await gate(w)) return null;
   await say(w, "kata", "Mantap, pilihan bagus! Aku tulis naskahnya sekarang.");
   return startTask(w, { type: "build_from_idea", ideaId });
 }

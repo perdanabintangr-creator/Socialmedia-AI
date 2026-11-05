@@ -277,6 +277,7 @@ export interface Workspace {
   name: string;
   owner_id: string | null;
   publish_key: string | null; // Ayrshare Profile-Key: akun sosmed milik klien ini
+  plan: PlanKey; // paket langganan (default "free": coba 3 konten)
   created_at: string;
 }
 
@@ -361,3 +362,6 @@ export interface UsageLog {
   detail: string | null;
   created_at: string;
 }
+
+export const PLAN_KEYS = ["free", "newbie", "starter", "growth", "agency"] as const;
+export type PlanKey = (typeof PLAN_KEYS)[number];

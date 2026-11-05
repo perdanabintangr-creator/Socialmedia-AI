@@ -3,7 +3,7 @@ import Link from "next/link";
 import { config } from "@/lib/config";
 import { ActionForm, Submit } from "@/components/forms";
 import { Card, Field, PageTitle, inputCls } from "@/components/ui";
-import { analyzeExamplesAction, saveBrandAction } from "@/app/actions";
+import { analyzeExamplesAction, importWebsiteAction, saveBrandAction } from "@/app/actions";
 import { FONT_KEYS, FONT_OPTIONS, TEMPLATE_KEYS, type Brand, type FontKey } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -56,6 +56,19 @@ export default async function BrandPage({ searchParams }: { searchParams: Promis
             </a>
           ))}
         </div>
+      </Card>
+
+      <Card className="bg-gradient-to-br from-brand-50 to-white ring-brand-100">
+        <h2 className="font-semibold">Isi otomatis dari website</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Tempel alamat website brand kamu. Tim AI membaca halamannya lalu mengisi logo, deskripsi, audiens, gaya bahasa, dan pilar konten yang masih kosong.
+        </p>
+        <ActionForm action={importWebsiteAction} className="mt-4">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input name="url" defaultValue={brand.website} placeholder="brandkamu.com" inputMode="url" className={`${inputCls} sm:flex-1`} />
+            <Submit variant="accent" pendingText="Membaca website…">Isi otomatis</Submit>
+          </div>
+        </ActionForm>
       </Card>
 
       <ActionForm action={saveBrandAction} className="space-y-6">
