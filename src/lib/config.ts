@@ -1,12 +1,17 @@
-const imageProvider =
-  (process.env.IMAGE_PROVIDER as "openai" | "gemini" | undefined) ??
-  (process.env.GEMINI_API_KEY ? "gemini" : process.env.OPENAI_API_KEY ? "openai" : undefined);
-
 export const config = {
   hasAI: Boolean(process.env.ANTHROPIC_API_KEY),
   hasSupabase: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
   hasPublisher: Boolean(process.env.AYRSHARE_API_KEY),
-  imageProvider: imageProvider && (imageProvider === "gemini" ? process.env.GEMINI_API_KEY : process.env.OPENAI_API_KEY) ? imageProvider : null,
+  /** Nama provider gambar yang aktif (rantai lengkap ada di lib/image-gen.ts). */
+  imageProvider:
+    [
+      process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_AI_TOKEN ? "Cloudflare" : "",
+      process.env.OPENROUTER_API_KEY?.trim() ? "OpenRouter" : "",
+      process.env.GEMINI_API_KEY?.trim() ? "Gemini" : "",
+      process.env.OPENAI_API_KEY?.trim() ? "OpenAI" : "",
+    ]
+      .filter(Boolean)
+      .join(" + ") || null,
   hasStock: Boolean(process.env.PEXELS_API_KEY),
   hasApify: Boolean(process.env.APIFY_TOKEN?.trim()),
   hasGoogle: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),

@@ -6,6 +6,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { config } from "./config";
 import { brandSystemPrompt, callStructured } from "./ai";
 import { readMedia } from "./media";
+import { supportsReferences } from "./image-gen";
 import type { WorkspaceRepo } from "./db";
 import { BODY_FONT_KEYS, FONT_KEYS, FONT_OPTIONS, SLIDE_LAYOUTS, TEMPLATE_KEYS, type Brand, type FontKey, type PostReference, type SlideLayout, type TemplateKey } from "./types";
 
@@ -250,7 +251,7 @@ export function describeReference(ref: PostReference): string {
 
 /** Gambar referensi sebagai JPEG kecil untuk generator gambar (maks 3, hemat biaya & ukuran request). */
 export async function referenceImageBuffers(ref: PostReference | null): Promise<Buffer[]> {
-  if (!ref || !config.imageProvider) return [];
+  if (!ref || !supportsReferences()) return [];
   const out: Buffer[] = [];
   for (const url of ref.urls.slice(0, 3)) {
     try {

@@ -52,6 +52,12 @@ disimpan di storage workspace (`src/lib/reference.ts`).
 - Gambar referensi ikut dikirim ke generator gambar (Gemini `inlineData` / OpenAI `images/edits`)
   sebagai contoh gaya foto — wajah, logo, dan teks tidak disalin.
 
+### Pembuat gambar (`src/lib/image-gen.ts`)
+Rantai provider, yang pertama berhasil dipakai. Gambar baru: Cloudflare Workers AI (gratis, kuota harian) →
+OpenRouter model hemat (Muse ±$0,01) → OpenRouter Gemini Flash Image → Gemini langsung → OpenAI.
+Gambar dengan referensi: OpenRouter Gemini Flash Image → Gemini langsung → OpenAI edits.
+Admin bisa menguji semua provider di `/pengguna/cek-gambar`.
+
 ### Mode promo & font
 - Layout `promo_hero` (subjek besar di latar warna + angka promo dalam starburst + tombol) dan
   `promo_offer` (angka diskon raksasa, benefit, tombol); template `promo` (warna kontras, starburst, gelombang).

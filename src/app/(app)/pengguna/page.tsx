@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { accounts } from "@/lib/db";
 import { publicUser, requireAdmin, requireWorkspace } from "@/lib/session";
 import { publishTarget } from "@/lib/pipeline";
@@ -62,6 +63,13 @@ export default async function UsersPage() {
           <Submit variant="ghost" pendingText="Menyimpan…">Ganti password</Submit>
         </ActionForm>
       </Card>
+
+      {isAdmin && (
+        <Link href="/pengguna/cek-gambar" className="flex items-center justify-between rounded-2xl bg-white px-5 py-4 text-sm font-semibold shadow-soft ring-1 ring-line hover:ring-brand-200">
+          Cek pembuat gambar (Gemini / OpenRouter / Cloudflare)
+          <span className="text-slate-400">›</span>
+        </Link>
+      )}
 
       {isAdmin && (
         <Card className="p-0">
