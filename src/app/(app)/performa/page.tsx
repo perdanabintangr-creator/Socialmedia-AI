@@ -118,7 +118,8 @@ export default async function PerformaPage() {
         {!config.hasApify && (
           <p className="mt-3 flex items-start gap-2 text-xs text-slate-500">
             <Sparkles size={14} className="mt-px shrink-0 text-brand-500" />
-            TikTok langsung terbaca. Pembacaan Instagram sedang disiapkan; link Instagram tetap bisa disimpan dan akan terbaca otomatis.
+            Postingan TikTok biasanya langsung terbaca; bila platform sedang membatasi, kami coba lagi otomatis. Pembacaan Instagram sedang disiapkan;
+            link Instagram tetap bisa disimpan dan akan terbaca otomatis.
             {user.role === "admin" && <span className="font-semibold text-amber-700"> (Admin: isi APIFY_TOKEN di Vercel untuk mengaktifkan.)</span>}
           </p>
         )}

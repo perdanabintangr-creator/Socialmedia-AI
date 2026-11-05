@@ -48,8 +48,9 @@ export function parseLink(raw: string): ParsedLink | null {
 
   if (host === "tiktok.com") {
     const user = parts[0]?.startsWith("@") ? parts[0].slice(1) : null;
-    if (user && (parts[1] === "video" || parts[1] === "photo") && /^\d+$/.test(parts[2] ?? "")) {
-      return { platform: "tiktok", kind: "post", url: `https://www.tiktok.com/@${user}/${parts[1]}/${parts[2]}`, handle: user };
+    // Link pendek kadang terbuka sebagai /@/video/<id> (tanpa nama akun): tetap sah.
+    if (user !== null && (parts[1] === "video" || parts[1] === "photo") && /^\d+$/.test(parts[2] ?? "")) {
+      return { platform: "tiktok", kind: "post", url: `https://www.tiktok.com/@${user}/${parts[1]}/${parts[2]}`, handle: user || null };
     }
     if (user && parts.length === 1) return { platform: "tiktok", kind: "profile", url: `https://www.tiktok.com/@${user}`, handle: user };
     return null;
