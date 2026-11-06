@@ -248,7 +248,7 @@ async function runTask(w: WorkspaceRepo, job: Job, task: Task) {
 }
 
 async function deliverPost(w: WorkspaceRepo, post: Post, revised = false) {
-  const intro = revised ? "Revisi sudah masuk. Cek lagi ya." : `Desain ${post.slides.length > 1 ? `${post.slides.length} slide` : ""} siap!`;
+  const intro = revised ? "Revisi sudah masuk. Cek lagi ya." : post.slides.length > 1 ? `Desain ${post.slides.length} slide siap!` : "Desainnya siap!";
   const notes = post.design_notes ? `\nCatatan dariku: ${post.design_notes}` : "";
   await say(w, "rupa", `${intro} Kalau sudah oke tinggal ACC, atau ketik revisinya di sini.${notes}`, { kind: "post", refs: [post.id] });
 }

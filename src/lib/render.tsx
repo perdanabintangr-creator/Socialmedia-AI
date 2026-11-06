@@ -62,7 +62,15 @@ function loadLogo(url: string | null, big = 0): Promise<LogoImg | null> {
       const src = big ? await sharp(await readMedia(url)).trim().toBuffer().catch(async () => readMedia(url)) : await readMedia(url);
       const png = await sharp(src).resize({ height: big || 144, width: big || undefined, fit: "inside" }).png().toBuffer();
       const meta = await sharp(png).metadata();
-      if (big) return { src: `data:image/png;base64,${png.toString("base64")}`, width: meta.width ?? big, height: meta.height ?? big };
+      if (big) {
+        // Logo "ubin" (sudut tidak transparan & hampir persegi) tampil langsung tanpa ubin putih.
+        const { data, info } = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+        const at = (x: number, y: number) => data[(y * info.width + x) * info.channels + 3];
+        const inset = Math.round(info.width * 0.12);
+        const edgesOpaque = [at(inset, Math.round(info.height / 2)), at(info.width - inset, Math.round(info.height / 2)), at(Math.round(info.width / 2), inset), at(Math.round(info.width / 2), info.height - inset)].every((a) => a > 200);
+        const square = Math.abs(info.width - info.height) / Math.max(info.width, info.height) < 0.12;
+        return { src: `data:image/png;base64,${png.toString("base64")}`, width: meta.width ?? big, height: meta.height ?? big, solid: edgesOpaque && square };
+      }
       const height = 68;
       const width = Math.round(((meta.width ?? 144) / (meta.height ?? 144)) * height);
       return { src: `data:image/png;base64,${png.toString("base64")}`, width: Math.min(width, 400), height };

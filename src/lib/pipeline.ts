@@ -252,7 +252,7 @@ export async function buildPostFromIdea(w: WorkspaceRepo, ideaId: string, progre
   const draft = teaser ? teaserize(raw) : ensureVisuals(raw, plan, brand, template);
   await progress(
     "kata",
-    `Naskah ${draft.slides.length > 1 ? `${draft.slides.length} slide` : "single post"} + caption sudah jadi${ref ? " mengikuti gaya referensimu" : ""}. Hook-nya: “${firstHook(draft.slides.map((d) => d.slide))}”. Aku oper ke Rupa ya.`,
+    `Naskah ${draft.slides.length > 1 ? `${draft.slides.length} slide` : "single post"} + caption sudah jadi${ref?.urls.length ? " mengikuti gaya referensimu" : ref?.style ? " dengan arah visual pilihanmu" : ""}. Hook-nya: “${firstHook(draft.slides.map((d) => d.slide))}”. Aku oper ke Rupa ya.`,
   );
 
   const key = randomUUID();
@@ -260,7 +260,7 @@ export async function buildPostFromIdea(w: WorkspaceRepo, ideaId: string, progre
   const photos = countPhotos(slides);
   await progress(
     "rupa",
-    `Layout & visual sudah tersusun${photos ? ` (${photos} foto)` : ""}${ref ? ", warna & gaya kusamakan dengan referensi" : ""}.${brand.autoReview && config.hasAI ? " Aku cek ulang hasil rendernya dulu sebelum kukirim." : ""}`,
+    `Layout & visual sudah tersusun${photos ? ` (${photos} foto)` : ""}${ref?.urls.length ? ", warna & gaya kusamakan dengan referensi" : ""}.${brand.autoReview && !teaser ? " Aku cek ulang hasil rendernya dulu sebelum kukirim." : ""}`,
   );
 
   // Teaser logo: desainnya sudah pasti (logo + warna brand), tidak perlu putaran art director.

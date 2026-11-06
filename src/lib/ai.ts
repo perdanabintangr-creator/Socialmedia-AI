@@ -31,14 +31,14 @@ const IdeasSchema = z.object({ ideas: z.array(IdeaSchema) });
 
 const SlideOut = z.object({
   layout: z.enum(SLIDE_LAYOUTS),
-  kicker: z.string().describe("Label kecil / sticker, maks 4 kata. Boleh kosong"),
+  kicker: z.string().describe("Label kecil / sticker, maks 4 kata. Boleh kosong. Jangan mengulang nomor slide (nomor sudah tampil otomatis)"),
   headline: z.string().describe("Teks utama, maks ~10 kata. Bungkus 1-3 kata kunci dengan *bintang* untuk highlight"),
   body: z.string().describe("Teks pendukung maks ~25 kata. Untuk quote: nama/sumber kutipan"),
   stat: z.string().describe("stat: angka besar, mis. '73%'. promo_hero/promo_offer: angka promo, mis. '50%', '2+1', 'Rp10rb'. Selain itu kosong"),
   items: z.array(z.string()).describe("list/steps: 3-5 item pendek (maks 7 kata). compare: poin kolom kiri. Selain itu []"),
   itemsB: z.array(z.string()).describe("compare: poin kolom kanan. Selain itu []"),
   labelA: z.string().describe("compare: judul kolom kiri (mis. 'Mitos'). promo_*: label kecil di atas angka promo (mis. 'Cashback', 'Diskon'). Selain itu kosong"),
-  labelB: z.string().describe("compare: judul kolom kanan (mis. 'Fakta'). promo_*: teks tombol ajakan (mis. 'Pesan sekarang'). Selain itu kosong"),
+  labelB: z.string().describe("compare: judul kolom kanan (mis. 'Fakta'). promo_* & cta: teks tombol ajakan spesifik sesuai tujuan (mis. 'Pesan sekarang', 'Mampir hari ini', 'Save buat nanti'). editorial_cover/logo_reveal: teks tombol/tanggal kecil. Selain itu kosong"),
   icon: z.enum(ICON_NAMES).describe("Ikon yang paling mewakili isi slide (dipakai di point_icon)"),
   image: z.object({
     assetId: z.string().describe("id foto brand yang cocok, atau kosong"),

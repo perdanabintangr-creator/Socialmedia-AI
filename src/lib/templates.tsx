@@ -24,7 +24,7 @@ export const IMAGE_BOX: Partial<Record<SlideLayout, { w: number; h: number }>> =
 const STYLE_COVERS: SlideLayout[] = ["news_cover", "folk_cover", "editorial_cover", "creative_cover", "logo_reveal"];
 
 export type Img = { src: string; w: number; h: number };
-export type LogoImg = { src: string; width: number; height: number };
+export type LogoImg = { src: string; width: number; height: number; solid?: boolean };
 
 // ---------------------------------------------------------------- warna
 
@@ -730,7 +730,7 @@ function Cta({ t, s, img, brand }: P & { img: Img | null; brand: Brand }) {
         <Rich t={t} text={s.headline} size={fit(s.headline, 104, 62, 32)} />
         <Text text={s.body && s.body !== brand.handle ? s.body : ""} size={36} color={t.muted} mt={28} />
         <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 56, background: t.pillBg, color: t.pillFg, fontSize: 40, fontWeight: 800, padding: "24px 44px", borderRadius: 9999 }}>
-          {`Follow ${brand.handle}`}
+          {plain(s.labelB) || `Follow ${brand.handle}`}
         </div>
         <div style={{ display: "flex", gap: 44, marginTop: 64 }}>
           {[
@@ -944,7 +944,7 @@ function LogoReveal({ s, brand, logo }: { s: Slide; brand: Brand; logo: LogoImg 
   let lw = 0;
   let lh = 0;
   if (logo) {
-    const max = tile * 0.66;
+    const max = logo.solid ? tile : tile * 0.66;
     const ratio = logo.width / logo.height;
     lw = ratio >= 1 ? max : Math.round(max * ratio);
     lh = ratio >= 1 ? Math.round(max / ratio) : max;
@@ -974,7 +974,8 @@ function LogoReveal({ s, brand, logo }: { s: Slide; brand: Brand; logo: LogoImg 
           width: tile,
           height: tile,
           borderRadius: 96,
-          background: "#FFFFFF",
+          overflow: "hidden",
+          background: logo?.solid ? "transparent" : "#FFFFFF",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
