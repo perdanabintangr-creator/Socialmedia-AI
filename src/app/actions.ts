@@ -1,6 +1,9 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { after } from "next/server";
+import { headers } from "next/headers";
+import { acceptPlanIdeas, runBatch } from "@/lib/month";
 import { revalidatePath } from "next/cache";
 import sharp from "sharp";
 import type { WorkspaceRepo } from "@/lib/db";
@@ -179,6 +182,17 @@ export async function approveIdeaAction(id: string): Promise<ActionState> {
   const { w } = await workspaceOrThrow();
   let postId: string;
   try {
+    // Ide dari rencana autopilot: masuk antrean (dibuat & dijadwalkan otomatis).
+    const idea = await w.getIdea(id);
+    if (idea?.batch?.state === "proposed") {
+      const res = await acceptPlanIdeas(w, [id]);
+      if (!res.accepted) return { error: res.message || "Kuota tidak cukup" };
+      const h = await headers();
+      const origin = `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host") ?? "localhost:3000"}`;
+      after(() => runBatch(w, origin));
+      revalidatePath("/", "layout");
+      return { ok: "Ide di-ACC. Kontennya dibuat dan dijadwalkan otomatis — pantau di Mode ACC." };
+    }
     const q = await quotaOf(w);
     if (!q.ok) return { error: q.message };
     if (q.plan.quality === "full") {

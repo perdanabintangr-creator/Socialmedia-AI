@@ -147,13 +147,13 @@ export function HomePrompt({ defaultStyle = "auto" }: { defaultStyle?: StyleChoi
             <span className="text-xs font-semibold text-slate-600 group-hover:text-ink">{title}</span>
           </button>
         ))}
-        <Link href="/acc#bulanan" aria-label="Sebulan: buat konten 1 bulan sekali klik" className="group flex w-[72px] shrink-0 flex-col items-center gap-2">
+        <Link href="/acc#rencana" aria-label="Autopilot: ide seminggu atau sebulan, konten dibuat dan dijadwalkan otomatis" className="group flex w-[72px] shrink-0 flex-col items-center gap-2">
           <span className="story-ring transition group-hover:scale-105 group-active:scale-95">
             <span className="grid h-16 w-16 place-items-center bg-gradient-to-br from-violet-100 to-fuchsia-50 text-violet-600">
               <CalendarRange size={24} />
             </span>
           </span>
-          <span className="text-xs font-semibold text-slate-600 group-hover:text-ink">Sebulan</span>
+          <span className="text-xs font-semibold text-slate-600 group-hover:text-ink">Autopilot</span>
         </Link>
         <Link href="/performa" aria-label="Performa: cek likes dan komentar" className="group flex w-[72px] shrink-0 flex-col items-center gap-2">
           <span className="story-ring transition group-hover:scale-105 group-active:scale-95">

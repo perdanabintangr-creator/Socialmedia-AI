@@ -142,10 +142,11 @@ export interface Idea {
 export interface IdeaBatch {
   id: string; // id rencana bulanan
   plannedAt: string; // slot tayang (ISO)
-  state: "queued" | "building" | "done" | "failed";
+  state: "proposed" | "queued" | "building" | "done" | "failed"; // proposed = ide menunggu ACC
   startedAt: string | null;
   attempts: number;
   error: string | null;
+  auto?: boolean; // autopilot: setelah jadi langsung dijadwalkan
 }
 
 export type PostStatus =

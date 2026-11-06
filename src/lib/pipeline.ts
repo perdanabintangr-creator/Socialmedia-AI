@@ -8,7 +8,7 @@ import { brandForPlan, planOf, visualConcept, type PlanRule } from "./plans";
 import { referenceImageBlocks, referenceImageBuffers, referencePrompt } from "./reference";
 import { renderSlidePng, renderSlidesJpeg, renderStoryJpeg } from "./render";
 import { sourceImage } from "./images";
-import { publish, publishStory } from "./publisher";
+import { publish, publishStory, unpublish } from "./publisher";
 import { config } from "./config";
 import type { AgentId } from "./agents";
 import { styledBrand, withVisualStyle, type Brand, type Idea, type Post, type PostFormat, type PostReference, type Slide } from "./types";
@@ -324,6 +324,23 @@ export async function autoRevisePost(w: WorkspaceRepo, postId: string): Promise<
   const reviewed = await artDirector(w, brand, revised, `${postId}-auto${revised.revision_count}`, await refContext(ref), await referenceImageBuffers(ref));
   await w.updatePost(postId, { slides: reviewed.slides, design_notes: reviewed.notes ?? revised.design_notes });
   return { ...revised, slides: reviewed.slides, design_notes: reviewed.notes ?? revised.design_notes };
+}
+
+/**
+ * Buka kembali konten yang sudah di-ACC / terjadwal (belum terbit) supaya bisa direvisi:
+ * jadwal di layanan posting dibatalkan dulu, status kembali "review".
+ */
+export async function reopenPost(w: WorkspaceRepo, post: Post): Promise<Post> {
+  if (post.status === "review" || post.status === "failed") return post;
+  if (post.status === "published" || post.status === "rejected") throw new Error("Konten yang sudah terbit tidak bisa direvisi");
+  if (post.status === "scheduled" && post.publish_ref) {
+    const target = await publishTarget(w.id);
+    const res = await unpublish(post.publish_ref, target.profileKey);
+    if (!res.ok) throw new Error(`Jadwal di layanan posting gagal dibatalkan: ${res.error}`);
+  }
+  const patch = { status: "review" as const, publish_ref: null, publish_result: null, planned_at: post.planned_at ?? post.scheduled_at };
+  await w.updatePost(post.id, patch);
+  return { ...post, ...patch };
 }
 
 /** Revisi AI sedang berjalan (lebih dari 6 menit dianggap macet). */

@@ -78,6 +78,16 @@ export async function publish(input: PublishInput): Promise<PublishResult> {
   };
 }
 
+/** Batalkan postingan terjadwal di Ayrshare (dipakai sebelum revisi konten autopilot). */
+export async function unpublish(ref: string, profileKey: string | null): Promise<{ ok: boolean; error: string | null }> {
+  if (!config.hasPublisher) return { ok: true, error: null };
+  const res = await fetch(`${BASE}/post`, { method: "DELETE", headers: headers(profileKey), body: JSON.stringify({ id: ref }) });
+  const raw = await res.json().catch(() => null);
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const ok = res.ok && r.status !== "error";
+  return { ok, error: ok ? null : errorText(raw, res.status) };
+}
+
 export async function getPublishStatus(ref: string, profileKey: string | null) {
   if (!config.hasPublisher) return null;
   const res = await fetch(`${BASE}/post/${encodeURIComponent(ref)}`, { headers: headers(profileKey) });
