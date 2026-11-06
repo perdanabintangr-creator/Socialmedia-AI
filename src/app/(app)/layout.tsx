@@ -6,6 +6,7 @@ import { SideNav, TabBar } from "@/components/app-nav";
 import { requireWorkspace } from "@/lib/session";
 import { planOf } from "@/lib/plans";
 import { logoutAction } from "@/app/auth-actions";
+import { ChatHistory } from "@/components/chat-history";
 
 export default async function AppLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const { user, w } = await requireWorkspace();
@@ -48,7 +49,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
           </span>
         </Link>
 
-        <SideNav badges={badges} chats={chats.map((c) => ({ id: c.id, title: c.title }))} />
+        <SideNav badges={badges} />
 
         <div className="shrink-0 space-y-2 border-t border-line pt-3">
           <div className="flex items-center gap-3 rounded-xl px-2 py-1.5">
@@ -78,7 +79,10 @@ export default async function AppLayout({ children }: Readonly<{ children: React
         </Link>
       </header>
 
-      <main className={fullBleed ? "min-w-0" : "mx-auto w-full max-w-6xl overflow-x-clip px-4 pt-6 pb-28 sm:px-6 lg:px-10 lg:pt-10 lg:pb-12"}>{children}</main>
+      <div className="min-w-0 transition-[padding] duration-300 xl:pr-[var(--history-w,0px)]">
+        <main className={fullBleed ? "min-w-0" : "mx-auto w-full max-w-6xl overflow-x-clip px-4 pt-6 pb-28 sm:px-6 lg:px-10 lg:pt-10 lg:pb-12"}>{children}</main>
+      </div>
+      <ChatHistory chats={chats.map((c) => ({ id: c.id, title: c.title }))} />
       <TabBar badges={badges} />
     </div>
   );

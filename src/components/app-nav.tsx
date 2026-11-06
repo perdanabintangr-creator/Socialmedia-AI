@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, CheckCheck, Home, Stethoscope, LayoutGrid, Lightbulb, MessageSquareText, Palette, Plus, Settings2, TrendingUp } from "lucide-react";
+import { CalendarDays, CheckCheck, Home, Stethoscope, LayoutGrid, Lightbulb, Palette, Settings2, TrendingUp } from "lucide-react";
 
 export const NAV = [
   { href: "/beranda", label: "Beranda", short: "Beranda", icon: Home, mobile: true },
@@ -22,7 +22,7 @@ export interface ChatLink {
   title: string;
 }
 
-export function SideNav({ badges, chats }: { badges: Partial<Record<string, number>>; chats: ChatLink[] }) {
+export function SideNav({ badges }: { badges: Partial<Record<string, number>> }) {
   const path = usePathname();
   return (
     <>
@@ -50,35 +50,7 @@ export function SideNav({ badges, chats }: { badges: Partial<Record<string, numb
         })}
       </nav>
 
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex items-center justify-between px-3 pb-1.5">
-          <span className="text-xs font-bold tracking-wide text-slate-400 uppercase">Riwayat chat</span>
-          <Link href="/beranda" title="Chat baru" className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-brand-600 hover:bg-white">
-            <Plus size={13} strokeWidth={2.6} /> Baru
-          </Link>
-        </div>
-        <div className="scrollbar-none -mx-1 flex-1 overflow-y-auto px-1">
-          {chats.length ? (
-            chats.map((c) => {
-              const on = path === `/chat/${c.id}`;
-              return (
-                <Link
-                  key={c.id}
-                  href={`/chat/${c.id}`}
-                  aria-current={on ? "page" : undefined}
-                  title={c.title}
-                  className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition ${on ? "bg-white font-semibold text-ink ring-1 ring-line" : "text-slate-600 hover:bg-white/70"}`}
-                >
-                  <MessageSquareText size={15} className="shrink-0 text-slate-400" />
-                  <span className="truncate">{c.title}</span>
-                </Link>
-              );
-            })
-          ) : (
-            <p className="px-3 py-2 text-sm text-slate-400">Belum ada percakapan.</p>
-          )}
-        </div>
-      </div>
+      <div className="flex-1" />
     </>
   );
 }
