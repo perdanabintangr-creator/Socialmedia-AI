@@ -87,6 +87,9 @@ const AuditSchema = z.object({
     .describe("6 ide konten yang paling berpotensi untuk akun ini"),
   posting: z.object({ perWeek: z.number().describe("Frekuensi ideal per minggu"), bestTimes: z.string().describe("Jam tayang yang disarankan (WIB) + alasan singkat") }),
   brandUpdates: z.object({
+    description: z.string().describe("Tentang brand/produk 2-3 kalimat, disimpulkan dari bio, post, dan screenshot. Kosongkan bila tidak jelas"),
+    audience: z.string().describe("Target audiens yang terlihat dari konten & komentar, 1 kalimat. Kosongkan bila tidak jelas"),
+    industry: z.string().describe("Bidang usaha singkat, mis. 'Kedai kopi', 'Skincare lokal'. Kosongkan bila tidak jelas"),
     tone: z.string().describe("Gaya bahasa yang disarankan, 1 kalimat"),
     pillars: z.array(z.string()).describe("4-5 pilar konten yang disarankan"),
     imageStyle: z.string().describe("Art direction foto/visual yang disarankan, 1-2 kalimat"),
@@ -136,7 +139,7 @@ function demoAudit(brand: Brand, base: Pick<AccountAudit, "createdAt" | "links" 
       { title: "Behind the scenes tim", hook: "Ini yang terjadi sebelum produk sampai ke kamu", format: "carousel", pillar: "Behind the scenes", why: "Membangun kepercayaan." },
     ],
     posting: { perWeek: 3, bestTimes: "19.00–21.00 WIB (jam santai setelah kerja)" },
-    brandUpdates: { tone: brand.tone, pillars: brand.pillars, imageStyle: brand.imageStyle, styleNotes: brand.styleNotes, doDont: brand.doDont, visualStyle: "brand" },
+    brandUpdates: { description: brand.description, audience: brand.audience, industry: brand.industry, tone: brand.tone, pillars: brand.pillars, imageStyle: brand.imageStyle, styleNotes: brand.styleNotes, doDont: brand.doDont, visualStyle: "brand" },
     insights: "[DEMO] Perbanyak carousel edukasi dengan hook angka spesifik; hindari cover penuh teks.",
     appliedAt: null,
   };
@@ -196,8 +199,14 @@ Berikan audit lengkap sesuai skema. Skor harus jujur (jangan semua tinggi). Masa
 /** Terapkan rekomendasi audit ke Brand Kit + simpan wawasan untuk otak AI. */
 export function applyAudit(brand: Brand, audit: AccountAudit): Brand {
   const u = audit.brandUpdates;
+  const handle = audit.profile[0]?.handle;
   return {
     ...brand,
+    // Data dasar hanya diisi bila Brand Kit masih kosong (tidak menimpa isian owner).
+    description: brand.description.trim() ? brand.description : u.description || brand.description,
+    audience: brand.audience.trim() ? brand.audience : u.audience || brand.audience,
+    industry: brand.industry.trim() ? brand.industry : u.industry || brand.industry,
+    handle: brand.handle.trim() ? brand.handle : handle ? `@${handle}` : brand.handle,
     tone: u.tone || brand.tone,
     pillars: u.pillars.length ? u.pillars.slice(0, 5) : brand.pillars,
     imageStyle: u.imageStyle || brand.imageStyle,

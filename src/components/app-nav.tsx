@@ -6,12 +6,12 @@ import { CalendarDays, CheckCheck, Home, Stethoscope, LayoutGrid, Lightbulb, Mes
 
 export const NAV = [
   { href: "/beranda", label: "Beranda", short: "Beranda", icon: Home, mobile: true },
+  { href: "/audit", label: "Audit akun", short: "Audit", icon: Stethoscope, mobile: false },
   { href: "/acc", label: "Mode ACC", short: "ACC", icon: CheckCheck, mobile: true },
   { href: "/posts", label: "Hasil konten", short: "Konten", icon: LayoutGrid, mobile: false },
   { href: "/ideas", label: "Bank ide", short: "Ide", icon: Lightbulb, mobile: false },
   { href: "/kalender", label: "Kalender konten", short: "Kalender", icon: CalendarDays, mobile: true },
   { href: "/performa", label: "Performa", short: "Performa", icon: TrendingUp, mobile: true },
-  { href: "/audit", label: "Audit akun", short: "Audit", icon: Stethoscope, mobile: false },
   { href: "/brand", label: "Brand Kit", short: "Brand", icon: Palette, mobile: false },
 ] as const;
 

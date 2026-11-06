@@ -1,4 +1,5 @@
-import { AlertTriangle, CalendarClock, CheckCircle2, Lightbulb, ListChecks, Palette, UserRound } from "lucide-react";
+import Link from "next/link";
+import { AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, Lightbulb, ListChecks, Palette, UserRound } from "lucide-react";
 import { requireWorkspace } from "@/lib/session";
 import { PageTitle } from "@/components/ui";
 import { AuditActions, AuditForm, CopyText } from "@/components/audit";
@@ -26,19 +27,50 @@ function Ring({ value }: { value: number }) {
   );
 }
 
-export default async function AuditPage() {
-  const { w } = await requireWorkspace();
+export default async function AuditPage({ searchParams }: { searchParams: Promise<{ awal?: string }> }) {
+  const { user, w } = await requireWorkspace();
   const brand = await w.getBrand();
   const a = brand.audit ?? null;
+  const awal = Boolean((await searchParams).awal);
   const when = (k: string) => a?.actions.filter((x) => x.when === k) ?? [];
 
   return (
     <div>
-      <PageTitle title="Audit akun" subtitle="Konsultan AI menilai akun Instagram/TikTok kamu seperti agency: apa yang sudah bagus, apa yang menghambat, dan langkah konkretnya." >
-        {a && <AuditForm hasAudit />}
-      </PageTitle>
+      {awal && !a ? (
+        <div className="mb-7">
+          <p className="text-sm font-bold tracking-wide text-brand-600 uppercase">Langkah pertama</p>
+          <h1 className="mt-1 text-[28px] font-extrabold tracking-tight text-ink sm:text-[34px]">Halo {user.name.split(" ")[0]}, kita mulai dari akunmu dulu</h1>
+          <p className="mt-2 max-w-2xl text-[15px] text-slate-500">
+            Seperti agency sungguhan, tim AI perlu kenal akunmu sebelum bikin konten. Kasih link profil + beberapa screenshot — dalam ±1 menit kamu dapat skor, masalah utama, bio baru,
+            dan ide konten. Brand Kit-mu juga langsung terisi dari hasilnya.
+          </p>
+        </div>
+      ) : (
+        <PageTitle title="Audit akun" subtitle="Konsultan AI menilai akun Instagram/TikTok kamu seperti agency: apa yang sudah bagus, apa yang menghambat, dan langkah konkretnya.">
+          {a && <AuditForm hasAudit />}
+        </PageTitle>
+      )}
 
       {!a && <AuditForm hasAudit={false} />}
+      {!a && awal && (
+        <p className="mt-4 text-center text-sm text-slate-500">
+          Belum punya akun sosmed atau mau nanti saja?{" "}
+          <Link href="/beranda" className="font-semibold text-brand-600 hover:underline">
+            Lewati, langsung ke Beranda →
+          </Link>
+        </p>
+      )}
+
+      {a && (awal || !brand.onboarded) && (
+        <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl bg-emerald-50 px-4 py-3 ring-1 ring-emerald-100">
+          <p className="min-w-0 flex-1 text-sm text-emerald-800">
+            <b>Audit selesai.</b> {a.appliedAt ? "Brand Kit sudah diisi dari hasil audit. " : ""}Lanjut buat konten pertama, atau jadikan ide di bawah sebagai rencana otomatis.
+          </p>
+          <Link href="/beranda" className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700">
+            Lanjut ke Beranda <ArrowRight size={15} />
+          </Link>
+        </div>
+      )}
 
       {a && (
         <div className="space-y-6">

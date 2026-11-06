@@ -39,6 +39,7 @@ export async function GET(req: Request) {
 
     const email = info.email.toLowerCase();
     let user = await accounts().getUserByEmail(email);
+    const isNew = !user;
     if (user?.status === "disabled") return back("/login?error=disabled");
     if (!user) {
       const name = (info.name || email.split("@")[0]).slice(0, 80);
@@ -52,7 +53,7 @@ export async function GET(req: Request) {
     }
     await accounts().updateUser(user.id, { last_login_at: new Date().toISOString() });
     await startSession(user.id);
-    return back("/beranda");
+    return back(isNew ? "/audit?awal=1" : "/beranda");
   } catch (e) {
     console.error("Google login gagal:", e);
     return back("/login?error=google");

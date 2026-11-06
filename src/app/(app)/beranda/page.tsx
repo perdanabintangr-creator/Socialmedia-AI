@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Check, ChevronRight, Copy, Heart, MessagesSquare, Plus, TrendingUp, Users } from "lucide-react";
+import { ArrowRight, Check, ChevronRight, Copy, Heart, MessagesSquare, Plus, Stethoscope, TrendingUp, Users } from "lucide-react";
 import { HomePrompt } from "@/components/home-prompt";
 import { publishTarget } from "@/lib/pipeline";
 import { requireWorkspace } from "@/lib/session";
@@ -74,6 +74,23 @@ export default async function HomePage() {
       </div>
 
       <div id="prompt" className="mt-10 scroll-mt-24">
+        {!brand.audit && (
+          <Link
+            href="/audit"
+            className="group mb-6 flex items-center gap-4 rounded-3xl bg-ink p-4 text-left text-white shadow-lift transition hover:-translate-y-0.5 sm:p-5"
+          >
+            <span className="bg-social grid h-12 w-12 shrink-0 place-items-center rounded-2xl">
+              <Stethoscope size={22} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-bold">Mulai dari audit akun (±1 menit)</span>
+              <span className="mt-0.5 block text-sm text-white/65">Konsultan AI menilai IG/TikTok kamu, mengisi Brand Kit, dan memberi ide konten yang paling berpotensi.</span>
+            </span>
+            <span className="hidden shrink-0 items-center gap-1.5 rounded-xl bg-white px-4 py-2 text-sm font-bold text-ink sm:inline-flex">
+              Audit sekarang <ArrowRight size={15} className="transition group-hover:translate-x-0.5" />
+            </span>
+          </Link>
+        )}
         <HomePrompt defaultStyle={brand.visualStyle ?? "auto"} />
       </div>
 

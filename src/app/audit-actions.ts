@@ -26,9 +26,11 @@ export async function runAuditAction(fd: FormData): Promise<AuditResult> {
     const screenshots = files.length ? await uploadReferences(w, files) : [];
     const audit = await metered(w, "audit", () => auditAccount(w, { links, screenshots, goal: String(fd.get("goal") ?? "").trim().slice(0, 300) }));
     const brand = await w.getBrand();
-    await w.saveBrand({ ...brand, audit });
-    revalidatePath("/audit");
-    return { ok: true, message: "Audit selesai" };
+    // Akun baru (Brand Kit masih kosong): rekomendasi langsung diterapkan supaya siap dipakai.
+    const fresh = !brand.description.trim() && !brand.audit;
+    await w.saveBrand(fresh ? applyAudit(brand, audit) : { ...brand, audit });
+    revalidatePath("/", "layout");
+    return { ok: true, message: fresh ? "Audit selesai — Brand Kit sudah terisi dari hasil audit" : "Audit selesai" };
   } catch (e) {
     return fail(e);
   }

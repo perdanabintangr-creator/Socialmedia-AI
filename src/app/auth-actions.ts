@@ -83,7 +83,7 @@ export async function registerAction(_: ActionState, fd: FormData): Promise<Acti
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Gagal mendaftar" };
   }
-  redirect("/beranda");
+  redirect("/audit?awal=1");
 }
 
 export async function logoutAction() {

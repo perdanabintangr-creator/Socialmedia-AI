@@ -543,7 +543,7 @@ export interface AccountAudit {
   actions: { when: string; action: string }[];
   ideas: { title: string; hook: string; format: "single" | "carousel"; pillar: string; why: string }[];
   posting: { perWeek: number; bestTimes: string };
-  brandUpdates: { tone: string; pillars: string[]; imageStyle: string; styleNotes: string; doDont: string; visualStyle: string };
+  brandUpdates: { description?: string; audience?: string; industry?: string; tone: string; pillars: string[]; imageStyle: string; styleNotes: string; doDont: string; visualStyle: string };
   insights: string; // ringkasan untuk "otak" AI
   appliedAt?: string | null;
 }
