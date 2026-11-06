@@ -134,7 +134,18 @@ export interface Idea {
   feedback: string | null;
   post_id: string | null;
   reference: PostReference | null; // referensi desain dari owner (dibawa ke konten)
+  batch?: IdeaBatch | null; // bagian dari "konten sebulan sekali klik"
   created_at: string;
+}
+
+/** Antrean pembuatan konten bulanan (disimpan di ide). */
+export interface IdeaBatch {
+  id: string; // id rencana bulanan
+  plannedAt: string; // slot tayang (ISO)
+  state: "queued" | "building" | "done" | "failed";
+  startedAt: string | null;
+  attempts: number;
+  error: string | null;
 }
 
 export type PostStatus =
@@ -166,6 +177,8 @@ export interface Post {
   design_notes: string | null; // catatan AI art director
   reference: PostReference | null; // referensi desain yang diikuti
   story: PostStory | null; // versi Story 9:16
+  planned_at?: string | null; // slot tayang dari rencana bulanan (dipakai saat ACC)
+  revising_since?: string | null; // revisi AI sedang berjalan di latar belakang
   created_at: string;
   updated_at: string;
 }

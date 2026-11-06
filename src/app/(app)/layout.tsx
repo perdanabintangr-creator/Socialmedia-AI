@@ -15,7 +15,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
 
   const badges = {
     "/ideas": ideas.filter((i) => i.status === "pending").length,
-    "/posts": posts.filter((p) => p.status === "review" || p.status === "failed").length,
+    "/acc": posts.filter((p) => p.status === "review" || p.status === "failed").length,
   };
   const initials = (brand.name || user.name).split(/\s+/).map((x) => x[0]).slice(0, 2).join("").toUpperCase();
   const plan = (await planOf(w.id)).label;

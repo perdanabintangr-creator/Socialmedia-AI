@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, Home, LayoutGrid, Lightbulb, MessageSquareText, Palette, Plus, Settings2, TrendingUp } from "lucide-react";
+import { CalendarDays, CheckCheck, Home, LayoutGrid, Lightbulb, MessageSquareText, Palette, Plus, Settings2, TrendingUp } from "lucide-react";
 
 export const NAV = [
   { href: "/beranda", label: "Beranda", icon: Home, mobile: true },
-  { href: "/posts", label: "Hasil konten", short: "Konten", icon: LayoutGrid, mobile: true },
+  { href: "/acc", label: "Mode ACC", short: "ACC", icon: CheckCheck, mobile: true },
+  { href: "/posts", label: "Hasil konten", short: "Konten", icon: LayoutGrid, mobile: false },
   { href: "/ideas", label: "Bank ide", short: "Ide", icon: Lightbulb, mobile: false },
   { href: "/kalender", label: "Kalender konten", short: "Kalender", icon: CalendarDays, mobile: true },
   { href: "/performa", label: "Performa", short: "Performa", icon: TrendingUp, mobile: true },

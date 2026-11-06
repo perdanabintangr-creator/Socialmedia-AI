@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowUp, CalendarCheck, Images, Lightbulb, Loader2, Megaphone, Sparkles, TrendingUp } from "lucide-react";
+import { ArrowUp, CalendarCheck, CalendarRange, Images, Lightbulb, Loader2, Megaphone, Sparkles, TrendingUp } from "lucide-react";
 import { startChatAction } from "@/app/studio-actions";
 import { AttachButton, DropOverlay, RefTray, useReferences } from "@/components/reference-input";
 import { StylePicker, type StyleChoice } from "@/components/style-picker";
@@ -147,6 +147,14 @@ export function HomePrompt({ defaultStyle = "auto" }: { defaultStyle?: StyleChoi
             <span className="text-xs font-semibold text-slate-600 group-hover:text-ink">{title}</span>
           </button>
         ))}
+        <Link href="/acc#bulanan" aria-label="Sebulan: buat konten 1 bulan sekali klik" className="group flex w-[72px] shrink-0 flex-col items-center gap-2">
+          <span className="story-ring transition group-hover:scale-105 group-active:scale-95">
+            <span className="grid h-16 w-16 place-items-center bg-gradient-to-br from-violet-100 to-fuchsia-50 text-violet-600">
+              <CalendarRange size={24} />
+            </span>
+          </span>
+          <span className="text-xs font-semibold text-slate-600 group-hover:text-ink">Sebulan</span>
+        </Link>
         <Link href="/performa" aria-label="Performa: cek likes dan komentar" className="group flex w-[72px] shrink-0 flex-col items-center gap-2">
           <span className="story-ring transition group-hover:scale-105 group-active:scale-95">
             <span className="grid h-16 w-16 place-items-center bg-gradient-to-br from-emerald-100 to-teal-50 text-emerald-600">

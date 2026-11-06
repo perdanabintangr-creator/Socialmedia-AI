@@ -305,6 +305,38 @@ export async function revisePostWith(
   return { ...post, ...patch, updated_at: new Date().toISOString() };
 }
 
+/** Instruksi revisi otomatis: AI mengkritik kontennya sendiri sebagai creative director senior. */
+export const AUTO_REVISE = `REVISI OTOMATIS oleh creative director senior. Evaluasi konten ini dengan kritis seperti sedang review hasil junior designer, lalu perbaiki sendiri tanpa menunggu arahan owner:
+- Hook slide 1 harus bikin berhenti scroll: lebih spesifik & tajam (angka, konflik, rasa penasaran), tetap jujur.
+- Pangkas teks bertele-tele: satu slide satu ide, judul maks 8 kata, body maks 1 kalimat.
+- Alur slide harus logis dan slide terakhir punya CTA yang spesifik.
+- Visual: cover wajib punya visual kuat; ganti foto yang kurang relevan/generik dengan image.prompt yang lebih spesifik & on-brand. Variasikan layout supaya tidak monoton.
+- Caption: baris pertama hook, isi bernilai, CTA jelas, hashtag relevan.
+Jangan mengubah fakta, harga, nama produk, tanggal, atau klaim.`;
+
+/** Revisi otomatis: AI memperbaiki naskah & visual, lalu art director mengecek hasil render. */
+export async function autoRevisePost(w: WorkspaceRepo, postId: string): Promise<Post> {
+  const revised = await revisePostWith(w, postId, AUTO_REVISE);
+  const plan = await planOf(w.id);
+  if (plan.quality !== "full" || !config.hasAI) return revised;
+  const ref = revised.reference ?? null;
+  const brand = brandForPlan(styledBrand(await w.getBrand(), ref), plan);
+  const reviewed = await artDirector(w, brand, revised, `${postId}-auto${revised.revision_count}`, await refContext(ref), await referenceImageBuffers(ref));
+  await w.updatePost(postId, { slides: reviewed.slides, design_notes: reviewed.notes ?? revised.design_notes });
+  return { ...revised, slides: reviewed.slides, design_notes: reviewed.notes ?? revised.design_notes };
+}
+
+/** Revisi AI sedang berjalan (lebih dari 6 menit dianggap macet). */
+export const isRevising = (p: Pick<Post, "revising_since">) =>
+  Boolean(p.revising_since && Date.now() - new Date(p.revising_since).getTime() < 6 * 60_000);
+
+/** Slot ACC: jadwal dari rencana bulanan bila masih di masa depan, selain itu besok jam posting brand. */
+export function accSlot(post: Pick<Post, "planned_at">, postingTime: string): Date {
+  const planned = post.planned_at ? new Date(post.planned_at) : null;
+  if (planned && planned.getTime() > Date.now() + 10 * 60_000) return planned;
+  return parseWib(defaultScheduleWib(postingTime)) ?? new Date(Date.now() + 24 * 3600_000);
+}
+
 /** "2026-11-05T19:00" (WIB) → Date. */
 export function parseWib(local: string): Date | null {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(local)) return null;

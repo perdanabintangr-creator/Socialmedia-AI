@@ -248,9 +248,13 @@ const withRef = (prompt: string, ref?: RefContext | null): Anthropic.Beta.BetaCo
 
 const PROMO_WORDS = /promo|diskon|cashback|gratis|potongan|sale|beli \d|harga spesial|voucher/i;
 
-export async function generateIdeas(brand: Brand, opts: { brief: string; count: number; recentTitles: string[]; reference?: string }) {
+export async function generateIdeas(brand: Brand, opts: { brief: string; count: number; recentTitles: string[]; reference?: string; month?: boolean }) {
   if (!config.hasAI) return demoIdeas(brand, opts.count, opts.brief);
-  const prompt = `Buat ${opts.count} ide konten baru untuk minggu ini.
+  const prompt = `Buat ${opts.count} ide konten baru untuk ${opts.month ? "SATU BULAN penuh (kalender konten bulanan)" : "minggu ini"}.${
+    opts.month
+      ? `\nSusun seperti social media strategist agency: urutkan sesuai tanggal tayang, campur tujuan (awareness/edukasi ±40%, engagement/interaksi ±20%, social proof/testimoni ±15%, behind the scenes ±10%, jualan/promo ±15%), selang-seling format & pilar supaya feed tidak monoton, dan buat alur kampanye yang nyambung dari minggu ke minggu.`
+      : ""
+  }
 
 Brief dari owner: ${opts.brief || "(tidak ada brief khusus — seimbangkan pilar konten)"}
 
