@@ -7,6 +7,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActionForm, Disclosure, Submit } from "@/components/forms";
 import { Card, Field, Pill, StatusBadge, formatWIB, inputCls } from "@/components/ui";
+import { DeletePostButton } from "@/components/delete-post";
 import { approvePostAction, checkStatusAction, rejectPostAction, removeSlideImageAction, replaceImageAction, revisePostAction, updatePostAction, uploadSlideImageAction } from "@/app/actions";
 import { ICON_NAMES } from "@/lib/icons";
 import { PHOTO_LAYOUTS, SLIDE_LAYOUTS, type Post, type SlideLayout } from "@/lib/types";
@@ -147,8 +148,11 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               <ActionForm action={rejectPostAction.bind(null, post.id)}>
                 <Submit variant="danger" className="w-full" pendingText="…">Tolak konten ini</Submit>
               </ActionForm>
+              <DeletePostButton id={post.id} />
             </>
           ) : (
+            <>
+            {!(post.status === "scheduled" && post.publish_ref) && <DeletePostButton id={post.id} />}
             <Card>
               <h2 className="font-semibold">Status posting</h2>
               <dl className="mt-3 space-y-2 text-sm">
@@ -177,6 +181,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                 </ActionForm>
               )}
             </Card>
+            </>
           )}
           {post.reference && post.reference.urls.length > 0 && (
             <Card>

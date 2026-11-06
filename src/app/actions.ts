@@ -398,3 +398,21 @@ export async function storyAction(postId: string, _: ActionState, fd: FormData):
     return fail(e);
   }
 }
+
+/** Hapus konten (lunak). Konten yang sudah dijadwalkan di layanan posting harus dibatalkan dulu. */
+export async function deletePostsAction(ids: string[]): Promise<ActionState> {
+  const { w } = await workspaceOrThrow();
+  try {
+    const posts = (await Promise.all(ids.slice(0, 200).map((id) => w.getPost(id)))).filter((p): p is Post => Boolean(p));
+    const locked = posts.filter((p) => p.status === "scheduled" && p.publish_ref);
+    const ok = posts.filter((p) => !locked.includes(p));
+    await w.deletePosts(ok.map((p) => p.id));
+    revalidatePath("/", "layout");
+    if (!ok.length && locked.length) return { error: "Konten yang sudah terjadwal tayang tidak bisa dihapus dari sini." };
+    return {
+      ok: `${ok.length} konten dihapus.${locked.length ? ` ${locked.length} konten terjadwal dilewati.` : ""}${ok.some((p) => p.status === "published") ? " Postingan yang sudah terbit tetap ada di Instagram/TikTok." : ""}`,
+    };
+  } catch (e) {
+    return fail(e);
+  }
+}

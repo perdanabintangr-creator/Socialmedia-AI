@@ -52,9 +52,8 @@ export interface Quota {
 /** Hitung pemakaian kuota konten (konten yang dibuat, termasuk yang ditolak). */
 export async function quotaOf(w: WorkspaceRepo): Promise<Quota> {
   const plan = await planOf(w.id);
-  const posts = await w.listPosts();
-  const since = new Date(monthStartWib()).getTime();
-  const used = plan.per === "total" ? posts.length : posts.filter((p) => new Date(p.created_at).getTime() >= since).length;
+  // Konten yang dihapus tetap dihitung, supaya kuota tidak bisa "diisi ulang" dengan menghapus.
+  const used = await w.countPostsCreated(plan.per === "total" ? undefined : new Date(monthStartWib()).toISOString());
   const left = Math.max(0, plan.quota - used);
   const ok = left > 0;
   const message = ok

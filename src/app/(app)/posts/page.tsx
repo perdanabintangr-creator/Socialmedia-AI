@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { CalendarClock, Copy, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
+import { PostGrid } from "@/components/post-grid";
 import { requireWorkspace } from "@/lib/session";
-import { PageTitle, StatusBadge, formatWIB } from "@/components/ui";
+import { PageTitle, formatWIB } from "@/components/ui";
 import type { PostStatus } from "@/lib/types";
 
 export const metadata = { title: "Hasil konten" };
@@ -54,35 +55,16 @@ export default async function PostsPage({ searchParams }: { searchParams: Promis
           <p className="mt-1 text-sm text-slate-500">Minta ide atau konten ke tim AI dari Beranda.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 lg:grid-cols-4">
-          {posts.map((p) => (
-            <Link key={p.id} href={`/posts/${p.id}`} className="group">
-              <div className="relative overflow-hidden rounded-2xl bg-slate-100 shadow-soft ring-1 ring-line transition group-hover:-translate-y-0.5 group-hover:shadow-lift">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={p.media_urls[0] ?? `/api/render/${p.id}/0?v=${encodeURIComponent(p.updated_at)}`}
-                  alt=""
-                  className="aspect-[4/5] w-full object-cover"
-                  loading="lazy"
-                />
-                {p.slides.length > 1 && (
-                  <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur">
-                    <Copy size={12} /> {p.slides.length}
-                  </span>
-                )}
-                <span className="absolute bottom-2.5 left-2.5">
-                  <StatusBadge status={p.status} />
-                </span>
-              </div>
-              <div className="mt-2.5 line-clamp-2 text-sm font-semibold">{p.title}</div>
-              {p.scheduled_at && (
-                <div className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500">
-                  <CalendarClock size={12} /> {formatWIB(p.scheduled_at)}
-                </div>
-              )}
-            </Link>
-          ))}
-        </div>
+        <PostGrid
+          posts={posts.map((p) => ({
+            id: p.id,
+            title: p.title,
+            status: p.status,
+            slides: p.slides.length,
+            thumb: p.media_urls[0] ?? `/api/render/${p.id}/0?v=${encodeURIComponent(p.updated_at)}`,
+            scheduledLabel: p.scheduled_at ? formatWIB(p.scheduled_at) : null,
+          }))}
+        />
       )}
     </div>
   );

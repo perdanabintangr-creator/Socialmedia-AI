@@ -46,7 +46,11 @@ export interface WorkspaceRepo {
   getIdea(id: string): Promise<Idea | null>;
   createIdeas(ideas: NewIdea[]): Promise<Idea[]>;
   updateIdea(id: string, patch: Partial<Idea>): Promise<void>;
-  listPosts(): Promise<Post[]>;
+  listPosts(): Promise<Post[]>; // tanpa konten yang dihapus
+  /** Jumlah konten dibuat (termasuk yang dihapus) sejak tanggal tertentu — untuk kuota. */
+  countPostsCreated(since?: string): Promise<number>;
+  /** Hapus lunak: konten hilang dari aplikasi, tetap terhitung di kuota. */
+  deletePosts(ids: string[]): Promise<void>;
   getPost(id: string): Promise<Post | null>;
   createPost(post: NewPost): Promise<Post>;
   updatePost(id: string, patch: Partial<Post>): Promise<void>;
@@ -176,12 +180,24 @@ class SupabaseWorkspace implements WorkspaceRepo {
   }
   async listPosts() {
     return check(
-      await sb().from("posts").select("*").eq("workspace_id", this.id).order("created_at", { ascending: false }).limit(200),
+      await sb().from("posts").select("*").eq("workspace_id", this.id).is("deleted_at", null).order("created_at", { ascending: false }).limit(200),
     ) as Post[];
+  }
+  async countPostsCreated(since?: string) {
+    let q = sb().from("posts").select("id", { count: "exact", head: true }).eq("workspace_id", this.id);
+    if (since) q = q.gte("created_at", since);
+    const { count, error } = await q;
+    if (error) throw new Error(error.message);
+    return count ?? 0;
+  }
+  async deletePosts(ids: string[]) {
+    const valid = ids.filter((id) => UUID.test(id));
+    if (!valid.length) return;
+    check(await sb().from("posts").update({ deleted_at: new Date().toISOString() }).eq("workspace_id", this.id).in("id", valid));
   }
   async getPost(id: string) {
     if (!UUID.test(id)) return null;
-    return check(await sb().from("posts").select("*").eq("workspace_id", this.id).eq("id", id).maybeSingle()) as Post | null;
+    return check(await sb().from("posts").select("*").eq("workspace_id", this.id).eq("id", id).is("deleted_at", null).maybeSingle()) as Post | null;
   }
   async createPost(post: NewPost) {
     return check(await sb().from("posts").insert({ ...post, workspace_id: this.id }).select("*").single()) as Post;
@@ -443,10 +459,22 @@ class LocalWorkspace implements WorkspaceRepo {
     });
   }
   async listPosts() {
-    return this.mine((await readLocal()).posts).sort((a, b) => b.created_at.localeCompare(a.created_at));
+    return this.mine((await readLocal()).posts)
+      .filter((p) => !p.deleted_at)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }
+  async countPostsCreated(since?: string) {
+    return this.mine((await readLocal()).posts).filter((p) => !since || p.created_at >= since).length;
+  }
+  async deletePosts(ids: string[]) {
+    const set = new Set(ids);
+    const now = new Date().toISOString();
+    await mutateLocal((d) => {
+      d.posts = d.posts.map((p) => (p.workspace_id === this.id && set.has(p.id) ? { ...p, deleted_at: now } : p));
+    });
   }
   async getPost(id: string) {
-    return this.mine((await readLocal()).posts).find((p) => p.id === id) ?? null;
+    return this.mine((await readLocal()).posts).find((p) => p.id === id && !p.deleted_at) ?? null;
   }
   async createPost(post: NewPost) {
     const now = new Date().toISOString();

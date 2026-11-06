@@ -179,6 +179,7 @@ export interface Post {
   story: PostStory | null; // versi Story 9:16
   planned_at?: string | null; // slot tayang dari rencana bulanan (dipakai saat ACC)
   revising_since?: string | null; // revisi AI sedang berjalan di latar belakang
+  deleted_at?: string | null; // dihapus owner (tetap dihitung kuota)
   created_at: string;
   updated_at: string;
 }
