@@ -47,7 +47,7 @@ function aiPrompt(brand: Brand, req: ImageRequest) {
       : "",
     cover ?? "",
     `Art direction: ${brand.imageStyle}`,
-    cover ? "" : `Subtle color harmony with brand colors ${brand.colors.primary}, ${brand.colors.secondary} and ${brand.colors.accent}.`,
+    `Color grading must match the brand palette: dominant tones close to ${brand.colors.primary} and ${brand.colors.secondary}, small accents of ${brand.colors.accent} (wardrobe, props, lighting, background). Avoid colors that clash with this palette.`,
     cover ? "High-end editorial quality, sharp focus, realistic details." : "Vertical 4:5 composition, high-end social media agency quality, magazine-grade lighting.",
     NO_TEXT,
   ]

@@ -54,12 +54,15 @@ function cached<T extends LogoImg | Img | null>(key: string, fn: () => Promise<T
   return cache.get(key) as Promise<T>;
 }
 
-function loadLogo(url: string | null): Promise<LogoImg | null> {
+function loadLogo(url: string | null, big = 0): Promise<LogoImg | null> {
   if (!url) return Promise.resolve(null);
-  return cached(`logo:${url}`, async () => {
+  return cached(`logo:${url}:${big}`, async () => {
     try {
-      const png = await sharp(await readMedia(url)).resize({ height: 144 }).png().toBuffer();
+      // Logo besar (teaser): potong ruang kosong di sekelilingnya supaya tampil penuh.
+      const src = big ? await sharp(await readMedia(url)).trim().toBuffer().catch(async () => readMedia(url)) : await readMedia(url);
+      const png = await sharp(src).resize({ height: big || 144, width: big || undefined, fit: "inside" }).png().toBuffer();
       const meta = await sharp(png).metadata();
+      if (big) return { src: `data:image/png;base64,${png.toString("base64")}`, width: meta.width ?? big, height: meta.height ?? big };
       const height = 68;
       const width = Math.round(((meta.width ?? 144) / (meta.height ?? 144)) * height);
       return { src: `data:image/png;base64,${png.toString("base64")}`, width: Math.min(width, 400), height };
@@ -97,11 +100,12 @@ export async function renderSlidePng(baseBrand: Brand, post: Renderable, index: 
   const brand = styledBrand(baseBrand, post.reference);
   const slide = post.slides[index];
   if (!slide) throw new Error("Slide tidak ditemukan");
-  const [fonts, onDark, onLight, img] = await Promise.all([
+  const [fonts, onDark, onLight, img, big] = await Promise.all([
     loadFonts(brand),
     loadLogo(brand.logoUrl),
     loadLogo(brand.logoAltUrl),
     loadSlideImage(slide),
+    slide.layout === "logo_reveal" ? loadLogo(brand.logoAltUrl ?? brand.logoUrl, 560) : Promise.resolve(null),
   ]);
   const res = new ImageResponse(
     <SlideView
@@ -110,7 +114,7 @@ export async function renderSlidePng(baseBrand: Brand, post: Renderable, index: 
       template={post.template}
       index={index}
       total={post.slides.length}
-      logos={{ onDark, onLight }}
+      logos={{ onDark, onLight, big }}
       img={img && effectiveLayout(slide.layout, true) === slide.layout ? img : null}
     />,
     { ...CANVAS, fonts },

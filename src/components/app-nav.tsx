@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { CalendarDays, CheckCheck, Home, LayoutGrid, Lightbulb, MessageSquareText, Palette, Plus, Settings2, TrendingUp } from "lucide-react";
 
 export const NAV = [
-  { href: "/beranda", label: "Beranda", icon: Home, mobile: true },
+  { href: "/beranda", label: "Beranda", short: "Beranda", icon: Home, mobile: true },
   { href: "/acc", label: "Mode ACC", short: "ACC", icon: CheckCheck, mobile: true },
   { href: "/posts", label: "Hasil konten", short: "Konten", icon: LayoutGrid, mobile: false },
   { href: "/ideas", label: "Bank ide", short: "Ide", icon: Lightbulb, mobile: false },
@@ -25,16 +25,6 @@ export function SideNav({ badges, chats }: { badges: Partial<Record<string, numb
   const path = usePathname();
   return (
     <>
-      <Link
-        href="/beranda"
-        className="group flex items-center gap-2.5 rounded-2xl bg-ink px-4 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-ink/90"
-      >
-        <span className="bg-social grid h-6 w-6 place-items-center rounded-lg transition group-hover:rotate-90">
-          <Plus size={15} strokeWidth={2.6} />
-        </span>
-        Chat baru
-      </Link>
-
       <nav className="flex flex-col gap-0.5" aria-label="Navigasi utama">
         {NAV.map(({ href, label, icon: Icon }) => {
           const on = active(path, href);
@@ -43,7 +33,7 @@ export function SideNav({ badges, chats }: { badges: Partial<Record<string, numb
               key={href}
               href={href}
               aria-current={on ? "page" : undefined}
-              className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+              className={`group flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition ${
                 on ? "bg-white text-ink shadow-soft ring-1 ring-line" : "text-slate-500 hover:bg-white/70 hover:text-ink"
               }`}
             >
@@ -59,8 +49,13 @@ export function SideNav({ badges, chats }: { badges: Partial<Record<string, numb
         })}
       </nav>
 
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="px-3 pb-1.5 text-xs font-bold tracking-wide text-slate-400 uppercase">Riwayat</div>
+      <div className="flex min-h-[132px] flex-1 flex-col">
+        <div className="flex items-center justify-between px-3 pb-1.5">
+          <span className="text-xs font-bold tracking-wide text-slate-400 uppercase">Riwayat chat</span>
+          <Link href="/beranda" title="Chat baru" className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-brand-600 hover:bg-white">
+            <Plus size={13} strokeWidth={2.6} /> Baru
+          </Link>
+        </div>
         <div className="scrollbar-none -mx-1 flex-1 overflow-y-auto px-1">
           {chats.length ? (
             chats.map((c) => {
@@ -103,7 +98,7 @@ export function TabBar({ badges }: { badges: Partial<Record<string, number>> }) 
             <Link key={n.href} href={n.href} aria-current={on ? "page" : undefined} className="relative flex flex-col items-center gap-1 py-2.5 text-[11px] font-semibold">
               <Icon size={21} strokeWidth={on ? 2.4 : 1.9} className={on ? "text-ink" : "text-slate-400"} />
               {on && <span className="bg-social absolute top-0 h-0.5 w-8 rounded-full" />}
-              <span className={on ? "text-ink" : "text-slate-500"}>{"short" in n ? n.short : n.label}</span>
+              <span className={on ? "text-ink" : "text-slate-500"}>{n.short}</span>
               {badges[n.href] ? <span className="absolute top-1.5 left-[calc(50%+6px)] h-2 w-2 rounded-full bg-pop ring-2 ring-white" /> : null}
             </Link>
           );

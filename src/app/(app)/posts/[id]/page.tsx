@@ -33,6 +33,7 @@ const LAYOUT_LABEL: Record<SlideLayout, string> = {
   folk_cover: "Cover • info cepat",
   editorial_cover: "Cover • editorial",
   creative_cover: "Cover • kreatif 3D",
+  logo_reveal: "Teaser logo (coming soon)",
 };
 
 const STORY_STATUS = {

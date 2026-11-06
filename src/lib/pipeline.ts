@@ -5,13 +5,14 @@ import { accounts, type WorkspaceRepo } from "./db";
 import { generateIdeas, generatePost, isTeaser, TEASER_WORDS, reviewDesign, revisePost, type Draft, type RefContext } from "./ai";
 import { setMeterPost } from "./cost";
 import { brandForPlan, planOf, visualConcept, type PlanRule } from "./plans";
-import { referenceImageBlocks, referenceImageBuffers, referencePrompt } from "./reference";
+import { colorsFromLogo, referenceImageBlocks, referenceImageBuffers, referencePrompt } from "./reference";
+import { readMedia } from "./media";
 import { renderSlidePng, renderSlidesJpeg, renderStoryJpeg } from "./render";
 import { sourceImage } from "./images";
 import { publish, publishStory, unpublish } from "./publisher";
 import { config } from "./config";
 import type { AgentId } from "./agents";
-import { styledBrand, withVisualStyle, type Brand, type Idea, type Post, type PostFormat, type PostReference, type Slide } from "./types";
+import { DEFAULT_BRAND, styledBrand, withVisualStyle, type Brand, type Idea, type Post, type PostFormat, type PostReference, type Slide } from "./types";
 
 /**
  * Inti alur kerja: ide → konten (copy + visual + review) → ACC → posting.
@@ -151,29 +152,14 @@ const STYLE_COVER: Record<string, Slide["layout"]> = {
   creative: "creative_cover",
 };
 
-/**
- * Teaser / coming soon: maks 3 slide, cover = key visual penuh (editorial_cover atau cover khas
- * arah visual), slide teks-berat dibuang. Paket penuh: cover pasti punya key visual sinematik.
- */
-function teaserize(draft: Draft, plan: PlanRule, brand: Brand, ref: PostReference | null, template: string): Draft {
+/** Teaser / coming soon: selalu SINGLE POST logo reveal (logo besar, warna brand), tanpa foto AI. */
+function teaserize(draft: Draft): Draft {
   if (!draft.slides.length) return draft;
-  const styleCover = ref?.style && ref.style !== "brand" ? STYLE_COVER[template] : undefined;
-  const coverLayout = styleCover ?? "editorial_cover";
-  const TEXTY = new Set<Slide["layout"]>(["list", "steps", "compare", "point_icon", "stat"]);
-  const [first, ...rest] = draft.slides;
-  const last = rest.length ? rest[rest.length - 1] : null;
-  const middle = rest.slice(0, -1).filter((d) => !TEXTY.has(d.slide.layout)).slice(0, 1);
-  const tail = last && !TEXTY.has(last.slide.layout) ? [last] : [];
-  const headline = first.slide.headline.replace(/\*/g, "");
-  const prompt = `Cinematic mysterious teaser key visual for an upcoming launch by ${brand.name} (${brand.industry || brand.description}). ${visualConcept(brand)} Main subject partially hidden in shadow, dramatic rim light in brand color ${brand.colors.accent} and ${brand.colors.primary}, dark clean premium background with subtle glow and light particles, plenty of empty space, luxury launch-campaign quality. Theme: "${headline}".`.slice(0, 900);
-  const cover = {
-    slide: { ...first.slide, layout: coverLayout },
-    imageRequest:
-      first.imageRequest ? { ...first.imageRequest, prompt: `${prompt} Scene idea: ${first.imageRequest.prompt}`.slice(0, 1200), layout: coverLayout }
-      : plan.quality === "full" ? { assetId: "", query: `${brand.industry || brand.name} dark product launch`, prompt, layout: coverLayout }
-      : null,
+  const first = draft.slides[0];
+  return {
+    ...draft,
+    slides: [{ slide: { ...first.slide, layout: "logo_reveal", image: null, items: [], itemsB: [] }, imageRequest: null }],
   };
-  return { ...draft, slides: [cover, ...middle, ...tail].slice(0, 3) };
 }
 
 /** Arah visual dipilih owner: cover wajib memakai cover khas gaya itu. */
@@ -222,6 +208,27 @@ export function ensureVisuals(draft: Draft, plan: PlanRule, brand: Brand, templa
   return { ...draft, slides };
 }
 
+const sameColors = (a: Brand["colors"], b: Brand["colors"]) =>
+  (Object.keys(b) as (keyof Brand["colors"])[]).every((k) => a[k]?.toLowerCase() === b[k]?.toLowerCase());
+
+/**
+ * Brand Kit yang warnanya masih bawaan aplikasi tapi sudah punya logo: ambil warna dari logo
+ * (sekali, lalu disimpan) supaya desain tidak memakai warna yang bukan milik brand.
+ */
+export async function ensureBrandColors(w: WorkspaceRepo, brand: Brand): Promise<Brand> {
+  if (!brand.logoUrl || !sameColors(brand.colors, DEFAULT_BRAND.colors)) return brand;
+  try {
+    const colors = await colorsFromLogo(await readMedia(brand.logoUrl));
+    if (!colors) return brand;
+    const next = { ...brand, colors };
+    await w.saveBrand(next);
+    return next;
+  } catch (e) {
+    console.error("Gagal mengambil warna dari logo:", e);
+    return brand;
+  }
+}
+
 /** Ide yang sudah di-ACC → konten lengkap siap review. */
 export async function buildPostFromIdea(w: WorkspaceRepo, ideaId: string, progress: Progress = silent): Promise<Post> {
   const idea = await w.getIdea(ideaId);
@@ -232,7 +239,7 @@ export async function buildPostFromIdea(w: WorkspaceRepo, ideaId: string, progre
   }
   await w.updateIdea(ideaId, { status: "approved" });
   const plan = await planOf(w.id);
-  const baseBrand = await w.getBrand();
+  const baseBrand = await ensureBrandColors(w, await w.getBrand());
   // Ide tanpa referensi (mis. dari halaman Ide) tetap memakai arah visual default Brand Kit.
   const ref = idea.reference ?? withVisualStyle(null, baseBrand.visualStyle);
   const brand = brandForPlan(styledBrand(baseBrand, ref), plan);
@@ -240,8 +247,9 @@ export async function buildPostFromIdea(w: WorkspaceRepo, ideaId: string, progre
   const refImgs = await referenceImageBuffers(ref);
   const template = ref?.template ?? brand.defaultTemplate;
 
+  const teaser = isTeaser(idea);
   const raw = styleCover(await generatePost(brand, idea, ctx), ref, template);
-  const draft = ensureVisuals(isTeaser(idea) ? teaserize(raw, plan, brand, ref, template) : raw, plan, brand, template);
+  const draft = teaser ? teaserize(raw) : ensureVisuals(raw, plan, brand, template);
   await progress(
     "kata",
     `Naskah ${draft.slides.length > 1 ? `${draft.slides.length} slide` : "single post"} + caption sudah jadi${ref ? " mengikuti gaya referensimu" : ""}. Hook-nya: “${firstHook(draft.slides.map((d) => d.slide))}”. Aku oper ke Rupa ya.`,
@@ -255,11 +263,14 @@ export async function buildPostFromIdea(w: WorkspaceRepo, ideaId: string, progre
     `Layout & visual sudah tersusun${photos ? ` (${photos} foto)` : ""}${ref ? ", warna & gaya kusamakan dengan referensi" : ""}.${brand.autoReview && config.hasAI ? " Aku cek ulang hasil rendernya dulu sebelum kukirim." : ""}`,
   );
 
-  const reviewed = await artDirector(w, brand, { slides, format: idea.format, caption: draft.caption, template }, key, ctx, refImgs);
+  // Teaser logo: desainnya sudah pasti (logo + warna brand), tidak perlu putaran art director.
+  const reviewed = teaser
+    ? { slides, notes: "Teaser simpel: logo brand besar di tengah, latar warna brand." }
+    : await artDirector(w, brand, { slides, format: idea.format, caption: draft.caption, template }, key, ctx, refImgs);
   const post = await w.createPost({
     idea_id: idea.id,
     title: draft.title || idea.title,
-    format: idea.format,
+    format: reviewed.slides.length > 1 ? idea.format : "single",
     platforms: ["instagram", "tiktok"],
     caption: draft.caption,
     hashtags: draft.hashtags,
@@ -287,7 +298,7 @@ export async function revisePostWith(
   setMeterPost(post.id);
   const ref = newRef ?? post.reference ?? null;
   const plan = await planOf(w.id);
-  const brand = brandForPlan(styledBrand(await w.getBrand(), ref), plan);
+  const brand = brandForPlan(styledBrand(await ensureBrandColors(w, await w.getBrand()), ref), plan);
   const draft = await revisePost(brand, post, instruction, await refContext(ref));
   await progress("kata", `Revisi naskah sudah kuterapkan${newRef ? " mengikuti referensi baru" : ""}. Rupa, tolong sesuaikan visualnya.`);
   const slides = await materialize(w, brand, draft, `${post.id}-r${post.revision_count + 1}`, await referenceImageBuffers(ref), Math.min(MAX_NEW_IMAGES, plan.maxVisuals));

@@ -15,9 +15,10 @@ import { brandGaps, quotaOf } from "@/lib/plans";
 import { importBrandFromWebsite } from "@/lib/brand-import";
 import { approveAndPublish, publishStoryFor, buildPostFromIdea, createIdeas, parseWib, publishTarget, revisePostWith } from "@/lib/pipeline";
 import { readMedia } from "@/lib/media";
+import { colorsFromLogo } from "@/lib/reference";
 import { randomUUID } from "crypto";
 import { getPublishStatus } from "@/lib/publisher";
-import { BODY_FONT_KEYS, FONT_KEYS, SLIDE_LAYOUTS, isVisualStyle, type VisualStyleKey, TEMPLATE_KEYS, normalizeSlide, type Brand, type FontKey, type ImageSourceMode, type Platform, type Post, type Slide, type SlideLayout, type TemplateKey } from "@/lib/types";
+import { DEFAULT_BRAND, BODY_FONT_KEYS, FONT_KEYS, SLIDE_LAYOUTS, isVisualStyle, type VisualStyleKey, TEMPLATE_KEYS, normalizeSlide, type Brand, type FontKey, type ImageSourceMode, type Platform, type Post, type Slide, type SlideLayout, type TemplateKey } from "@/lib/types";
 
 export type ActionState = { error?: string; ok?: string } | undefined;
 
@@ -84,7 +85,14 @@ export async function saveBrandAction(_: ActionState, fd: FormData): Promise<Act
     };
 
     const logo = fd.get("logo");
-    if (logo instanceof File && logo.size > 0) brand.logoUrl = await uploadImage(w, logo, "brand");
+    if (logo instanceof File && logo.size > 0) {
+      brand.logoUrl = await uploadImage(w, logo, "brand");
+      // Logo baru + warna masih bawaan → ambil warna dari logo.
+      const untouched = (Object.keys(DEFAULT_BRAND.colors) as (keyof Brand["colors"])[]).every(
+        (k) => brand.colors[k].toLowerCase() === DEFAULT_BRAND.colors[k].toLowerCase(),
+      );
+      if (untouched) brand.colors = (await colorsFromLogo(await readMedia(brand.logoUrl)).catch(() => null)) ?? brand.colors;
+    }
     if (fd.get("removeLogo") === "on") brand.logoUrl = null;
     const logoAlt = fd.get("logoAlt");
     if (logoAlt instanceof File && logoAlt.size > 0) brand.logoAltUrl = await uploadImage(w, logoAlt, "brand");
@@ -426,6 +434,22 @@ export async function deletePostsAction(ids: string[]): Promise<ActionState> {
     return {
       ok: `${ok.length} konten dihapus.${locked.length ? ` ${locked.length} konten terjadwal dilewati.` : ""}${ok.some((p) => p.status === "published") ? " Postingan yang sudah terbit tetap ada di Instagram/TikTok." : ""}`,
     };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Brand Kit: samakan warna brand dengan warna logo. */
+export async function colorsFromLogoAction(): Promise<ActionState> {
+  const { w } = await workspaceOrThrow();
+  try {
+    const brand = await w.getBrand();
+    if (!brand.logoUrl) return { error: "Upload logo dulu" };
+    const colors = await colorsFromLogo(await readMedia(brand.logoUrl));
+    if (!colors) return { error: "Logo hanya hitam-putih, warna tidak bisa diambil otomatis. Atur manual ya." };
+    await w.saveBrand({ ...brand, colors });
+    revalidatePath("/", "layout");
+    return { ok: "Warna brand disamakan dengan logo" };
   } catch (e) {
     return fail(e);
   }

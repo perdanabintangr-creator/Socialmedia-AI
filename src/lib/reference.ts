@@ -107,6 +107,30 @@ export async function paletteOf(buffers: Buffer[]): Promise<Swatch[]> {
     .map((m) => ({ hex: m.hex, share: m.n / total, lum: relLum(m.hex), sat: m.sat }));
 }
 
+/** Campur dua warna hex (t = porsi warna b). */
+const mixHex = (a: string, b: string, t: number) => {
+  const [r1, g1, b1] = rgb(a);
+  const [r2, g2, b2] = rgb(b);
+  return hex(r1 + (r2 - r1) * t, g1 + (g2 - g1) * t, b1 + (b2 - b1) * t);
+};
+
+/**
+ * Warna Brand Kit dari logo: warna logo paling dominan jadi warna utama, warna kedua jadi
+ * sekunder/aksen, latar = tint sangat muda dari warna utama. Null bila logo hitam-putih saja.
+ */
+export async function colorsFromLogo(logo: Buffer): Promise<Brand["colors"] | null> {
+  const flat = await sharp(logo).flatten({ background: "#ffffff" }).png().toBuffer();
+  const sw = (await paletteOf([flat])).filter((c) => c.lum < 0.88 && c.sat > 0.22 && c.share > 0.004);
+  if (!sw.length) return null;
+  const vivid = [...sw].sort((a, b) => b.share * (0.5 + b.sat) - a.share * (0.5 + a.sat));
+  let primary = vivid[0].hex;
+  if (relLum(primary) > 0.45) primary = mixHex(primary, "#0B0D1A", 0.35); // terlalu terang untuk latar cover
+  const second = vivid.find((c) => dist(c.hex, vivid[0].hex) > 70)?.hex;
+  const accent = second ?? mixHex(vivid[0].hex, "#FFFFFF", 0.35);
+  const secondary = second ? mixHex(primary, second, 0.5) : mixHex(primary, "#000000", 0.3);
+  return { primary, secondary, accent, background: mixHex(vivid[0].hex, "#FFFFFF", 0.95), text: "#14161F" };
+}
+
 /** Tentukan peran warna (latar, teks, utama, aksen) + template yang paling mirip. */
 export function rolesFromPalette(sw: Swatch[]): { colors: Brand["colors"]; template: TemplateKey } {
   const bg = sw[0]?.hex ?? "#F7F6F2";

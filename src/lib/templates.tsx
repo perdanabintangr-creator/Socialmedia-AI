@@ -21,7 +21,7 @@ export const IMAGE_BOX: Partial<Record<SlideLayout, { w: number; h: number }>> =
 };
 
 /** Cover bergaya media: menggambar branding sendiri, tanpa header/footer standar. */
-const STYLE_COVERS: SlideLayout[] = ["news_cover", "folk_cover", "editorial_cover", "creative_cover"];
+const STYLE_COVERS: SlideLayout[] = ["news_cover", "folk_cover", "editorial_cover", "creative_cover", "logo_reveal"];
 
 export type Img = { src: string; w: number; h: number };
 export type LogoImg = { src: string; width: number; height: number };
@@ -355,7 +355,7 @@ export interface SlideProps {
   template: TemplateKey;
   index: number;
   total: number;
-  logos: { onDark: LogoImg | null; onLight: LogoImg | null };
+  logos: { onDark: LogoImg | null; onLight: LogoImg | null; big?: LogoImg | null };
   img: Img | null;
 }
 
@@ -365,7 +365,7 @@ export function effectiveLayout(layout: SlideLayout, hasImg: boolean): SlideLayo
   if (layout === "cover_photo" || layout === "cover_split") return "cover_type";
   if (layout === "point_photo") return "point_icon";
   if (layout === "promo_hero") return "promo_offer";
-  if (STYLE_COVERS.includes(layout)) return "cover_type";
+  if (STYLE_COVERS.includes(layout) && layout !== "logo_reveal") return "cover_type";
   return layout;
 }
 
@@ -398,6 +398,7 @@ export function SlideView({ brand, slide, template, index, total, logos, img }: 
       case "folk_cover": return <FolkCover t={t} s={slide} img={img!} brand={brand} logo={logos.onLight ?? logos.onDark} />;
       case "editorial_cover": return <EditorialCover t={t} s={slide} img={img!} brand={brand} logo={logos.onDark ?? logos.onLight} />;
       case "creative_cover": return <CreativeCover t={t} s={slide} img={img!} brand={brand} logo={logos.onDark ?? logos.onLight} />;
+      case "logo_reveal": return <LogoReveal s={slide} brand={brand} logo={logos.big ?? logos.onLight ?? logos.onDark} />;
     }
   })();
 
@@ -916,6 +917,95 @@ function EditorialCover({ t, s, img, brand, logo }: CoverProps) {
           </div>
         </div>
       ) : null}
+    </>
+  );
+}
+
+/** Teaser / coming soon: logo besar di tengah (ubin putih), latar warna brand bercahaya, teks sangat singkat. */
+function LogoReveal({ s, brand, logo }: { s: Slide; brand: Brand; logo: LogoImg | null }) {
+  const base = brand.colors.primary;
+  // Latar: versi sangat gelap dari warna utama (premium), cahaya: warna brand paling hidup.
+  const mixHex = (a: string, b: string, t: number) => {
+    const [r1, g1, b1] = hexToRgb(a);
+    const [r2, g2, b2] = hexToRgb(b);
+    return "#" + [r1 + (r2 - r1) * t, g1 + (g2 - g1) * t, b1 + (b2 - b1) * t].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
+  };
+  const deep = mixHex(base, "#04050B", luminance(base) < 0.05 ? 0.2 : 0.74);
+  const glow = [brand.colors.primary, brand.colors.accent, brand.colors.secondary].sort((x, y) => contrast(y, deep) - contrast(x, deep))[0];
+  const fg = "#FFFFFF";
+  const rawKicker = plain(s.kicker);
+  const kicker = rawKicker && /segera|soon|hadir|launch|rilis|nantikan|teaser|baru/i.test(rawKicker) ? rawKicker : "Segera hadir";
+  const cx = CANVAS.width / 2;
+  const tile = 400;
+  const tileTop = 330;
+  const ring = (r: number, a: number) => (
+    <div style={{ position: "absolute", left: cx - r, top: tileTop + tile / 2 - r, width: r * 2, height: r * 2, borderRadius: 9999, border: `2px solid ${alpha("#FFFFFF", a)}` }} />
+  );
+  let lw = 0;
+  let lh = 0;
+  if (logo) {
+    const max = tile * 0.66;
+    const ratio = logo.width / logo.height;
+    lw = ratio >= 1 ? max : Math.round(max * ratio);
+    lh = ratio >= 1 ? Math.round(max / ratio) : max;
+  }
+  return (
+    <>
+      <div style={{ position: "absolute", left: 0, top: 0, width: CANVAS.width, height: CANVAS.height, background: deep }} />
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          width: CANVAS.width,
+          height: CANVAS.height,
+          backgroundImage: `radial-gradient(circle at 50% 39%, ${alpha(glow, 0.55)} 0%, ${alpha(glow, 0.18)} 28%, ${alpha(deep, 0)} 58%)`,
+        }}
+      />
+      <div style={{ position: "absolute", left: 0, top: 0, width: CANVAS.width, height: CANVAS.height, backgroundImage: `linear-gradient(180deg, ${alpha("#000000", 0)} 55%, ${alpha("#000000", 0.35)} 100%)` }} />
+      {ring(300, 0.14)}
+      {ring(400, 0.09)}
+      {ring(510, 0.05)}
+      <div
+        style={{
+          position: "absolute",
+          left: cx - tile / 2,
+          top: tileTop,
+          width: tile,
+          height: tile,
+          borderRadius: 96,
+          background: "#FFFFFF",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: `0 40px 120px ${alpha(glow, 0.55)}, 0 10px 40px rgba(0,0,0,0.35)`,
+        }}
+      >
+        {logo ? (
+          <img src={logo.src} width={lw} height={lh} />
+        ) : (
+          <div style={{ fontFamily: "Heading", fontWeight: 800, fontSize: 200, color: base, letterSpacing: -6 }}>{brand.name.slice(0, 1).toUpperCase()}</div>
+        )}
+      </div>
+      <div style={{ position: "absolute", left: 0, width: CANVAS.width, top: 140, display: "flex", justifyContent: "center" }}>
+        <div style={{ fontFamily: "Heading", fontWeight: 800, fontSize: 30, letterSpacing: 2, color: alpha(fg, 0.8) }}>{brand.name}</div>
+      </div>
+      <div style={{ position: "absolute", left: 80, width: CANVAS.width - 160, top: tileTop + tile + 96, display: "flex", flexDirection: "column", alignItems: "center", gap: 26 }}>
+        <div style={{ display: "flex", fontSize: 30, fontWeight: 800, letterSpacing: 12, textTransform: "uppercase", color: glow }}>{kicker}</div>
+        {plain(s.headline) ? (
+          <div style={{ display: "flex", textAlign: "center", justifyContent: "center", fontFamily: "Heading", fontWeight: 800, fontSize: fit(s.headline, 76, 52, 22), lineHeight: 1.08, letterSpacing: -1.5, color: fg }}>
+            {plain(s.headline)}
+          </div>
+        ) : null}
+        {plain(s.labelB) ? (
+          <div style={{ display: "flex", marginTop: 6, padding: "14px 34px", borderRadius: 9999, border: `2px solid ${alpha(fg, 0.5)}`, fontSize: 28, fontWeight: 700, letterSpacing: 2, color: fg, textTransform: "uppercase" }}>
+            {plain(s.labelB)}
+          </div>
+        ) : null}
+      </div>
+      <div style={{ position: "absolute", left: 0, width: CANVAS.width, bottom: 56, display: "flex", justifyContent: "center", fontSize: 26, fontWeight: 600, color: alpha(fg, 0.6) }}>
+        {brand.handle}
+      </div>
     </>
   );
 }

@@ -52,6 +52,7 @@ const toItem = (p: Post): AccItem => {
     plannedLocal: when ? toWibLocal(when) : null,
     whenLabel: when ? whenLabel(when) : null,
     version: p.updated_at,
+    hashtags: p.hashtags,
   };
 };
 
@@ -67,6 +68,7 @@ export default async function AccPage() {
     .sort(byDate);
   const review = posts.filter((p) => p.status === "review" || p.status === "failed").sort(byDate);
   const failedIdeas = ideas.filter((i) => i.batch?.state === "failed" && Date.now() - new Date(i.created_at).getTime() < 7 * 24 * 3600_000);
+  const previewBrand = { name: brand.name, handle: brand.handle, logoUrl: brand.logoUrl, primary: brand.colors.primary };
   const nothing = !proposals.length && !scheduled.length && !review.length && !progress?.running;
 
   return (
@@ -104,8 +106,8 @@ export default async function AccPage() {
         }))}
       />
 
-      <ContentList items={scheduled.map(toItem)} variant="scheduled" />
-      <ContentList items={review.map(toItem)} variant="review" />
+      <ContentList items={scheduled.map(toItem)} variant="scheduled" brand={previewBrand} />
+      <ContentList items={review.map(toItem)} variant="review" brand={previewBrand} />
 
       {nothing && (
         <div className="rounded-3xl border-2 border-dashed border-line px-6 py-12 text-center">

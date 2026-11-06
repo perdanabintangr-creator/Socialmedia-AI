@@ -13,6 +13,7 @@ import {
   Lightbulb,
   Loader2,
   Palette,
+  Smartphone,
   Send,
   Sparkles,
   Undo2,
@@ -35,6 +36,7 @@ import {
   type AccResult,
 } from "@/app/acc-actions";
 import { StylePicker, type StyleChoice } from "@/components/style-picker";
+import { PhonePreview } from "@/components/phone-preview";
 import type { BatchProgress } from "@/lib/month";
 
 export interface AccItem {
@@ -51,6 +53,14 @@ export interface AccItem {
   plannedLocal: string | null;
   whenLabel: string | null;
   version: string;
+  hashtags: string[];
+}
+
+export interface PreviewBrand {
+  name: string;
+  handle: string;
+  logoUrl: string | null;
+  primary: string;
 }
 
 export interface PlanIdea {
@@ -299,7 +309,8 @@ export function IdeaPlan({ ideas }: { ideas: PlanIdea[] }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [res, setRes] = useState<AccResult | null>(null);
   const [pending, start] = useTransition();
-  if (!ideas.length) return null;
+  // Daftar kosong setelah ACC: tetap tampilkan notifikasinya.
+  if (!ideas.length) return <Toast res={res} onClose={() => setRes(null)} />;
   const allOn = ideas.every((i) => selected.has(i.id));
   const toggle = (id: string) =>
     setSelected((s) => {
@@ -401,7 +412,7 @@ function IdeaRow({ idea, checked, onCheck, onResult, disabled }: { idea: PlanIde
 
 const QUICK = ["Ganti foto cover", "Visual lebih premium", "Warna lebih cerah", "Pakai foto orang Indonesia", "Hook lebih nendang", "Teks lebih singkat"];
 
-export function ContentList({ items, variant }: { items: AccItem[]; variant: "scheduled" | "review" }) {
+export function ContentList({ items, variant, brand }: { items: AccItem[]; variant: "scheduled" | "review"; brand: PreviewBrand }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [res, setRes] = useState<AccResult | null>(null);
   const [bulk, startBulk] = useTransition();
@@ -450,7 +461,7 @@ export function ContentList({ items, variant }: { items: AccItem[]; variant: "sc
       )}
       <ul className="space-y-4">
         {items.map((it) => (
-          <ContentCard key={it.id} it={it} variant={variant} checked={selected.has(it.id)} onCheck={() => toggle(it.id)} onResult={setRes} />
+          <ContentCard key={it.id} it={it} variant={variant} brand={brand} checked={selected.has(it.id)} onCheck={() => toggle(it.id)} onResult={setRes} />
         ))}
       </ul>
       <Toast res={res} onClose={() => setRes(null)} />
@@ -461,12 +472,14 @@ export function ContentList({ items, variant }: { items: AccItem[]; variant: "sc
 function ContentCard({
   it,
   variant,
+  brand,
   checked,
   onCheck,
   onResult,
 }: {
   it: AccItem;
   variant: "scheduled" | "review";
+  brand: PreviewBrand;
   checked: boolean;
   onCheck: () => void;
   onResult: (r: AccResult) => void;
@@ -475,6 +488,7 @@ function ContentCard({
   const [chat, setChat] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [preview, setPreview] = useState(false);
   const run = (label: string, fn: () => Promise<AccResult>) => {
     setBusy(label);
     start(async () => {
@@ -503,12 +517,15 @@ function ContentCard({
       <div className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row">
         <div className="flex items-start gap-3 lg:w-[46%]">
           {!scheduled && <input type="checkbox" checked={checked} onChange={onCheck} disabled={locked} aria-label={`Pilih ${it.title}`} className="mt-2 h-4 w-4 shrink-0 accent-emerald-600" />}
-          <div className="scrollbar-none flex min-w-0 gap-2 overflow-x-auto pb-1">
+          <button type="button" onClick={() => setPreview(true)} title="Lihat preview di HP" className="group/pv scrollbar-none relative flex min-w-0 gap-2 overflow-x-auto pb-1 text-left">
             {thumbs.map((src, i) => (
               // eslint-disable-next-line @next/next/no-img-element
-              <img key={src} src={src} alt={`Slide ${i + 1}`} loading="lazy" className={`aspect-[4/5] shrink-0 rounded-xl bg-slate-100 object-cover ring-1 ring-black/5 ${i === 0 ? "w-40" : "w-28 self-end"}`} />
+              <img key={src} src={src} alt={`Slide ${i + 1}`} loading="lazy" className={`aspect-[4/5] shrink-0 rounded-xl bg-slate-100 object-cover ring-1 ring-black/5 transition group-hover/pv:brightness-95 ${i === 0 ? "w-40" : "w-28 self-end"}`} />
             ))}
-          </div>
+            <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur">
+              <Smartphone size={12} /> Preview IG & TikTok
+            </span>
+          </button>
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col">
@@ -636,6 +653,28 @@ function ContentCard({
           )}
         </div>
       </div>
+      {preview && (
+        <div role="dialog" aria-modal="true" aria-label={`Preview ${it.title}`} className="fixed inset-0 z-50 overflow-y-auto bg-ink/60 p-4 backdrop-blur-sm" onClick={() => setPreview(false)}>
+          <div className="relative mx-auto my-6 w-full max-w-[380px]" onClick={(e) => e.stopPropagation()}>
+            <button type="button" onClick={() => setPreview(false)} aria-label="Tutup preview" className="absolute -top-2 -right-2 z-10 grid h-10 w-10 place-items-center rounded-full bg-white text-ink shadow-lift">
+              <X size={18} />
+            </button>
+            <div className="rounded-3xl bg-canvas p-4">
+              <PhonePreview
+                images={Array.from({ length: it.slides }, (_, i) => `/api/render/${it.id}/${i}?v=${encodeURIComponent(it.version)}`)}
+                storyImages={Array.from({ length: it.slides }, (_, i) => `/api/story/${it.id}/${i}?v=${encodeURIComponent(it.version)}`)}
+                brandName={brand.name}
+                handle={brand.handle}
+                logoUrl={brand.logoUrl}
+                primary={brand.primary}
+                caption={it.caption}
+                hashtags={it.hashtags}
+              />
+              <p className="mt-3 text-center text-xs text-slate-500">Geser gambar untuk melihat semua slide · ketuk di luar untuk menutup</p>
+            </div>
+          </div>
+        </div>
+      )}
     </li>
   );
 }

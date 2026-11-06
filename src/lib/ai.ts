@@ -84,6 +84,7 @@ Cover bergaya (dipakai bila arah visual/referensi memintanya; semuanya BUTUH fot
 - news_cover: gaya media berita/homeless media. Foto liputan di atas, latar hitam, logo kecil, JUDUL KAPITAL panjang 12-20 kata di tengah bawah dengan 2-4 kata kunci ditandai *bintang* (warna menyala), body = 1 baris subjudul. image.prompt: foto dokumenter realistis, subjek di setengah atas.
 - folk_cover: gaya info cepat. Foto lebar di atas, panel putih di bawah, headline = 1 kalimat fakta 15-30 kata huruf biasa tanpa *bintang*. image.prompt: foto dokumenter/wide shot/foto udara.
 - editorial_cover: gaya majalah. Foto close-up penuh, judul 2-5 kata di tengah bawah, 1 kata *bintang* jadi serif italic, labelB = teks tombol pil kecil. image.prompt: close-up wajah/produk kelas majalah, latar bersih.
+- logo_reveal: teaser / coming soon / pengumuman: logo brand besar di tengah, latar warna brand bercahaya, kicker kecil ("Segera hadir"), headline 2-6 kata, labelB tanggal. TANPA foto. Selalu single post.
 - creative_cover: gaya kreatif 3D/AI. Visual 3D penuh, judul raksasa 2-4 kata di atas, 1 kata *bintang* jadi tulisan tangan neon, kicker = stiker miring pendek (mis. "Part 2"). image.prompt: render 3D glossy surreal melayang di langit biru.`;
 
 export function brandSystemPrompt(brand: Brand): string {
@@ -271,11 +272,11 @@ export const TEASER_WORDS = /coming\s?soon|segera hadir|teaser|launch|peluncuran
 export const isTeaser = (idea: Pick<Idea, "title" | "hook" | "angle">, extra = "") => TEASER_WORDS.test(`${idea.title} ${idea.hook} ${idea.angle} ${extra}`);
 
 const TEASER_GUIDE = `# KONTEN TEASER / COMING SOON (WAJIB)
-Ini konten teaser/pengumuman eksklusif, BUKAN edukasi. Target rasa: misterius, premium, bikin penasaran — seperti teaser peluncuran brand besar.
-- Maksimal 3 slide (single post lebih baik). Slide 1 = KEY VISUAL penuh satu layar: pakai layout editorial_cover (atau cover khas arah visual bila ada).
-- Judul sangat pendek 2-4 kata, mis. "Segera *hadir*." / "Sesuatu yang *baru*." Tandai 1 kata dengan *bintang*. labelB = teks tombol kecil, mis. "Nantikan 12.12" atau "Segera".
-- Tanpa paragraf, tanpa daftar, tanpa kartu ikon/clue berisi kalimat panjang. Bila ada slide 2-3, tiap slide dipimpin foto/visual dengan 1 baris teks saja, terakhir cta singkat.
-- image.prompt cover: key visual sinematik yang misterius dan mahal: produk/objek utama brand tersembunyi sebagian dalam bayangan, rim light dramatis berwarna brand, latar gelap bersih dengan glow halus, ruang kosong untuk judul, kualitas iklan peluncuran. Bila brand produk digital: perangkat (HP/laptop) dengan layar menyala samar di ruang gelap, siluet, partikel cahaya.
+Ini teaser eksklusif yang SIMPEL: SINGLE POST, 1 slide saja, layout logo_reveal (logo brand besar di tengah di atas latar warna brand). Bukan carousel, bukan edukasi.
+- kicker: label kecil kapital, mis. "Segera hadir" / "Coming soon".
+- headline: 2-6 kata yang bikin penasaran, tanpa *bintang*, mis. "Sesuatu yang baru untuk marketer".
+- labelB: tanggal / ajakan sangat singkat, mis. "12.12" atau "Nantikan". body boleh kosong.
+- Kosongkan image.prompt & image.query (visualnya logo brand).
 - Caption singkat penuh rasa penasaran + ajakan nyalakan notifikasi/follow.`;
 
 export async function generatePost(brand: Brand, idea: Idea, ref?: RefContext | null): Promise<Draft> {

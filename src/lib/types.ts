@@ -91,6 +91,7 @@ export const SLIDE_LAYOUTS = [
   "folk_cover", // info cepat: foto di atas, kotak putih teks hitam besar, stiker bulat
   "editorial_cover", // editorial majalah: foto close-up penuh, judul tengah sans + serif italic, tombol pil
   "creative_cover", // kreatif 3D/AI: render 3D penuh, judul putih raksasa + kata tulisan tangan neon
+  "logo_reveal", // teaser / coming soon: logo besar di tengah, latar warna brand, teks singkat
 ] as const;
 export type SlideLayout = (typeof SLIDE_LAYOUTS)[number];
 

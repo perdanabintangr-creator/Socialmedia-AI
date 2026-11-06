@@ -4,7 +4,7 @@ import { config } from "@/lib/config";
 import { ActionForm, Submit } from "@/components/forms";
 import { StylePickerField } from "@/components/style-picker";
 import { Card, Field, PageTitle, inputCls } from "@/components/ui";
-import { analyzeExamplesAction, importWebsiteAction, saveBrandAction } from "@/app/actions";
+import { analyzeExamplesAction, colorsFromLogoAction, importWebsiteAction, saveBrandAction } from "@/app/actions";
 import { FONT_KEYS, FONT_OPTIONS, TEMPLATE_KEYS, type Brand, type FontKey } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +71,22 @@ export default async function BrandPage({ searchParams }: { searchParams: Promis
           </div>
         </ActionForm>
       </Card>
+
+      {brand.logoUrl && (
+        <Card className="flex flex-wrap items-center gap-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={brand.logoUrl} alt="" className="h-12 w-12 rounded-xl bg-white object-contain p-1 ring-1 ring-line" />
+          <div className="flex gap-1.5">
+            {(["primary", "secondary", "accent", "background"] as const).map((k) => (
+              <span key={k} title={k} className="h-8 w-8 rounded-lg ring-1 ring-black/10" style={{ background: brand.colors[k] }} />
+            ))}
+          </div>
+          <p className="min-w-0 flex-1 text-sm text-slate-500">Warna desain harus senada dengan logo supaya vibes-nya pas.</p>
+          <ActionForm action={colorsFromLogoAction}>
+            <Submit variant="ghost" pendingText="Membaca warna logo…">🎨 Samakan warna dengan logo</Submit>
+          </ActionForm>
+        </Card>
+      )}
 
       <ActionForm action={saveBrandAction} className="space-y-6">
         <Card className="space-y-4">

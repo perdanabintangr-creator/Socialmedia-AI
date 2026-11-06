@@ -23,7 +23,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
   return (
     <div className="min-h-dvh lg:grid lg:grid-cols-[272px_minmax(0,1fr)]">
       {/* Sidebar (desktop) */}
-      <aside className="sticky top-0 hidden h-dvh flex-col gap-5 border-r border-line bg-canvas px-4 py-5 lg:flex">
+      <aside className="sticky top-0 hidden h-dvh flex-col gap-4 border-r border-line bg-canvas px-4 py-5 lg:flex">
         <div className="flex items-center justify-between px-1">
           <Link href="/beranda">
             <Logo size={30} />
