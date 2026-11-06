@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Copy, ImagePlus, Loader2, Sparkles, Stethoscope, Wand2, X } from "lucide-react";
 import { applyAuditAction, planFromAuditAction, runAuditAction, type AuditResult } from "@/app/audit-actions";
@@ -47,7 +47,6 @@ export function AuditForm({ hasAudit }: { hasAudit: boolean }) {
           setRes(r);
           if (r.ok) {
             setFiles([]);
-            setOpen(false);
             router.refresh();
           }
         });
@@ -188,5 +187,45 @@ export function CopyText({ text }: { text: string }) {
     >
       {done ? <Check size={13} /> : <Copy size={13} />} {done ? "Tersalin" : "Salin"}
     </button>
+  );
+}
+
+const STEPS = ["Membaca profil & screenshot", "Menilai feed, hook, dan desain", "Mencari masalah terbesar", "Menyusun rencana aksi & ide konten"];
+
+/** Audit sedang berjalan di latar belakang: tampilkan progres & muat ulang sampai selesai. */
+export function AuditRunning({ startedAt }: { startedAt: string }) {
+  const router = useRouter();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    const poll = setInterval(() => router.refresh(), 5000);
+    return () => {
+      clearInterval(tick);
+      clearInterval(poll);
+    };
+  }, [router]);
+  const secs = Math.max(0, Math.round((now - new Date(startedAt).getTime()) / 1000));
+  const step = Math.min(STEPS.length - 1, Math.floor(secs / 20));
+  return (
+    <section className="rounded-3xl bg-ink p-6 text-white shadow-lift sm:p-8" role="status" aria-live="polite">
+      <div className="flex items-center gap-4">
+        <span className="bg-social grid h-12 w-12 shrink-0 place-items-center rounded-2xl">
+          <Loader2 size={22} className="animate-spin" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-lg font-bold">Konsultan sedang menganalisis akunmu…</p>
+          <p className="text-sm text-white/60">Biasanya 1–2 menit. Halaman ini memperbarui sendiri — boleh ditinggal dulu, hasilnya tetap tersimpan.</p>
+        </div>
+        <span className="text-2xl font-extrabold tabular-nums">{Math.floor(secs / 60)}:{String(secs % 60).padStart(2, "0")}</span>
+      </div>
+      <ol className="mt-6 grid gap-2 sm:grid-cols-4">
+        {STEPS.map((t, i) => (
+          <li key={t} className={`rounded-xl px-3 py-2 text-xs font-semibold ring-1 ${i < step ? "bg-white/10 text-white/70 ring-white/10" : i === step ? "bg-white text-ink ring-white" : "text-white/40 ring-white/10"}`}>
+            {i < step ? "✓ " : ""}
+            {t}
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }

@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { workspaceOrThrow } from "@/lib/session";
 import { metered } from "@/lib/cost";
@@ -24,13 +25,27 @@ export async function runAuditAction(fd: FormData): Promise<AuditResult> {
     const files = fd.getAll("shots").filter((f): f is File => f instanceof File && f.size > 0);
     if (!links.length && !files.length) return { ok: false, message: "Masukkan link profil atau upload screenshot profil dulu" };
     const screenshots = files.length ? await uploadReferences(w, files) : [];
-    const audit = await metered(w, "audit", () => auditAccount(w, { links, screenshots, goal: String(fd.get("goal") ?? "").trim().slice(0, 300) }));
-    const brand = await w.getBrand();
-    // Akun baru (Brand Kit masih kosong): rekomendasi langsung diterapkan supaya siap dipakai.
-    const fresh = !brand.description.trim() && !brand.audit;
-    await w.saveBrand(fresh ? applyAudit(brand, audit) : { ...brand, audit });
-    revalidatePath("/", "layout");
-    return { ok: true, message: fresh ? "Audit selesai — Brand Kit sudah terisi dari hasil audit" : "Audit selesai" };
+    const goal = String(fd.get("goal") ?? "").trim().slice(0, 300);
+    const current = await w.getBrand();
+    if (current.auditRun?.status === "running" && Date.now() - new Date(current.auditRun.startedAt).getTime() < 6 * 60_000) {
+      return { ok: false, message: "Audit sebelumnya masih berjalan, tunggu sebentar ya" };
+    }
+    await w.saveBrand({ ...current, auditRun: { status: "running", startedAt: new Date().toISOString(), error: null } });
+    // Analisis ±1-2 menit berjalan di latar belakang: aman walau koneksi customer putus / tab ditutup.
+    after(async () => {
+      try {
+        const audit = await metered(w, "audit", () => auditAccount(w, { links, screenshots, goal }));
+        const brand = await w.getBrand();
+        // Akun baru (Brand Kit masih kosong): rekomendasi langsung diterapkan supaya siap dipakai.
+        const fresh = !brand.description.trim() && !brand.audit;
+        await w.saveBrand({ ...(fresh ? applyAudit(brand, audit) : { ...brand, audit }), auditRun: null });
+      } catch (e) {
+        const brand = await w.getBrand();
+        await w.saveBrand({ ...brand, auditRun: { status: "error", startedAt: new Date().toISOString(), error: e instanceof Error ? e.message : "Audit gagal" } });
+      }
+    });
+    revalidatePath("/audit");
+    return { ok: true, message: "Konsultan mulai menganalisis akunmu…" };
   } catch (e) {
     return fail(e);
   }

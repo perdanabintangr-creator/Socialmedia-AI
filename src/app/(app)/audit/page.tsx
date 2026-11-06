@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, Lightbulb, ListChecks, Palette, UserRound } from "lucide-react";
 import { requireWorkspace } from "@/lib/session";
 import { PageTitle } from "@/components/ui";
-import { AuditActions, AuditForm, CopyText } from "@/components/audit";
+import { AuditActions, AuditForm, AuditRunning, CopyText } from "@/components/audit";
 import { VISUAL_STYLES, isVisualStyle } from "@/lib/types";
 
 export const metadata = { title: "Audit akun" };
@@ -31,6 +31,8 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
   const { user, w } = await requireWorkspace();
   const brand = await w.getBrand();
   const a = brand.audit ?? null;
+  const run = brand.auditRun ?? null;
+  const running = run?.status === "running" && Date.now() - new Date(run.startedAt).getTime() < 6 * 60_000;
   const awal = Boolean((await searchParams).awal);
   const when = (k: string) => a?.actions.filter((x) => x.when === k) ?? [];
 
@@ -47,12 +49,22 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
         </div>
       ) : (
         <PageTitle title="Audit akun" subtitle="Konsultan AI menilai akun Instagram/TikTok kamu seperti agency: apa yang sudah bagus, apa yang menghambat, dan langkah konkretnya.">
-          {a && <AuditForm hasAudit />}
+          {a && !running && <AuditForm hasAudit />}
         </PageTitle>
       )}
 
-      {!a && <AuditForm hasAudit={false} />}
-      {!a && awal && (
+      {running && (
+        <div className="mb-6">
+          <AuditRunning startedAt={run!.startedAt} />
+        </div>
+      )}
+      {run?.status === "error" && !running && (
+        <p role="alert" className="mb-6 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-200">
+          Audit terakhir gagal: {run.error}. Coba jalankan ulang.
+        </p>
+      )}
+      {!a && !running && <AuditForm hasAudit={false} />}
+      {!a && !running && awal && (
         <p className="mt-4 text-center text-sm text-slate-500">
           Belum punya akun sosmed atau mau nanti saja?{" "}
           <Link href="/beranda" className="font-semibold text-brand-600 hover:underline">

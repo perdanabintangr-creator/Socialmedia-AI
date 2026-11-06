@@ -62,6 +62,7 @@ export interface Brand {
   performance: boolean; // pemantauan performa (baca metrik dari link) aktif
   insights?: string; // wawasan konsultan dari audit akun (dipakai di semua prompt)
   audit?: AccountAudit | null; // hasil audit akun terakhir
+  auditRun?: { status: "running" | "error"; startedAt: string; error?: string | null } | null; // audit di latar belakang
 }
 
 export type ImageSourceMode = "auto" | "ai" | "stock" | "brand" | "none";
