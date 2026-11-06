@@ -26,10 +26,26 @@ const clean = (v: string | undefined) => {
   const s = (v ?? "").trim().replace(/^[A-Z_]+=/, "").replace(/^Bearer\s+/i, "").replace(/^["']|["']$/g, "").trim();
   return s || undefined;
 };
+/**
+ * Ambil token murni walau yang ditempel berupa perintah curl / "Bearer xxx" utuh.
+ * Token tidak pernah ditulis ke pesan error.
+ */
+function apiToken(raw: string | undefined): string | undefined {
+  const v = raw?.trim();
+  if (!v) return undefined;
+  const bearer = /Bearer\s+([A-Za-z0-9._~+/=-]{20,})/i.exec(v)?.[1];
+  const token = bearer ?? (/^[A-Za-z0-9._~+/=-]+$/.test(v) ? v : undefined);
+  return token;
+}
+
+/** Pesan error aman: buang apa pun yang mirip token/kunci. */
+export const redact = (msg: string) =>
+  msg.replace(/(Bearer\s+)[^\s"']+/gi, "$1***").replace(/\b(cfut|sk|AIza|ghp|xox)[-_A-Za-z0-9]{8,}/g, "***");
+
 const keys = () => ({
   openrouter: clean(process.env.OPENROUTER_API_KEY),
   cfAccount: clean(process.env.CLOUDFLARE_ACCOUNT_ID),
-  cfToken: clean(process.env.CLOUDFLARE_AI_TOKEN),
+  cfToken: apiToken(process.env.CLOUDFLARE_AI_TOKEN),
   gemini: clean(process.env.GEMINI_API_KEY),
   openai: clean(process.env.OPENAI_API_KEY),
 });
@@ -75,11 +91,16 @@ async function fromUrl(url: string): Promise<Buffer | null> {
 /** Cloudflare Workers AI: FLUX.1 schnell, termasuk kuota gratis harian Workers AI. */
 async function viaCloudflare(account: string, token: string, prompt: string): Promise<GenResult> {
   const model = process.env.CLOUDFLARE_IMAGE_MODEL || "@cf/black-forest-labs/flux-1-schnell";
-  const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/ai/run/${model}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt: prompt.slice(0, 2000), steps: 8 }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${account.trim()}/ai/run/${model}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: prompt.slice(0, 2000), steps: 8 }),
+    });
+  } catch {
+    throw new Error("cloudflare: permintaan gagal dikirim (cek format CLOUDFLARE_AI_TOKEN & CLOUDFLARE_ACCOUNT_ID)");
+  }
   const json = (await res.json().catch(() => null)) as { result?: { image?: string }; errors?: { message?: string }[] } | null;
   const b64 = json?.result?.image;
   if (!res.ok || !b64) throw new Error(`cloudflare ${res.status}: ${json?.errors?.[0]?.message ?? "tidak mengembalikan gambar"}`);
@@ -266,7 +287,7 @@ export async function checkImageProviders(): Promise<{ provider: string; ok: boo
       const r = await run();
       out.push({ provider, ok: true, model: r.model, ms: Date.now() - t, costUsd: r.costUsd });
     } catch (e) {
-      out.push({ provider, ok: false, ms: Date.now() - t, error: (e instanceof Error ? e.message : String(e)).slice(0, 300) });
+      out.push({ provider, ok: false, ms: Date.now() - t, error: redact(e instanceof Error ? e.message : String(e)).slice(0, 300) });
     }
   }
   return out;

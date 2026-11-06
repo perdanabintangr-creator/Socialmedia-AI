@@ -1,7 +1,7 @@
 import "server-only";
 import sharp from "sharp";
 import { config } from "./config";
-import { generateImage } from "./image-gen";
+import { generateImage, redact } from "./image-gen";
 import { recordImage } from "./cost";
 import type { WorkspaceRepo } from "./db";
 import type { Brand, SlideImage } from "./types";
@@ -109,7 +109,7 @@ export async function sourceImage(w: WorkspaceRepo, brand: Brand, req: ImageRequ
       recordImage(out.provider, out.model, out.costUsd);
       return { ...base, url: await store(w, out.data, key), source: "ai" };
     } catch (e) {
-      console.error("AI image gagal, coba stok foto:", e);
+      console.error("AI image gagal, coba stok foto:", redact(e instanceof Error ? e.message : String(e)));
     }
   }
   if ((mode === "auto" || mode === "stock" || mode === "ai") && config.hasStock && req.query) {
