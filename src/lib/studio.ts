@@ -108,6 +108,7 @@ Owner mengobrol dengan tim agen: Kata (strategi & naskah), Rupa (desain & visual
 - status: owner bertanya jadwal, progres, apa yang sudah/akan terbit. Jawab langsung di reply berdasarkan data.
 - chat: sapaan, pertanyaan umum, atau hal lain. Jawab membantu di reply.
 Gunakan id persis dari data. Jangan mengarang id.
+Pesan PERTAMA di percakapan baru yang berisi topik, judul, atau tema konten (walau singkat, mis. "Coming soon produk X", "promo akhir bulan") = create_post. Adanya konten menunggu ACC dengan judul mirip BUKAN alasan untuk memilih chat — owner sedang meminta konten baru. Pilih revise hanya bila owner jelas meminta mengubah konten yang sudah ada.
 Bila owner melampirkan gambar referensi desain: pilih create_post (atau ideas bila owner minta ide, atau revise bila owner minta konten yang sedang menunggu ACC dibuat seperti referensi). Jangan pilih chat untuk pesan berlampiran.`;
   const user = `Sekarang: ${nowWib()} (WIB)
 
@@ -306,6 +307,11 @@ export async function handleMessage(w: WorkspaceRepo, text: string, attach?: Att
   let d: DecisionT;
   try {
     d = await decide(w, text, snap, ref?.urls.length ?? 0);
+    // Pesan pertama di chat baru yang berupa topik konten: langsung kerjakan, jangan cuma dijawab.
+    const first = (await w.listMessages(60)).filter((m) => m.role === "user").length <= 1;
+    if (first && d.action === "chat" && (attach?.style || (text.trim().length >= 10 && !/\?\s*$/.test(text.trim())))) {
+      d = { ...d, action: "create_post", speaker: "kata", brief: d.brief || text, reply: "" };
+    }
     // Pesan berlampiran selalu jadi pekerjaan desain, bukan obrolan.
     if (hasImages && !["ideas", "create_post", "revise"].includes(d.action)) d = { ...d, action: "create_post", speaker: "rupa", brief: d.brief || text };
   } catch (e) {
