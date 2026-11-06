@@ -1,4 +1,6 @@
 import "server-only";
+import { readFile } from "fs/promises";
+import path from "path";
 import sharp from "sharp";
 import { config } from "./config";
 import { generateImage, redact } from "./image-gen";
@@ -73,23 +75,10 @@ async function store(w: WorkspaceRepo, data: Buffer, key: string) {
   return w.uploadFile(`images/${key}-${Date.now()}.jpg`, jpg, "image/jpeg");
 }
 
-/** Gambar abstrak on-brand untuk mode demo (tanpa API gambar). */
-async function demoImage(brand: Brand, seed: number) {
-  const { primary, secondary, accent } = brand.colors;
-  const r = (n: number) => Math.abs(Math.sin(seed * 999 + n)) ;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350">
-    <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${secondary}"/><stop offset="1" stop-color="${primary}"/></linearGradient></defs>
-    <rect width="1080" height="1350" fill="url(#g)"/>
-    <circle cx="${200 + r(1) * 700}" cy="${300 + r(2) * 500}" r="${220 + r(3) * 200}" fill="${accent}" opacity="0.55"/>
-    <circle cx="${200 + r(4) * 700}" cy="${600 + r(5) * 500}" r="${150 + r(6) * 200}" fill="#ffffff" opacity="0.18"/>
-  </svg>`;
-  return sharp(Buffer.from(svg)).jpeg({ quality: 85 }).toBuffer();
-}
-
 /**
  * @param refs gambar referensi desain dari owner (JPEG kecil) — dikirim ke AI image sebagai contoh gaya.
  */
-export async function sourceImage(w: WorkspaceRepo, brand: Brand, req: ImageRequest, key: string, seed = 0, refs: Buffer[] = []): Promise<SlideImage | null> {
+export async function sourceImage(w: WorkspaceRepo, brand: Brand, req: ImageRequest, key: string, refs: Buffer[] = []): Promise<SlideImage | null> {
   const base = { query: req.query, prompt: req.prompt, credit: "" };
   const mode = brand.imageSource;
   if (mode === "none") return null;
@@ -97,9 +86,6 @@ export async function sourceImage(w: WorkspaceRepo, brand: Brand, req: ImageRequ
   const asset = brand.assets.find((a) => a.id === req.assetId);
   if (asset) return { ...base, url: asset.url, source: "brand" };
   if (mode === "brand") return null;
-
-  // Mode demo tanpa API gambar: pakai foto brand bergantian.
-  if (!config.hasAI && !config.imageProvider && brand.assets.length) return { ...base, url: brand.assets[seed % brand.assets.length].url, source: "brand" };
 
   // AI image boleh jalan walau ANTHROPIC_API_KEY belum diisi (kunci gambar terpisah).
   if ((mode === "auto" || mode === "ai") && config.imageProvider && (req.prompt || req.query)) {
@@ -120,12 +106,13 @@ export async function sourceImage(w: WorkspaceRepo, brand: Brand, req: ImageRequ
       console.error("Stok foto gagal:", e);
     }
   }
-  if (!config.hasAI) return { ...base, url: await store(w, await demoImage(brand, seed + 1), key), source: "demo" };
   return null;
 }
 
-export async function demoImageDataUrl(brand: Brand, seed: number) {
-  return `data:image/jpeg;base64,${(await demoImage(brand, seed)).toString("base64")}`;
+/** Foto contoh (Unsplash) untuk galeri pratinjau layout di Brand Kit — bukan untuk konten. */
+export async function samplePhotoDataUrl(seed: number) {
+  const file = path.join(process.cwd(), "public", "samples", `${(Math.abs(seed) % 6) + 1}.jpg`);
+  return `data:image/jpeg;base64,${(await readFile(file)).toString("base64")}`;
 }
 
 export function imageSourceStatus() {

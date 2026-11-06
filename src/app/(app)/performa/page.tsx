@@ -380,7 +380,7 @@ function EmptyState() {
 
 /** Belum diaktifkan: jelaskan manfaatnya + satu tombol. */
 function Intro() {
-  const demo = [
+  const contoh = [
     { t: "Promo beli 2 gratis 1", v: "48,2 rb", l: "6,1 rb", c: "312", w: 92 },
     { t: "3 kesalahan seduh kopi", v: "21,7 rb", l: "2,4 rb", c: "148", w: 54 },
     { t: "Behind the scenes roasting", v: "9,8 rb", l: "1,1 rb", c: "61", w: 26 },
@@ -424,7 +424,7 @@ function Intro() {
               <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">ER 7,4%</span>
             </div>
             <ul className="mt-4 space-y-3">
-              {demo.map((d, i) => (
+              {contoh.map((d, i) => (
                 <li key={d.t} className="flex items-center gap-3">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={`/showcase/${i + 1}.webp`} alt="" className="aspect-[4/5] w-12 rounded-xl object-cover" />

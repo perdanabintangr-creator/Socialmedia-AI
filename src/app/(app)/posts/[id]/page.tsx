@@ -43,7 +43,7 @@ const STORY_STATUS = {
   failed: ["Story gagal", "bg-red-100 text-red-700"],
 } as const;
 
-const SOURCE_LABEL = { ai: "AI image", stock: "Stok foto", brand: "Foto brand", upload: "Upload", demo: "Demo" } as const;
+const SOURCE_LABEL = { ai: "AI image", stock: "Stok foto", brand: "Foto brand", upload: "Upload", demo: "Contoh" } as const;
 
 const PRESETS = [
   "Visualnya kurang wow, buat lebih eye-catching",

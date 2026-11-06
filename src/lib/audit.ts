@@ -3,8 +3,7 @@ import sharp from "sharp";
 import { z } from "zod";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { WorkspaceRepo } from "./db";
-import { callStructured, brandSystemPrompt } from "./ai";
-import { config } from "./config";
+import { callStructured, brandSystemPrompt, requireAI } from "./ai";
 import { readMedia } from "./media";
 import { compact, engagementOf } from "./insights";
 import { VISUAL_STYLE_KEYS, type AccountAudit, type Brand } from "./types";
@@ -114,37 +113,6 @@ async function screenshotBlocks(urls: string[]): Promise<Anthropic.Beta.BetaCont
   return out;
 }
 
-function demoAudit(brand: Brand, base: Pick<AccountAudit, "createdAt" | "links" | "screenshots" | "goal" | "profile">): AccountAudit {
-  return {
-    ...base,
-    overall: 58,
-    verdict: "[DEMO] Akun punya potensi, tapi feed belum konsisten dan hook masih umum.",
-    scores: ["Profil & bio", "Konsistensi visual feed", "Strategi & pilar konten", "Hook & copywriting", "Kualitas desain", "Konsistensi posting", "Engagement & komunitas"].map((area, i) => ({
-      area,
-      score: [62, 48, 55, 50, 60, 45, 52][i],
-      note: "Contoh penilaian mode demo.",
-    })),
-    strengths: ["Logo & warna brand mudah dikenali", "Topik relevan dengan audiens"],
-    problems: [
-      { title: "Hook cover terlalu umum", why: "Orang tidak berhenti scroll.", fix: "Pakai angka spesifik atau masalah yang dikenali audiens di cover." },
-      { title: "Jadwal posting tidak konsisten", why: "Algoritma & audiens kehilangan ritme.", fix: "Posting 3x seminggu di jam yang sama lewat Mode ACC." },
-    ],
-    bio: `${brand.name} — bantu kamu ${brand.industry || "tumbuh"} lebih cepat. Cek link 👇`,
-    actions: [
-      { when: "Minggu ini", action: "Ganti bio dengan usulan baru" },
-      { when: "Bulan ini", action: "Jalankan rencana 12 konten di Mode ACC" },
-    ],
-    ideas: [
-      { title: "3 kesalahan yang bikin konten sepi", hook: "Konten rame tapi nggak ada yang beli?", format: "carousel", pillar: brand.pillars[0] ?? "Edukasi", why: "Masalah yang dikenali audiens." },
-      { title: "Behind the scenes tim", hook: "Ini yang terjadi sebelum produk sampai ke kamu", format: "carousel", pillar: "Behind the scenes", why: "Membangun kepercayaan." },
-    ],
-    posting: { perWeek: 3, bestTimes: "19.00–21.00 WIB (jam santai setelah kerja)" },
-    brandUpdates: { description: brand.description, audience: brand.audience, industry: brand.industry, tone: brand.tone, pillars: brand.pillars, imageStyle: brand.imageStyle, styleNotes: brand.styleNotes, doDont: brand.doDont, visualStyle: "brand" },
-    insights: "[DEMO] Perbanyak carousel edukasi dengan hook angka spesifik; hindari cover penuh teks.",
-    appliedAt: null,
-  };
-}
-
 /** Jalankan audit. Mengembalikan hasil audit (belum diterapkan ke Brand Kit). */
 export async function auditAccount(w: WorkspaceRepo, opts: { links: string[]; screenshots: string[]; goal: string }): Promise<AccountAudit> {
   const brand = await w.getBrand();
@@ -155,7 +123,7 @@ export async function auditAccount(w: WorkspaceRepo, opts: { links: string[]; sc
     profile.push(read ?? { platform: p.platform, handle: p.handle });
   }
   const base = { createdAt: new Date().toISOString(), links: opts.links, screenshots: opts.screenshots, goal: opts.goal, profile };
-  if (!config.hasAI) return demoAudit(brand, base);
+  requireAI();
 
   // Data performa nyata dari menu Performa (bila ada).
   const links = (await w.listLinks()).filter((l) => l.metrics);

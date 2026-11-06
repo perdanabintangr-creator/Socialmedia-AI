@@ -242,37 +242,7 @@ async function readTikTokApify(p: ParsedLink): Promise<Reading> {
   };
 }
 
-/** Mode uji lokal (INSIGHTS_FAKE=1, tidak berlaku di Vercel): angka tiruan yang stabil per link. */
-function fakeReading(p: ParsedLink): Reading {
-  let h = 0;
-  for (const c of p.url) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  const days = Math.floor(Date.now() / 86_400_000) % 1000;
-  const base = 800 + (h % 9000);
-  const grow = 1 + ((days * 7 + (h % 13)) % 40) / 100;
-  const views = Math.round(base * 14 * grow);
-  if (p.kind === "profile") {
-    return {
-      metrics: { followers: Math.round(base * 3 * grow), following: 120 + (h % 300), posts: 40 + (h % 200), ...(p.platform === "tiktok" ? { totalLikes: Math.round(base * 40 * grow) } : {}) },
-      title: p.handle,
-      handle: p.handle,
-      image: `${process.env.APP_URL || "http://localhost:3000"}/showcase/${(h % 6) + 1}.webp`,
-    };
-  }
-  return {
-    metrics: {
-      views,
-      likes: Math.round(views * (0.06 + (h % 7) / 100)),
-      comments: Math.round(views * 0.004),
-      ...(p.platform === "tiktok" ? { shares: Math.round(views * 0.003), saves: Math.round(views * 0.005) } : {}),
-    },
-    title: ["3 kesalahan yang bikin kopi kamu pahit", "Promo beli 2 gratis 1 akhir bulan", "Behind the scenes roasting pagi", "Cara seduh V60 untuk pemula"][h % 4],
-    handle: p.handle ?? "kopisenja",
-    image: `${process.env.APP_URL || "http://localhost:3000"}/showcase/${(h % 6) + 1}.webp`,
-  };
-}
-
 export async function readLink(p: ParsedLink): Promise<Reading> {
-  if (process.env.INSIGHTS_FAKE === "1" && !process.env.VERCEL) return fakeReading(p);
   if (p.platform === "instagram") return readInstagram(p);
   try {
     return await readTikTokDirect(p);

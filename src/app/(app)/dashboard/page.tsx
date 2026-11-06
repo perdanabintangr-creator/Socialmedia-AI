@@ -16,7 +16,7 @@ export default async function Dashboard() {
   const published = posts.filter((p) => p.status === "published");
 
   const allSetup = [
-    { done: config.hasAI, label: "Hubungkan AI (ANTHROPIC_API_KEY)", hint: "Tanpa ini ide & konten masih contoh (mode demo)." },
+    { done: config.hasAI, label: "Hubungkan AI (ANTHROPIC_API_KEY)", hint: "Wajib: semua ide, naskah, desain, dan audit dibuat oleh Claude." },
     { done: config.hasSupabase, label: "Hubungkan database (Supabase)", hint: "Tanpa ini data disimpan lokal di folder .data." },
     { done: config.hasPublisher, label: "Hubungkan Instagram & TikTok (AYRSHARE_API_KEY)", hint: "Tanpa ini desain final bisa diunduh, tapi belum auto-post." },
     { done: Boolean(config.imageProvider || config.hasStock), label: "Hubungkan sumber foto (AI image / Pexels)", hint: "Tanpa ini, foto hanya dari library foto brand; slide lain memakai versi grafis." },

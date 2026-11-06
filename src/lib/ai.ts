@@ -167,6 +167,11 @@ function formatRules(format: PostFormat): string {
 - Slide terakhir: layout cta.`;
 }
 
+/** Semua pekerjaan kreatif wajib lewat Claude — tidak ada konten contoh/tiruan. */
+export function requireAI() {
+  if (!config.hasAI) throw new Error("AI belum aktif: ANTHROPIC_API_KEY belum diisi di pengaturan server.");
+}
+
 export async function callStructured<T extends z.ZodType>(
   system: string,
   content: Anthropic.Beta.BetaContentBlockParam[] | string,
@@ -273,10 +278,9 @@ export interface RefContext {
 const withRef = (prompt: string, ref?: RefContext | null): Anthropic.Beta.BetaContentBlockParam[] | string =>
   ref ? [...ref.images, { type: "text", text: `${ref.text}\n\n${prompt}` }] : prompt;
 
-const PROMO_WORDS = /promo|diskon|cashback|gratis|potongan|sale|beli \d|harga spesial|voucher/i;
 
 export async function generateIdeas(brand: Brand, opts: { brief: string; count: number; recentTitles: string[]; reference?: string; month?: boolean }) {
-  if (!config.hasAI) return demoIdeas(brand, opts.count, opts.brief);
+  requireAI();
   const prompt = `Buat ${opts.count} ide konten baru untuk ${opts.month ? "SATU BULAN penuh (kalender konten bulanan)" : "minggu ini"}.${
     opts.month
       ? `\nSusun seperti social media strategist agency: urutkan sesuai tanggal tayang, campur tujuan (awareness/edukasi ±40%, engagement/interaksi ±20%, social proof/testimoni ±15%, behind the scenes ±10%, jualan/promo ±15%), selang-seling format & pilar supaya feed tidak monoton, dan buat alur kampanye yang nyambung dari minggu ke minggu.`
@@ -306,7 +310,7 @@ Ini teaser eksklusif yang SIMPEL: SINGLE POST, 1 slide saja, layout logo_reveal 
 - Caption singkat penuh rasa penasaran + ajakan nyalakan notifikasi/follow.`;
 
 export async function generatePost(brand: Brand, idea: Idea, ref?: RefContext | null): Promise<Draft> {
-  if (!config.hasAI) return demoPost(brand, idea);
+  requireAI();
   const teaser = isTeaser(idea);
   const prompt = `Buat konten lengkap (copy + art direction) dari ide yang sudah di-ACC berikut.
 
@@ -323,14 +327,7 @@ Pastikan alur slide enak dibaca berurutan, visualnya bervariasi, dan caption mel
 }
 
 export async function revisePost(brand: Brand, post: Post, instruction: string, ref?: RefContext | null): Promise<Draft> {
-  if (!config.hasAI) {
-    return {
-      title: post.title,
-      slides: post.slides.map((slide) => ({ slide, imageRequest: null })),
-      caption: `${post.caption}\n\n[DEMO] Revisi diminta: ${instruction}`,
-      hashtags: post.hashtags,
-    };
-  }
+  requireAI();
   const prompt = `Ini konten yang sudah kamu buat sebelumnya (JSON):
 ${JSON.stringify({ title: post.title, slides: slidesForPrompt(post.slides), caption: post.caption, hashtags: post.hashtags }, null, 2)}
 
@@ -378,13 +375,7 @@ export async function analyzeExamples(
   brand: Brand,
   images: { data: string; mediaType: "image/png" | "image/jpeg" | "image/webp" }[],
 ) {
-  if (!config.hasAI) {
-    return {
-      styleNotes: "[DEMO] Isi ANTHROPIC_API_KEY agar AI bisa menganalisis contoh post secara otomatis.",
-      imageStyle: brand.imageStyle,
-      suggestedTemplate: brand.defaultTemplate,
-    };
-  }
+  requireAI();
   const content: Anthropic.Beta.BetaContentBlockParam[] = [
     ...images.map((img) => ({
       type: "image" as const,
@@ -396,77 +387,4 @@ export async function analyzeExamples(
     },
   ];
   return callStructured(brandSystemPrompt(brand), content, StyleSchema);
-}
-
-// ------------------------------------------------------------------ mode demo
-
-function demoIdeas(brand: Brand, count: number, brief = "") {
-  const pillars = brand.pillars.length ? brand.pillars : ["Edukasi"];
-  if (count === 1 && PROMO_WORDS.test(brief)) {
-    return [
-      {
-        title: "[DEMO] Promo spesial akhir bulan",
-        hook: "Akhir bulan, dompet tetap aman.",
-        angle: "Penawaran promo dengan angka besar, benefit singkat, dan tombol ajakan (mode demo).",
-        pillar: "Promo",
-        format: "carousel" as const,
-        rationale: "Contoh konten promo untuk mencoba mode iklan.",
-      },
-    ];
-  }
-  const base = [
-    { title: "5 kesalahan yang bikin konten sepi engagement", format: "carousel" as const },
-    { title: "Satu kebiasaan kecil yang menghemat 2 jam kerja", format: "single" as const },
-    { title: "Checklist sebelum posting konten", format: "carousel" as const },
-    { title: "Mitos vs fakta soal branding", format: "carousel" as const },
-    { title: "Kutipan minggu ini dari tim kami", format: "single" as const },
-    { title: "Cara kerja kami dari brief sampai hasil", format: "carousel" as const },
-  ];
-  return Array.from({ length: count }, (_, i) => {
-    const b = base[i % base.length];
-    return {
-      title: `[DEMO] ${b.title}`,
-      hook: "Kalau kamu masih begini, pantas hasilnya belum maksimal.",
-      angle: "Contoh ide (mode demo). Isi ANTHROPIC_API_KEY agar ide dibuat AI sesuai brand.",
-      pillar: pillars[i % pillars.length],
-      format: b.format,
-      rationale: "Ide contoh untuk mencoba alur ACC.",
-    };
-  });
-}
-
-function demoPost(brand: Brand, idea: Idea): Draft {
-  const title = idea.title.replace("[DEMO] ", "");
-  const photo = (q: string, layout?: string): ImageRequest => ({ assetId: "", query: q, prompt: q, layout });
-  if (idea.reference?.template === "promo" || PROMO_WORDS.test(`${idea.title} ${idea.angle}`)) {
-    const raw: [Partial<Slide>, ImageRequest | null][] = [
-      [{ layout: "promo_hero", kicker: "Promo minggu ini", headline: "Akhir bulan *tetap hemat*", stat: "50%", labelA: "Cashback", labelB: "Pesan sekarang", body: "Contoh S&K · mode demo" }, photo("smiling Indonesian woman holding smartphone", "promo_hero")],
-      [{ layout: "promo_offer", kicker: "Spesial", headline: "Beli 2 *gratis 1*", stat: "2+1", labelA: "Semua menu", items: ["Semua cabang", "Tiap Jumat", "Bisa takeaway"], labelB: "Klaim promo", body: "Contoh syarat & ketentuan." }, null],
-      [{ layout: "list", kicker: "Cara klaim", headline: "Gampang *banget*", items: ["Datang ke outlet", "Tunjukkan postingan ini", "Nikmati promonya"] }, null],
-      [{ layout: "cta", headline: "Jangan sampai *kelewatan*", body: brand.cta }, null],
-    ];
-    return {
-      title,
-      slides: (idea.format === "single" ? raw.slice(0, 1) : raw).map(([s, req]) => ({ slide: normalizeSlide(s), imageRequest: req })),
-      caption: `${idea.hook}\n\nIni caption contoh dari mode demo. Setelah ANTHROPIC_API_KEY diisi, copy promo & art direction dibuat AI sesuai brief dan referensimu.\n\n${brand.cta} 👉 ${brand.handle}`,
-      hashtags: ["promo", "diskon", "hemat"],
-    };
-  }
-  const raw: [Partial<Slide>, ImageRequest | null][] =
-    idea.format === "single"
-      ? [[{ layout: "cover_photo", kicker: idea.pillar, headline: `${title.split(" ").slice(0, -2).join(" ")} *${title.split(" ").slice(-2).join(" ")}*`, body: idea.hook }, photo("creative team working")]]
-      : [
-          [{ layout: "cover_photo", kicker: idea.pillar, headline: `5 kesalahan yang bikin konten *sepi*`, body: "Nomor 3 paling sering terjadi" }, photo("frustrated marketer laptop")],
-          [{ layout: "point_photo", kicker: "Kesalahan", headline: "Tidak punya *tujuan* yang jelas", body: "Tiap konten harus punya satu tujuan: edukasi, kepercayaan, atau jualan." }, photo("team planning whiteboard")],
-          [{ layout: "point_icon", kicker: "Kesalahan", headline: "Hook di slide pertama *lemah*", body: "Orang memutuskan geser atau scroll dalam 3 detik.", icon: "Zap" }, null],
-          [{ layout: "compare", headline: "Yang sering dilakukan vs yang *seharusnya*", labelA: "Salah", labelB: "Benar", items: ["Satu slide penuh teks", "Posting asal jadi"], itemsB: ["Satu slide, satu ide", "Rencanakan tiap minggu"] }, null],
-          [{ layout: "list", kicker: "Checklist", headline: "Sebelum klik *posting*", items: ["Hook jelas di slide pertama", "Visual sesuai brand", "CTA yang spesifik"] }, null],
-          [{ layout: "cta", headline: "Simpan biar *nggak lupa*", body: brand.cta }, null],
-        ];
-  return {
-    title,
-    slides: raw.map(([s, req]) => ({ slide: normalizeSlide(s), imageRequest: req })),
-    caption: `${idea.hook}\n\nIni caption contoh dari mode demo. Setelah ANTHROPIC_API_KEY diisi, caption & art direction dibuat AI sesuai brand ${brand.name}.\n\n${brand.cta} 👉 ${brand.handle}`,
-    hashtags: ["marketing", "kontenkreator", "tipsbisnis"],
-  };
 }

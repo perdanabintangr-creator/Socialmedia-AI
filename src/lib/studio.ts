@@ -2,7 +2,7 @@ import "server-only";
 import { z } from "zod";
 import type { NewMessage, WorkspaceRepo } from "./db";
 import { config } from "./config";
-import { brandSystemPrompt, callStructured } from "./ai";
+import { brandSystemPrompt, callStructured, requireAI } from "./ai";
 import { AGENTS, type AgentId } from "./agents";
 import {
   approveAndPublish,
@@ -21,7 +21,7 @@ import { VISUAL_STYLES, withVisualStyle, type Idea, type Job, type Post, type Po
 
 /**
  * Studio: owner ngobrol dengan tim agen (Kata, Rupa, Siar).
- * 1. Pesan owner → diputuskan aksinya (Claude, atau aturan kata kunci di mode demo)
+ * 1. Pesan owner → diputuskan aksinya oleh Claude
  * 2. Agen membalas singkat
  * 3. Pekerjaan berat dijalankan di latar belakang (job); tiap agen melapor progres ke chat
  */
@@ -81,7 +81,7 @@ async function snapshot(w: WorkspaceRepo): Promise<Snapshot> {
 }
 
 async function decide(w: WorkspaceRepo, text: string, snap: Snapshot, refCount = 0): Promise<DecisionT> {
-  if (!config.hasAI) return demoDecide(text, snap, refCount);
+  requireAI();
   const brand = await w.getBrand();
   const history = (await w.listMessages(14))
     .map((m) => `${m.role === "user" ? "Owner" : AGENTS[m.agent ?? "kata"].name}: ${m.text}`)
@@ -122,44 +122,6 @@ Pesan baru dari owner: ${text}${refCount ? `\n(Owner melampirkan ${refCount} gam
   return callStructured(system, user, Decision, "low");
 }
 
-/** Mode demo: aturan kata kunci sederhana. */
-function demoDecide(text: string, snap: Snapshot, refCount = 0): DecisionT {
-  const t = text.toLowerCase();
-  const base: DecisionT = {
-    action: "chat",
-    speaker: "kata",
-    reply: "",
-    brief: "",
-    count: 0,
-    format: "auto",
-    targetId: "",
-    instruction: "",
-    when: "schedule",
-    scheduleAt: "",
-  };
-  const latest = snap.review[0];
-  if (/\b(acc|setuju|approve|oke posting|gas)\b/.test(t) && latest) {
-    return { ...base, action: "approve", speaker: "siar", targetId: latest.id, when: /sekarang/.test(t) ? "now" : "schedule", reply: "Siap! Aku render versi final dan atur jadwalnya." };
-  }
-  if (/(revisi|ubah|ganti|perbaiki|lebih |kurang)/.test(t) && latest) {
-    return { ...base, action: "revise", speaker: "rupa", targetId: latest.id, instruction: text, reply: "Oke, aku dan Kata kerjakan revisinya." };
-  }
-  if (/(jadwal|status|kapan|terbit)/.test(t)) {
-    return { ...base, action: "status", speaker: "siar", reply: "" };
-  }
-  if (/\bide\b|brainstorm/.test(t)) {
-    const n = Number(/(\d+)/.exec(t)?.[1] ?? 5);
-    return { ...base, action: "ideas", speaker: "kata", brief: text, count: Math.min(10, Math.max(1, n)), reply: "Siap, aku cari ide-idenya dulu ya." };
-  }
-  if (refCount || /(buat|bikin|carousel|konten|post)/.test(t)) {
-    return { ...base, action: "create_post", speaker: "kata", brief: text, format: /single/.test(t) ? "single" : /carousel/.test(t) ? "carousel" : "auto", reply: "Siap! Aku susun angle & naskahnya, nanti Rupa yang desain." };
-  }
-  return {
-    ...base,
-    reply:
-      "Halo! Kami siap bantu. Coba ketik misalnya: “buatkan 5 ide konten minggu ini”, “bikin carousel tentang tips branding”, atau “ACC, jadwalkan besok jam 7 malam”. (Mode demo: isi ANTHROPIC_API_KEY supaya kami benar-benar pintar.)",
-  };
-}
 
 function statusText(snap: Snapshot) {
   const lines: string[] = [];
@@ -229,7 +191,7 @@ async function runTask(w: WorkspaceRepo, job: Job, task: Task) {
       await say(
         w,
         "rupa",
-        `Referensimu sudah kupelajari${summary ? `: ${summary}` : ""}. Gayanya kubuat semirip mungkin, isinya tetap untuk brand kamu.${!config.hasAI ? " (Mode demo: warna & gaya latar sudah mengikuti referensi; peniruan layout & copy aktif setelah ANTHROPIC_API_KEY diisi.)" : ""}`,
+        `Referensimu sudah kupelajari${summary ? `: ${summary}` : ""}. Gayanya kubuat semirip mungkin, isinya tetap untuk brand kamu.`,
       );
       const [a, l] = FIRST_AGENT[task.type];
       current = a;

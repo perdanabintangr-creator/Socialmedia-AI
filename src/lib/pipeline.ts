@@ -50,7 +50,7 @@ export async function createIdeas(
   );
 }
 
-/** Teks + gambar referensi untuk AI (hanya bila AI aktif; mode demo cukup palet & template). */
+/** Teks + gambar referensi untuk AI. */
 async function refContext(ref: PostReference | null): Promise<RefContext | null> {
   if (!ref || !config.hasAI) return null;
   return { text: referencePrompt(ref), images: await referenceImageBlocks(ref) };
@@ -87,7 +87,7 @@ export async function materialize(
   for (let n = 0; n < jobs.length; n += 3) {
     await Promise.all(
       jobs.slice(n, n + 3).map(async ({ d, i }) => {
-        out[i] = { ...out[i], image: await sourceImage(w, brand, { ...d.imageRequest!, layout: d.imageRequest!.layout ?? d.slide.layout }, `${key}-${i}`, i, refs) };
+        out[i] = { ...out[i], image: await sourceImage(w, brand, { ...d.imageRequest!, layout: d.imageRequest!.layout ?? d.slide.layout }, `${key}-${i}`, refs) };
       }),
     );
   }

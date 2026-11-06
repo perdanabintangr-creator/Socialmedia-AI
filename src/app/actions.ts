@@ -322,7 +322,7 @@ export async function replaceImageAction(postId: string, index: number, _: Actio
       query: custom || slide.image?.query || plainHeadline(slide),
       prompt: custom ? `${custom}. Context: ${plainHeadline(slide)}` : slide.image?.prompt || plainHeadline(slide),
     };
-    const image = await metered(w, "image", () => sourceImage(w, { ...brand, imageSource: brand.imageSource === "brand" || brand.imageSource === "none" ? "auto" : brand.imageSource }, req, `${post.id}-${index}`, Date.now() % 97), () => post.id);
+    const image = await metered(w, "image", () => sourceImage(w, { ...brand, imageSource: brand.imageSource === "brand" || brand.imageSource === "none" ? "auto" : brand.imageSource }, req, `${post.id}-${index}`), () => post.id);
     if (!image) return { error: "Tidak ada sumber gambar aktif (isi OPENAI/GEMINI atau PEXELS API key), atau tidak ditemukan." };
     await saveSlide(w, post, index, { ...slide, image });
     return { ok: "Gambar diganti" };

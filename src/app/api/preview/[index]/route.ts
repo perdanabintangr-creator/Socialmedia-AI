@@ -1,6 +1,6 @@
 import { workspaceOrThrow } from "@/lib/session";
 import { renderSlidePng } from "@/lib/render";
-import { demoImageDataUrl } from "@/lib/images";
+import { samplePhotoDataUrl } from "@/lib/images";
 import { normalizeSlide, type Slide, type TemplateKey } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -16,8 +16,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ index: string }
   }
   const t = new URL(req.url).searchParams.get("template") as TemplateKey | null;
   const photo = async (n: number) => {
-    const url = brand.assets.length ? brand.assets[n % brand.assets.length].url : await demoImageDataUrl(brand, n);
-    return { url, source: "demo" as const, query: "", prompt: "", credit: "" };
+    const url = brand.assets.length ? brand.assets[n % brand.assets.length].url : await samplePhotoDataUrl(n);
+    return { url, source: "stock" as const, query: "", prompt: "", credit: "" };
   };
   const raw: Partial<Slide>[] = [
     { layout: "cover_photo", kicker: brand.pillars[0] ?? "Tips", headline: "Konten bagus itu *bukan* soal alat mahal" , body: "5 hal yang benar-benar bikin orang berhenti scroll", image: await photo(0) },
