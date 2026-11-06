@@ -26,7 +26,7 @@ export function SideNav({ badges, chats }: { badges: Partial<Record<string, numb
   const path = usePathname();
   return (
     <>
-      <nav className="flex flex-col gap-0.5" aria-label="Navigasi utama">
+      <nav className="flex shrink-0 flex-col gap-0.5" aria-label="Navigasi utama">
         {NAV.map(({ href, label, icon: Icon }) => {
           const on = active(path, href);
           return (
@@ -34,7 +34,7 @@ export function SideNav({ badges, chats }: { badges: Partial<Record<string, numb
               key={href}
               href={href}
               aria-current={on ? "page" : undefined}
-              className={`group flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition ${
+              className={`group flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition [@media(max-height:780px)]:py-1 ${
                 on ? "bg-white text-ink shadow-soft ring-1 ring-line" : "text-slate-500 hover:bg-white/70 hover:text-ink"
               }`}
             >
@@ -50,7 +50,7 @@ export function SideNav({ badges, chats }: { badges: Partial<Record<string, numb
         })}
       </nav>
 
-      <div className="flex min-h-[132px] flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex items-center justify-between px-3 pb-1.5">
           <span className="text-xs font-bold tracking-wide text-slate-400 uppercase">Riwayat chat</span>
           <Link href="/beranda" title="Chat baru" className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-brand-600 hover:bg-white">

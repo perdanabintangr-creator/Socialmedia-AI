@@ -23,15 +23,15 @@ export default async function AppLayout({ children }: Readonly<{ children: React
   return (
     <div className="min-h-dvh lg:grid lg:grid-cols-[272px_minmax(0,1fr)]">
       {/* Sidebar (desktop) */}
-      <aside className="sticky top-0 hidden h-dvh flex-col gap-4 border-r border-line bg-canvas px-4 py-5 lg:flex">
-        <div className="flex items-center justify-between px-1">
+      <aside className="sticky top-0 hidden h-dvh flex-col gap-4 overflow-hidden [@media(max-height:780px)]:gap-2.5 [@media(max-height:780px)]:py-3 border-r border-line bg-canvas px-4 py-5 lg:flex">
+        <div className="flex shrink-0 items-center justify-between px-1">
           <Link href="/beranda">
             <Logo size={30} />
           </Link>
         </div>
 
         {/* Profil brand ala aplikasi sosmed */}
-        <Link href="/brand" className="flex items-center gap-3 rounded-2xl bg-white p-2.5 shadow-soft ring-1 ring-line transition hover:ring-brand-200">
+        <Link href="/brand" className="flex shrink-0 items-center gap-3 rounded-2xl bg-white p-2.5 shadow-soft ring-1 ring-line transition hover:ring-brand-200">
           <span className="story-ring shrink-0">
             {brand.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -50,7 +50,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
 
         <SideNav badges={badges} chats={chats.map((c) => ({ id: c.id, title: c.title }))} />
 
-        <div className="space-y-2 border-t border-line pt-4">
+        <div className="shrink-0 space-y-2 border-t border-line pt-3">
           <div className="flex items-center gap-3 rounded-xl px-2 py-1.5">
             <Link href="/pengguna" className="flex min-w-0 flex-1 items-center gap-3">
               <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">{user.name.slice(0, 1).toUpperCase()}</span>
