@@ -79,7 +79,12 @@ const LAYOUT_GUIDE = `# Layout yang tersedia (pilih per slide)
 - cta: penutup ajakan follow/save/share; opsional foto latar.
 - promo_hero: gaya IKLAN PROMO. Foto orang/produk besar di bagian bawah di atas latar warna utama, judul kapital di kiri atas, angka promo (stat + labelA) dalam starburst di kanan atas, catatan S&K kecil (body) dan tombol (labelB). BUTUH foto: image.prompt harus berisi subjek (mis. orang Indonesia tersenyum memegang HP / produk) di atas LATAR POLOS SATU WARNA, subjek di 2/3 bawah, ruang kosong di atas.
 - promo_offer: iklan promo tanpa foto: judul tebal, angka promo raksasa dalam starburst (stat + labelA), 1-3 benefit singkat (items), tombol (labelB), S&K kecil (body).
-Untuk konten jualan/diskon/promo/cashback, pakai promo_hero untuk cover dan promo_offer untuk slide penawaran.`;
+Untuk konten jualan/diskon/promo/cashback, pakai promo_hero untuk cover dan promo_offer untuk slide penawaran.
+Cover bergaya (dipakai bila arah visual/referensi memintanya; semuanya BUTUH foto):
+- news_cover: gaya media berita/homeless media. Foto liputan di atas, latar hitam, logo kecil, JUDUL KAPITAL panjang 12-20 kata di tengah bawah dengan 2-4 kata kunci ditandai *bintang* (warna menyala), body = 1 baris subjudul. image.prompt: foto dokumenter realistis, subjek di setengah atas.
+- folk_cover: gaya info cepat. Foto lebar di atas, panel putih di bawah, headline = 1 kalimat fakta 15-30 kata huruf biasa tanpa *bintang*. image.prompt: foto dokumenter/wide shot/foto udara.
+- editorial_cover: gaya majalah. Foto close-up penuh, judul 2-5 kata di tengah bawah, 1 kata *bintang* jadi serif italic, labelB = teks tombol pil kecil. image.prompt: close-up wajah/produk kelas majalah, latar bersih.
+- creative_cover: gaya kreatif 3D/AI. Visual 3D penuh, judul raksasa 2-4 kata di atas, 1 kata *bintang* jadi tulisan tangan neon, kicker = stiker miring pendek (mis. "Part 2"). image.prompt: render 3D glossy surreal melayang di langit biru.`;
 
 export function brandSystemPrompt(brand: Brand): string {
   const assets = brand.assets.length

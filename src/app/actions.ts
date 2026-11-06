@@ -14,7 +14,7 @@ import { approveAndPublish, publishStoryFor, buildPostFromIdea, createIdeas, par
 import { readMedia } from "@/lib/media";
 import { randomUUID } from "crypto";
 import { getPublishStatus } from "@/lib/publisher";
-import { BODY_FONT_KEYS, FONT_KEYS, SLIDE_LAYOUTS, TEMPLATE_KEYS, normalizeSlide, type Brand, type FontKey, type ImageSourceMode, type Platform, type Post, type Slide, type SlideLayout, type TemplateKey } from "@/lib/types";
+import { BODY_FONT_KEYS, FONT_KEYS, SLIDE_LAYOUTS, isVisualStyle, type VisualStyleKey, TEMPLATE_KEYS, normalizeSlide, type Brand, type FontKey, type ImageSourceMode, type Platform, type Post, type Slide, type SlideLayout, type TemplateKey } from "@/lib/types";
 
 export type ActionState = { error?: string; ok?: string } | undefined;
 
@@ -70,6 +70,7 @@ export async function saveBrandAction(_: ActionState, fd: FormData): Promise<Act
       headingFont: FONTS.includes(headingFont) ? headingFont : current.headingFont,
       bodyFont: BODY_FONT_KEYS.includes(bodyFont) ? bodyFont : current.bodyFont,
       defaultTemplate: TEMPLATES.includes(template) ? template : current.defaultTemplate,
+      visualStyle: fd.has("visualStyle") ? (isVisualStyle(str(fd, "visualStyle")) ? (str(fd, "visualStyle") as VisualStyleKey) : "auto") : current.visualStyle,
       colors: {
         primary: color("primary"),
         secondary: color("secondary"),

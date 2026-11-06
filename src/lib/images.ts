@@ -24,16 +24,30 @@ export interface ImageRequest {
 
 const NO_TEXT = "No text, no letters, no words, no logos, no watermark.";
 
+/** Arahan komposisi khusus per cover bergaya (supaya foto pas dengan tata letak teksnya). */
+const COVER_DIRECTION: Record<string, string> = {
+  news_cover:
+    "Photojournalism style news photo, realistic documentary moment, main subject large and centered in the upper half, eye-level, natural light, slightly gritty authentic feel like a press photo. Bottom area can be darker/simpler because a headline will be placed there.",
+  folk_cover:
+    "Documentary photo, wide landscape-style framing (subject centered, will be cropped to a wide banner), aerial/drone or wide establishing shot when it suits the topic, natural colors, informative like a news agency photo.",
+  editorial_cover:
+    "High-end magazine cover photography: extreme close-up portrait or hero product, perfectly lit soft beauty light, flawless natural skin texture, clean pastel or sky background, symmetrical composition, face/product in the middle, empty space at the bottom third for a title.",
+  creative_cover:
+    "Surreal glossy 3D render: oversized shiny object or product floating in a bright blue sky with soft fluffy clouds, plastic/glass material, saturated colors, studio lighting, playful viral AI-art look. Keep the top third mostly clear sky for a big title.",
+};
+
 function aiPrompt(brand: Brand, req: ImageRequest) {
   const promo = req.layout === "promo_hero";
+  const cover = req.layout ? COVER_DIRECTION[req.layout] : undefined;
   return [
     req.prompt || req.query,
     promo
       ? `Advertising key visual: the subject stands/poses in the lower two thirds, waist-up, on a plain seamless solid ${brand.colors.primary} background (exact same flat color edge to edge, no gradient, no props behind), clean studio lighting, crisp edges like a cut-out. Keep the top third empty.`
       : "",
+    cover ?? "",
     `Art direction: ${brand.imageStyle}`,
-    `Subtle color harmony with brand colors ${brand.colors.primary}, ${brand.colors.secondary} and ${brand.colors.accent}.`,
-    "Vertical 4:5 composition, high-end social media agency quality, magazine-grade lighting.",
+    cover ? "" : `Subtle color harmony with brand colors ${brand.colors.primary}, ${brand.colors.secondary} and ${brand.colors.accent}.`,
+    cover ? "High-end editorial quality, sharp focus, realistic details." : "Vertical 4:5 composition, high-end social media agency quality, magazine-grade lighting.",
     NO_TEXT,
   ]
     .filter(Boolean)

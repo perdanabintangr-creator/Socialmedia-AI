@@ -32,6 +32,10 @@ export async function GET(req: Request, ctx: { params: Promise<{ index: string }
     { layout: "quote", kicker: "Founder", headline: "Konsisten lebih penting daripada *sempurna*.", body: brand.name, image: await photo(4) },
     { layout: "cta", headline: "Simpan & *bagikan* ke tim kamu", body: brand.cta },
     { layout: "promo_hero", kicker: "Promo minggu ini", headline: "Ngopi hemat *akhir bulan*", stat: "50%", labelA: "Cashback", labelB: "Pesan sekarang", body: "Berlaku s.d. 30 Nov · S&K berlaku", image: await photo(5) },
+    { layout: "news_cover", headline: "Strategi nekat bikin kopi 1.000-an, *bikin anak muda tinggalkan coffee shop mahal*", body: "Rahasia menang dari kompetitor lewat kedai gerobakan", image: await photo(0) },
+    { layout: "folk_cover", headline: "265 kedai kopi lokal buka cabang baru, 4.500 barista muda kini bekerja.", image: await photo(1) },
+    { layout: "editorial_cover", headline: "This is *AI*", labelB: "Lihat sendiri", image: await photo(2) },
+    { layout: "creative_cover", kicker: "Part 2", headline: "*Viral* Website Prompts", image: await photo(3) },
     { layout: "promo_offer", kicker: "Spesial member", headline: "Beli 2 *gratis 1*", stat: "2+1", labelA: "Semua menu", items: ["Semua cabang", "Tiap Jumat", "Bisa takeaway"], labelB: "Klaim promo", body: "Tunjukkan postingan ini ke kasir." },
   ];
   const slides = raw.map(normalizeSlide);

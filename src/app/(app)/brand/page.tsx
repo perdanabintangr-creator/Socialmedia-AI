@@ -2,6 +2,7 @@ import { requireWorkspace } from "@/lib/session";
 import Link from "next/link";
 import { config } from "@/lib/config";
 import { ActionForm, Submit } from "@/components/forms";
+import { StylePickerField } from "@/components/style-picker";
 import { Card, Field, PageTitle, inputCls } from "@/components/ui";
 import { analyzeExamplesAction, importWebsiteAction, saveBrandAction } from "@/app/actions";
 import { FONT_KEYS, FONT_OPTIONS, TEMPLATE_KEYS, type Brand, type FontKey } from "@/lib/types";
@@ -19,7 +20,7 @@ const COLORS: [keyof Brand["colors"], string, string][] = [
   ["text", "Teks", "Warna teks di latar terang"],
 ];
 
-const TEMPLATE_LABEL = { mix: "Editorial", bold: "Bold", clean: "Clean", promo: "Promo" } as const;
+const TEMPLATE_LABEL = { mix: "Brand", bold: "Bold", clean: "Clean", promo: "Promo", news: "Berita", folk: "Info cepat", editorial: "Editorial", creative: "Kreatif 3D" } as const;
 
 export default async function BrandPage({ searchParams }: { searchParams: Promise<{ template?: string }> }) {
   const { w } = await requireWorkspace();
@@ -49,7 +50,7 @@ export default async function BrandPage({ searchParams }: { searchParams: Promis
           </div>
         </div>
         <div className="mt-3 flex gap-3 overflow-x-auto pb-1">
-          {Array.from({ length: 13 }, (_, i) => (
+          {Array.from({ length: 17 }, (_, i) => (
             <a key={i} href={`/api/preview/${i}?template=${tpl}`} target="_blank" className="shrink-0">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={`/api/preview/${i}?template=${tpl}&v=${v}`} alt="" loading="lazy" className="aspect-[4/5] w-[200px] rounded-lg bg-slate-100 ring-1 ring-slate-200" />
@@ -104,6 +105,10 @@ export default async function BrandPage({ searchParams }: { searchParams: Promis
               </Field>
             ))}
           </div>
+          <div>
+            <p className="mb-1.5 text-sm font-semibold text-slate-700">Arah visual default</p>
+            <StylePickerField name="visualStyle" defaultValue={brand.visualStyle ?? "auto"} />
+          </div>
           <div className="grid gap-4 md:grid-cols-3">
             <Field label="Font judul">
               <select name="headingFont" defaultValue={brand.headingFont} className={inputCls}>
@@ -121,6 +126,10 @@ export default async function BrandPage({ searchParams }: { searchParams: Promis
                 <option value="bold">Bold (warna penuh + bentuk dekoratif)</option>
                 <option value="clean">Clean (minimalis terang)</option>
                 <option value="promo">Promo (gaya iklan: warna kontras, starburst, stiker)</option>
+                <option value="news">Media berita (foto + judul kapital, latar hitam)</option>
+                <option value="folk">Info cepat (foto + panel putih)</option>
+                <option value="editorial">Editorial majalah (close-up + serif italic)</option>
+                <option value="creative">Kreatif 3D / AI (judul raksasa + tulisan tangan)</option>
               </select>
             </Field>
           </div>

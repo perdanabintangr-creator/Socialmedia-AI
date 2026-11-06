@@ -74,7 +74,7 @@ export default async function HomePage() {
       </div>
 
       <div id="prompt" className="mt-10 scroll-mt-24">
-        <HomePrompt />
+        <HomePrompt defaultStyle={brand.visualStyle ?? "auto"} />
       </div>
 
       <div className="mt-12 grid gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">

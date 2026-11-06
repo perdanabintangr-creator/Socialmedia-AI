@@ -11,7 +11,7 @@ import { sourceImage } from "./images";
 import { publish, publishStory } from "./publisher";
 import { config } from "./config";
 import type { AgentId } from "./agents";
-import { styledBrand, type Brand, type Idea, type Post, type PostFormat, type PostReference, type Slide } from "./types";
+import { styledBrand, withVisualStyle, type Brand, type Idea, type Post, type PostFormat, type PostReference, type Slide } from "./types";
 
 /**
  * Inti alur kerja: ide → konten (copy + visual + review) → ACC → posting.
@@ -77,7 +77,7 @@ export async function materialize(
   for (let n = 0; n < jobs.length; n += 3) {
     await Promise.all(
       jobs.slice(n, n + 3).map(async ({ d, i }) => {
-        out[i] = { ...out[i], image: await sourceImage(w, brand, d.imageRequest!, `${key}-${i}`, i, refs) };
+        out[i] = { ...out[i], image: await sourceImage(w, brand, { ...d.imageRequest!, layout: d.imageRequest!.layout ?? d.slide.layout }, `${key}-${i}`, i, refs) };
       }),
     );
   }
@@ -133,6 +133,26 @@ const PHOTO_OF: Partial<Record<Slide["layout"], Slide["layout"]>> = {
   promo_offer: "promo_hero",
 };
 
+/** Cover khas tiap gaya (dipakai bila cover AI belum berfoto). */
+const STYLE_COVER: Record<string, Slide["layout"]> = {
+  promo: "promo_hero",
+  news: "news_cover",
+  folk: "folk_cover",
+  editorial: "editorial_cover",
+  creative: "creative_cover",
+};
+
+/** Arah visual dipilih owner: cover wajib memakai cover khas gaya itu. */
+function styleCover(draft: Draft, ref: PostReference | null, template: string): Draft {
+  const cover = STYLE_COVER[template];
+  if (!ref?.style || !cover || !draft.slides.length || draft.slides[0].slide.layout === cover) return draft;
+  const [first, ...rest] = draft.slides;
+  return {
+    ...draft,
+    slides: [{ slide: { ...first.slide, layout: cover }, imageRequest: first.imageRequest ? { ...first.imageRequest, layout: cover } : null }, ...rest],
+  };
+}
+
 /**
  * Paket kualitas penuh wajib punya minimal N visual. Bila naskah AI kurang foto,
  * cover lalu slide isi diubah ke layout berfoto dengan konsep visual sesuai bisnis.
@@ -148,7 +168,7 @@ export function ensureVisuals(draft: Draft, plan: PlanRule, brand: Brand, templa
     if (have >= plan.minVisuals) break;
     const d = slides[i];
     if (d.imageRequest || d.slide.image) continue;
-    const to = i === 0 && template === "promo" ? "promo_hero" : PHOTO_OF[d.slide.layout];
+    const to = (i === 0 ? STYLE_COVER[template] : undefined) ?? PHOTO_OF[d.slide.layout];
     if (!to && d.slide.layout !== "cover_photo" && d.slide.layout !== "point_photo" && d.slide.layout !== "cover_split") continue;
     const headline = d.slide.headline.replace(/\*/g, "");
     const asset = brand.assets[have % Math.max(1, brand.assets.length)];
@@ -175,14 +195,16 @@ export async function buildPostFromIdea(w: WorkspaceRepo, ideaId: string, progre
     if (existing) return existing;
   }
   await w.updateIdea(ideaId, { status: "approved" });
-  const ref = idea.reference ?? null;
   const plan = await planOf(w.id);
-  const brand = brandForPlan(styledBrand(await w.getBrand(), ref), plan);
+  const baseBrand = await w.getBrand();
+  // Ide tanpa referensi (mis. dari halaman Ide) tetap memakai arah visual default Brand Kit.
+  const ref = idea.reference ?? withVisualStyle(null, baseBrand.visualStyle);
+  const brand = brandForPlan(styledBrand(baseBrand, ref), plan);
   const ctx = await refContext(ref);
   const refImgs = await referenceImageBuffers(ref);
   const template = ref?.template ?? brand.defaultTemplate;
 
-  const draft = ensureVisuals(await generatePost(brand, idea, ctx), plan, brand, template);
+  const draft = ensureVisuals(styleCover(await generatePost(brand, idea, ctx), ref, template), plan, brand, template);
   await progress(
     "kata",
     `Naskah ${draft.slides.length > 1 ? `${draft.slides.length} slide` : "single post"} + caption sudah jadi${ref ? " mengikuti gaya referensimu" : ""}. Hook-nya: “${firstHook(draft.slides.map((d) => d.slide))}”. Aku oper ke Rupa ya.`,

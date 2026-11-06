@@ -7,6 +7,7 @@ import { approveIdeaFromChat, approvePostFromChat, handleMessage, type Attach } 
 import { uploadReferences } from "@/lib/reference";
 import { parseWib } from "@/lib/pipeline";
 import { workspaceOrThrow } from "@/lib/session";
+import { isVisualStyle } from "@/lib/types";
 
 export type StudioResult = { ok: boolean; error?: string; chatId?: string };
 
@@ -43,9 +44,11 @@ async function readMessage(w: WorkspaceRepo, fd: FormData): Promise<{ msg: strin
   const files = fd.getAll("refs").filter((f): f is File => f instanceof File && f.size > 0);
   const urls = files.length ? await uploadReferences(w, files) : [];
   const text = String(fd.get("text") ?? "").trim().slice(0, 2000);
+  const rawStyle = fd.get("style");
+  const style = isVisualStyle(rawStyle) ? rawStyle : undefined;
   return {
     msg: text || (urls.length ? DEFAULT_REF_TEXT : ""),
-    attach: urls.length ? { urls, useRefColors: fd.get("colors") !== "brand" } : undefined,
+    attach: urls.length || style ? { urls, useRefColors: fd.get("colors") !== "brand", style } : undefined,
   };
 }
 

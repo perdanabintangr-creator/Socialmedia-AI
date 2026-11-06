@@ -14,7 +14,14 @@ export const IMAGE_BOX: Partial<Record<SlideLayout, { w: number; h: number }>> =
   quote: { w: 168, h: 168 },
   cta: { w: 1080, h: 1350 },
   promo_hero: { w: 1080, h: 860 },
+  news_cover: { w: 1080, h: 900 },
+  folk_cover: { w: 1080, h: 640 },
+  editorial_cover: { w: 1080, h: 1350 },
+  creative_cover: { w: 1080, h: 1350 },
 };
+
+/** Cover bergaya media: menggambar branding sendiri, tanpa header/footer standar. */
+const STYLE_COVERS: SlideLayout[] = ["news_cover", "folk_cover", "editorial_cover", "creative_cover"];
 
 export type Img = { src: string; w: number; h: number };
 export type LogoImg = { src: string; width: number; height: number };
@@ -59,6 +66,13 @@ interface Theme {
   dark: boolean;
   hl: "marker" | "color";
   upper: boolean; // judul kapital (font poster)
+  hlFamily?: "Serif" | "Script"; // kata *highlight* memakai font aksen
+}
+
+/** Warna neon untuk highlight gaya berita / kreatif: pakai aksen brand bila cukup terang. */
+function neonOf(brand: Brand) {
+  const a = brand.colors.accent;
+  return luminance(a) > 0.45 ? a : "#C6F432";
 }
 
 /** Font poster yang memang dirancang untuk huruf kapital. */
@@ -94,6 +108,20 @@ function themeFor(brand: Brand, template: TemplateKey, layout: SlideLayout, inde
     const bg = isBookend || index % 2 === 0 ? c.primary : c.secondary;
     return makeTheme(brand, bg, "#FFFFFF");
   }
+  if (template === "news") {
+    return { ...makeTheme(brand, "#0B0B0D", "#FFFFFF"), accent: neonOf(brand), hl: "color", upper: true };
+  }
+  if (template === "folk") {
+    return { ...makeTheme(brand, "#FFFFFF", "#111111"), hl: "color" };
+  }
+  if (template === "editorial") {
+    const t = makeTheme(brand, isBookend ? "#111111" : "#F3EFE8", isBookend ? "#FFFFFF" : "#121212");
+    return { ...t, accent: t.fg, hl: "color", hlFamily: "Serif" };
+  }
+  if (template === "creative") {
+    const t = makeTheme(brand, "#2F7BEA", "#FFFFFF");
+    return { ...t, bg: "linear-gradient(180deg, #2F7BEA 0%, #8EC2F7 100%)", accent: "#D7FF3A", hl: "color", hlFamily: "Script" };
+  }
   if (template === "promo") {
     // Gaya iklan: latar warna penuh yang berganti, slide promo selalu warna utama.
     const bg = isBookend || layout.startsWith("promo") || index % 2 === 0 ? c.primary : c.secondary;
@@ -128,6 +156,9 @@ function Rich({
   lineHeight = 1.08,
   color,
   letterSpacing,
+  align = "left",
+  shadow,
+  hlColor,
 }: {
   text: string;
   size: number;
@@ -137,6 +168,9 @@ function Rich({
   lineHeight?: number;
   color?: string;
   letterSpacing?: number;
+  align?: "left" | "center";
+  shadow?: string;
+  hlColor?: string;
 }) {
   const words: { w: string; hl: boolean }[] = [];
   clean(text)
@@ -159,7 +193,9 @@ function Rich({
       style={{
         display: "flex",
         flexWrap: "wrap",
+        justifyContent: align === "center" ? "center" : "flex-start",
         width: "100%",
+        ...(shadow ? { textShadow: shadow } : {}),
         fontFamily: family,
         fontWeight: weight,
         fontSize: size,
@@ -175,9 +211,19 @@ function Rich({
           style={{
             marginRight: size * 0.24,
             ...(x.hl
-              ? t.hl === "color"
-                ? { color: t.accent }
-                : { backgroundImage: `linear-gradient(180deg, transparent 58%, ${alpha(t.pillBg, 0.55)} 58%)` }
+              ? t.hlFamily && family === "Heading"
+                ? {
+                    color: hlColor ?? t.accent,
+                    fontFamily: t.hlFamily,
+                    fontStyle: t.hlFamily === "Serif" ? "italic" : "normal",
+                    fontWeight: t.hlFamily === "Serif" ? 400 : 700,
+                    textTransform: "none",
+                    fontSize: t.hlFamily === "Script" ? size * 1.12 : size * 1.04,
+                    letterSpacing: 0,
+                  }
+                : t.hl === "color"
+                  ? { color: hlColor ?? t.accent }
+                  : { backgroundImage: `linear-gradient(180deg, transparent 58%, ${alpha(t.pillBg, 0.55)} 58%)` }
               : {}),
           }}
         >
@@ -260,7 +306,16 @@ function Wave({ color, style, width = 1080, height = 260 }: { color: string; sty
 }
 
 function Decor({ t, template, layout }: { t: Theme; template: TemplateKey; layout: SlideLayout }) {
-  if (layout === "cover_photo" || layout === "cover_split" || layout.startsWith("promo")) return null;
+  if (layout === "cover_photo" || layout === "cover_split" || layout.startsWith("promo") || STYLE_COVERS.includes(layout)) return null;
+  if (template === "news" || template === "folk" || template === "editorial") return null;
+  if (template === "creative") {
+    return (
+      <>
+        <div style={{ position: "absolute", left: -120, bottom: -60, width: 700, height: 260, borderRadius: 9999, background: alpha("#FFFFFF", 0.55) }} />
+        <div style={{ position: "absolute", right: -160, bottom: 40, width: 620, height: 220, borderRadius: 9999, background: alpha("#FFFFFF", 0.4) }} />
+      </>
+    );
+  }
   if (template === "promo") {
     return (
       <>
@@ -310,6 +365,7 @@ export function effectiveLayout(layout: SlideLayout, hasImg: boolean): SlideLayo
   if (layout === "cover_photo" || layout === "cover_split") return "cover_type";
   if (layout === "point_photo") return "point_icon";
   if (layout === "promo_hero") return "promo_offer";
+  if (STYLE_COVERS.includes(layout)) return "cover_type";
   return layout;
 }
 
@@ -338,6 +394,10 @@ export function SlideView({ brand, slide, template, index, total, logos, img }: 
       case "cta": return <Cta t={t} s={slide} img={img} brand={brand} />;
       case "promo_hero": return <PromoHero t={t} s={slide} img={img!} />;
       case "promo_offer": return <PromoOffer t={t} s={slide} />;
+      case "news_cover": return <NewsCover t={t} s={slide} img={img!} brand={brand} logo={logos.onDark ?? logos.onLight} />;
+      case "folk_cover": return <FolkCover t={t} s={slide} img={img!} brand={brand} logo={logos.onLight ?? logos.onDark} />;
+      case "editorial_cover": return <EditorialCover t={t} s={slide} img={img!} brand={brand} logo={logos.onDark ?? logos.onLight} />;
+      case "creative_cover": return <CreativeCover t={t} s={slide} img={img!} brand={brand} logo={logos.onDark ?? logos.onLight} />;
     }
   })();
 
@@ -358,7 +418,7 @@ export function SlideView({ brand, slide, template, index, total, logos, img }: 
       {body}
 
       {/* header */}
-      <div style={{ position: "absolute", left: PAD, right: PAD, top: 64, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ position: "absolute", left: PAD, right: PAD, top: 64, opacity: STYLE_COVERS.includes(layout) ? 0 : 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         {logo ? (
           <img src={logo.src} width={logo.width} height={logo.height} />
         ) : (
@@ -374,7 +434,7 @@ export function SlideView({ brand, slide, template, index, total, logos, img }: 
       </div>
 
       {/* footer */}
-      <div style={{ position: "absolute", left: PAD, right: PAD, bottom: 56, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 26, color: t.muted }}>
+      <div style={{ position: "absolute", left: PAD, right: PAD, bottom: 56, opacity: STYLE_COVERS.includes(layout) ? 0 : 1, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 26, color: t.muted }}>
         <div style={{ fontWeight: 600 }}>{brand.handle}</div>
         {total > 1 && !isLast ? (
           <div style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 700, color: t.accent }}>
@@ -775,6 +835,110 @@ function PromoOffer({ t, s }: P) {
           <CtaPill t={t} text={s.labelB} />
           {plain(s.body) ? <div style={{ display: "flex", flex: 1, fontSize: 24, color: t.muted, lineHeight: 1.3 }}>{plain(s.body)}</div> : null}
         </div>
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- cover bergaya media
+
+type CoverProps = P & { img: Img; brand: Brand; logo: LogoImg | null };
+
+function BrandMark({ brand, logo, height = 56, color = "#FFFFFF" }: { brand: Brand; logo: LogoImg | null; height?: number; color?: string }) {
+  if (logo) {
+    const w = Math.round((logo.width / logo.height) * height);
+    return <img src={logo.src} width={w} height={height} />;
+  }
+  return <div style={{ fontFamily: "Heading", fontWeight: 800, fontSize: height * 0.7, letterSpacing: -1, color }}>{brand.name}</div>;
+}
+
+/** Media berita (homeless media): foto kuat di atas, latar hitam, judul kapital, baris kunci neon. */
+function NewsCover({ t, s, img, brand, logo }: CoverProps) {
+  const bg = "#0B0B0D";
+  return (
+    <>
+      <img src={img.src} width={img.w} height={img.h} style={{ position: "absolute", left: 0, top: 0 }} />
+      <div style={{ position: "absolute", left: 0, top: img.h - 460, width: CANVAS.width, height: 460, backgroundImage: `linear-gradient(180deg, ${alpha(bg, 0)} 0%, ${alpha(bg, 0.85)} 60%, ${bg} 100%)` }} />
+      <div style={{ position: "absolute", left: 0, top: img.h, width: CANVAS.width, height: CANVAS.height - img.h, background: bg }} />
+      <div style={{ position: "absolute", left: 56, width: CANVAS.width - 112, bottom: 86, display: "flex", flexDirection: "column", alignItems: "center", gap: 22 }}>
+        <BrandMark brand={brand} logo={logo} height={52} />
+        <Rich t={t} text={s.headline} size={fit(s.headline, 100, 62, 28)} align="center" lineHeight={1.0} letterSpacing={0} color="#FFFFFF" />
+        {plain(s.body) ? (
+          <div style={{ display: "flex", textAlign: "center", fontSize: 32, fontWeight: 700, color: alpha("#FFFFFF", 0.88), lineHeight: 1.3, maxWidth: 900 }}>{plain(s.body)}</div>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+/** Info cepat (ala media info): foto di atas, panel putih, teks hitam besar polos, stiker bulat. */
+function FolkCover({ s, img, brand, logo }: CoverProps) {
+  const top = img.h;
+  return (
+    <>
+      <img src={img.src} width={img.w} height={img.h} style={{ position: "absolute", left: 0, top: 0 }} />
+      <div style={{ position: "absolute", left: 0, top, width: CANVAS.width, height: CANVAS.height - top, background: "#FFFFFF" }} />
+      <div style={{ position: "absolute", left: 48, top: 48, width: 150, height: 150, borderRadius: 9999, background: "#FFFFFF", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 12px 36px rgba(0,0,0,0.25)", border: "8px solid #FFFFFF", overflow: "hidden" }}>
+        {logo ? (
+          <img src={logo.src} width={Math.min(110, Math.round((logo.width / logo.height) * 80))} height={Math.round(Math.min(110, Math.round((logo.width / logo.height) * 80)) * (logo.height / logo.width))} />
+        ) : (
+          <div style={{ fontFamily: "Heading", fontWeight: 800, fontSize: 64, color: brand.colors.primary }}>{brand.name.slice(0, 1).toUpperCase()}</div>
+        )}
+      </div>
+      <div style={{ position: "absolute", left: 56, width: CANVAS.width - 112, top: top + 36, height: CANVAS.height - top - 156, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ display: "flex", width: CANVAS.width - 112, fontFamily: "Body", fontWeight: 500, fontSize: fit(s.headline, 84, 54, 60), lineHeight: 1.12, letterSpacing: -1.5, color: "#111111" }}>
+          {plain(s.headline)}
+        </div>
+      </div>
+      <div style={{ position: "absolute", right: 56, bottom: 52, display: "flex", fontFamily: "Heading", fontWeight: 800, fontSize: 40, letterSpacing: 1, color: "#111111", textTransform: "uppercase" }}>
+        {brand.name}
+      </div>
+    </>
+  );
+}
+
+/** Editorial majalah: foto close-up penuh, logotype di atas, judul tengah sans + serif italic, tombol pil. */
+function EditorialCover({ t, s, img, brand, logo }: CoverProps) {
+  const cta = plain(s.labelB) || plain(s.kicker);
+  return (
+    <>
+      <img src={img.src} width={img.w} height={img.h} style={{ position: "absolute", left: 0, top: 0 }} />
+      <div style={{ position: "absolute", left: 0, top: 0, width: CANVAS.width, height: CANVAS.height, backgroundImage: `linear-gradient(180deg, ${alpha("#000000", 0.28)} 0%, ${alpha("#000000", 0)} 22%, ${alpha("#000000", 0)} 50%, ${alpha("#000000", 0.45)} 100%)` }} />
+      <div style={{ position: "absolute", left: 0, width: CANVAS.width, top: 58, display: "flex", justifyContent: "center" }}>
+        <BrandMark brand={brand} logo={logo} height={60} />
+      </div>
+      <div style={{ position: "absolute", left: 50, width: CANVAS.width - 100, bottom: cta ? 220 : 140, display: "flex" }}>
+        <Rich t={{ ...t, accent: "#FFFFFF" }} text={s.headline} size={fit(s.headline, 150, 84, 14)} align="center" lineHeight={0.98} color="#FFFFFF" letterSpacing={-4} shadow="0 4px 30px rgba(0,0,0,0.25)" />
+      </div>
+      {cta ? (
+        <div style={{ position: "absolute", left: 0, width: CANVAS.width, bottom: 96, display: "flex", justifyContent: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, background: "#FFFFFF", color: "#111111", fontSize: 32, fontWeight: 700, padding: "18px 40px", borderRadius: 9999, textTransform: "uppercase", letterSpacing: 1 }}>
+            {cta}
+            <Icon name="ArrowRight" size={30} color="#111111" strokeWidth={2.6} />
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+/** Kreatif 3D / AI: render 3D penuh, judul putih raksasa di atas, kata kunci tulisan tangan neon, stiker. */
+function CreativeCover({ t, s, img, brand, logo }: CoverProps) {
+  return (
+    <>
+      <img src={img.src} width={img.w} height={img.h} style={{ position: "absolute", left: 0, top: 0 }} />
+      <div style={{ position: "absolute", left: 0, top: 0, width: CANVAS.width, height: 620, backgroundImage: `linear-gradient(180deg, ${alpha("#0A2A66", 0.35)} 0%, ${alpha("#0A2A66", 0)} 100%)` }} />
+      <div style={{ position: "absolute", left: 64, width: CANVAS.width - 128, top: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <BrandMark brand={brand} logo={logo} height={44} />
+        <div style={{ fontSize: 28, fontWeight: 700, color: "#FFFFFF" }}>{brand.handle}</div>
+      </div>
+      <div style={{ position: "absolute", left: 60, width: CANVAS.width - 120, top: 170, display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <Rich t={t} text={s.headline} size={fit(s.headline, 168, 96, 14)} align="center" lineHeight={0.92} color="#FFFFFF" letterSpacing={-5} shadow="0 6px 30px rgba(10,42,102,0.35)" />
+        {plain(s.kicker) ? (
+          <div style={{ display: "flex", alignSelf: "flex-end", marginTop: -10, transform: "rotate(-6deg)", background: "#FFD23F", color: "#111111", fontFamily: "Heading", fontWeight: 800, fontSize: 40, padding: "10px 26px", borderRadius: 18, boxShadow: "0 10px 26px rgba(0,0,0,0.25)" }}>
+            {plain(s.kicker)}
+          </div>
+        ) : null}
       </div>
     </>
   );

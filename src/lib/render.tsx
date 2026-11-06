@@ -23,8 +23,20 @@ async function font(key: FontKey, wanted: 500 | 700 | 800) {
   return data;
 }
 
+async function rawFont(file: string) {
+  let data = fontCache.get(file);
+  if (!data) {
+    data = await fs.readFile(path.join(FONT_DIR, file));
+    fontCache.set(file, data);
+  }
+  return data;
+}
+
 async function loadFonts(brand: Brand) {
   return [
+    // Aksen gaya: serif italic (Editorial) & tulisan tangan (Kreatif 3D)
+    { name: "Serif", data: await rawFont("dm-serif-display-latin-400-italic.woff"), weight: 400 as const, style: "italic" as const },
+    { name: "Script", data: await rawFont("caveat-latin-700-normal.woff"), weight: 700 as const, style: "normal" as const },
     { name: "Heading", data: await font(brand.headingFont, 700), weight: 700 as const, style: "normal" as const },
     { name: "Heading", data: await font(brand.headingFont, 800), weight: 800 as const, style: "normal" as const },
     { name: "Body", data: await font(brand.bodyFont, 500), weight: 500 as const, style: "normal" as const },

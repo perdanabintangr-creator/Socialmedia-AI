@@ -8,7 +8,7 @@ import { brandSystemPrompt, callStructured } from "./ai";
 import { readMedia } from "./media";
 import { supportsReferences } from "./image-gen";
 import type { WorkspaceRepo } from "./db";
-import { BODY_FONT_KEYS, FONT_KEYS, FONT_OPTIONS, SLIDE_LAYOUTS, TEMPLATE_KEYS, type Brand, type FontKey, type PostReference, type SlideLayout, type TemplateKey } from "./types";
+import { BODY_FONT_KEYS, VISUAL_STYLES, FONT_KEYS, FONT_OPTIONS, SLIDE_LAYOUTS, TEMPLATE_KEYS, type Brand, type FontKey, type PostReference, type SlideLayout, type TemplateKey } from "./types";
 
 /**
  * Referensi desain: owner menempel / mengunggah contoh ("bikin seperti ini").
@@ -217,6 +217,14 @@ export async function analyzeReference(brand: Brand, urls: string[], useRefColor
 
 /** Blok teks untuk prompt penulisan/desain. */
 export function referencePrompt(ref: PostReference): string {
+  if (!ref.urls.length) {
+    const s = ref.style ? VISUAL_STYLES[ref.style] : null;
+    return `# ARAH VISUAL PILIHAN OWNER${s ? `: ${s.label.toUpperCase()}` : ""} — WAJIB DIIKUTI
+Owner memilih arah visual ini supaya hasilnya setara designer expert di gaya tersebut. Ikuti struktur cover, panjang & gaya judul, dan jenis foto di bawah dengan disiplin.
+${ref.notes}
+${ref.layouts.length ? `Kerangka layout: ${ref.layouts.join(" → ")} (slide pertama WAJIB ${ref.layouts[0]}; sesuaikan jumlah slide dengan format, single post cukup slide pertama).` : ""}
+${ref.imageStyle ? `Art direction foto: ${ref.imageStyle}` : ""}`;
+  }
   return `# REFERENSI DESAIN DARI OWNER — WAJIB DIIKUTI SEDEKAT MUNGKIN
 Owner melampirkan ${ref.urls.length} gambar contoh dan ingin hasil yang sangat mirip gayanya. Tiru seperti designer agency meniru moodboard klien: komposisi, hierarki & panjang teks, gaya hook dan copy, penggunaan foto vs grafis, mood foto, jumlah & alur slide.
 ${ref.notes ? `Analisis referensi:\n${ref.notes}` : ""}
@@ -243,7 +251,8 @@ export async function referenceImageBlocks(ref: PostReference): Promise<Anthropi
 /** Ringkasan singkat untuk chat (warna & template). */
 export function describeReference(ref: PostReference): string {
   const parts: string[] = [];
-  if (ref.template) parts.push(ref.template === "bold" ? "latar warna solid yang tegas" : ref.template === "clean" ? "latar terang yang bersih" : "cover gelap dengan isi terang");
+  if (ref.style) parts.push(`arah visual ${VISUAL_STYLES[ref.style].label}`);
+  else if (ref.template) parts.push(ref.template === "bold" ? "latar warna solid yang tegas" : ref.template === "clean" ? "latar terang yang bersih" : "cover gelap dengan isi terang");
   if (ref.colors) parts.push(`palet ${ref.colors.primary}, ${ref.colors.accent} & ${ref.colors.background}`);
   if (ref.layouts.length) parts.push(`${ref.layouts.length} pola slide`);
   return parts.join(", ");

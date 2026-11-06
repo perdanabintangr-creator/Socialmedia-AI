@@ -28,6 +28,10 @@ const LAYOUT_LABEL: Record<SlideLayout, string> = {
   cta: "Penutup / CTA",
   promo_hero: "Promo • foto + angka",
   promo_offer: "Promo • angka besar",
+  news_cover: "Cover • media berita",
+  folk_cover: "Cover • info cepat",
+  editorial_cover: "Cover • editorial",
+  creative_cover: "Cover • kreatif 3D",
 };
 
 const STORY_STATUS = {
@@ -282,6 +286,10 @@ function EditForm({ post }: { post: Post }) {
                 <option value="bold">Bold (warna penuh + bentuk dekoratif)</option>
                 <option value="clean">Clean (minimalis terang)</option>
                 <option value="promo">Promo (gaya iklan)</option>
+                <option value="news">Media berita</option>
+                <option value="folk">Info cepat</option>
+                <option value="editorial">Editorial majalah</option>
+                <option value="creative">Kreatif 3D / AI</option>
               </select>
             </Field>
           </div>

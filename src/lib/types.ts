@@ -49,6 +49,7 @@ export interface Brand {
   exampleUrls: string[];
   styleNotes: string; // hasil analisis contoh post oleh AI
   defaultTemplate: TemplateKey;
+  visualStyle?: VisualStyleKey | "auto"; // arah visual default (auto = sesuai template & AI)
   postingTime: string; // "19:00" WIB default jadwal
   imageSource: ImageSourceMode;
   imageStyle: string; // art direction untuk foto/ilustrasi
@@ -69,7 +70,7 @@ export interface BrandAsset {
   description: string;
 }
 
-export const TEMPLATE_KEYS = ["mix", "bold", "clean", "promo"] as const;
+export const TEMPLATE_KEYS = ["mix", "bold", "clean", "promo", "news", "folk", "editorial", "creative"] as const;
 export type TemplateKey = (typeof TEMPLATE_KEYS)[number];
 
 export const SLIDE_LAYOUTS = [
@@ -86,11 +87,15 @@ export const SLIDE_LAYOUTS = [
   "cta", // penutup / ajakan
   "promo_hero", // iklan promo: foto orang/produk besar di latar warna + angka promo dalam starburst + tombol
   "promo_offer", // iklan promo tanpa foto: angka diskon raksasa, benefit, tombol
+  "news_cover", // media berita: foto di atas, latar hitam, judul kapital + baris neon
+  "folk_cover", // info cepat: foto di atas, kotak putih teks hitam besar, stiker bulat
+  "editorial_cover", // editorial majalah: foto close-up penuh, judul tengah sans + serif italic, tombol pil
+  "creative_cover", // kreatif 3D/AI: render 3D penuh, judul putih raksasa + kata tulisan tangan neon
 ] as const;
 export type SlideLayout = (typeof SLIDE_LAYOUTS)[number];
 
 /** Layout yang butuh foto. Tanpa foto, renderer otomatis memakai varian grafis. */
-export const PHOTO_LAYOUTS: SlideLayout[] = ["cover_photo", "cover_split", "point_photo", "promo_hero"];
+export const PHOTO_LAYOUTS: SlideLayout[] = ["cover_photo", "cover_split", "point_photo", "promo_hero", "news_cover", "folk_cover", "editorial_cover", "creative_cover"];
 
 export interface SlideImage {
   url: string;
@@ -190,6 +195,7 @@ export const DEFAULT_BRAND: Brand = {
   exampleUrls: [],
   styleNotes: "",
   defaultTemplate: "mix",
+  visualStyle: "auto",
   postingTime: "19:00",
   imageSource: "auto",
   imageStyle:
@@ -333,6 +339,130 @@ export interface PostReference {
   bodyFont?: FontKey | null;
   template: TemplateKey | null;
   layouts: SlideLayout[]; // layout paling mirip untuk tiap gambar referensi
+  style?: VisualStyleKey | null; // arah visual pilihan owner
+}
+
+// ---------------------------------------------------------------- Arah visual
+
+/**
+ * Arah visual siap pakai (dipilih owner di awal). Tiap gaya = "referensi" bawaan:
+ * template, urutan layout, font, art direction foto & catatan desain untuk AI.
+ */
+export const VISUAL_STYLES = {
+  brand: {
+    label: "Brand profesional",
+    short: "Brand",
+    desc: "Rapi & on-brand, warna dan logo brand dominan. Aman untuk semua bisnis.",
+    example: "Gaya akun resmi brand",
+    template: "mix",
+    layouts: ["cover_photo", "point_photo", "point_icon", "stat", "cta"],
+    headingFont: null,
+    imageStyle: "",
+    notes:
+      "Gaya akun resmi brand: komposisi bersih, warna brand dominan, logo selalu terlihat, foto lifestyle/produk yang premium, copy jelas & meyakinkan.",
+  },
+  berita: {
+    label: "Media berita",
+    short: "Berita",
+    desc: "Gaya homeless media: foto kuat + judul kapital besar, kata kunci menyala. Paling viral.",
+    example: "Ala akun berita & homeless media",
+    template: "news",
+    layouts: ["news_cover", "point_photo", "point_photo", "stat", "cta"],
+    headingFont: null,
+    imageStyle:
+      "Foto dokumenter/jurnalistik yang realistis seperti liputan media: momen nyata, orang Indonesia di lokasi sebenarnya (toko, jalanan, kantor, acara), ekspresi natural, cahaya alami, terasa seperti foto berita, bukan foto stok.",
+    notes:
+      "Gaya HOMELESS MEDIA / akun berita: cover = foto liputan kuat di atas, latar hitam di bawah, JUDUL KAPITAL panjang seperti headline berita (12-20 kata, faktual & bikin penasaran: angka, nama, kejadian), 2-4 kata kunci ditandai *bintang* (warna menyala), satu baris subjudul. Slide isi bercerita seperti artikel singkat: kronologi, fakta, angka. Nada: informatif, dramatis secukupnya, tidak clickbait palsu.",
+  },
+  info: {
+    label: "Info cepat",
+    short: "Info",
+    desc: "Satu fakta menarik, foto di atas, teks hitam polos di panel putih. Ringkas & gampang dibagikan.",
+    example: "Ala akun info & fakta singkat",
+    template: "folk",
+    layouts: ["folk_cover", "point_photo", "point_icon", "cta"],
+    headingFont: null,
+    imageStyle:
+      "Foto dokumenter yang informatif: suasana tempat/aktivitas nyata, foto udara (drone) atau wide shot bila cocok, warna natural, terasa seperti foto jurnalistik.",
+    notes:
+      "Gaya INFO CEPAT ala akun fakta: cover = foto di atas, panel putih di bawah berisi SATU kalimat fakta/berita dalam huruf biasa (bukan kapital), 15-30 kata, tanpa tanda bintang, bahasa lugas seperti ringkasan berita. Tidak perlu hook berlebihan; faktanya sendiri yang menarik. Single post lebih cocok; bila carousel, slide isi tetap lugas & minimalis.",
+  },
+  editorial: {
+    label: "Editorial majalah",
+    short: "Editorial",
+    desc: "Foto close-up penuh, judul tengah dengan aksen serif italic. Mewah ala majalah & beauty.",
+    example: "Ala majalah fashion/beauty",
+    template: "editorial",
+    layouts: ["editorial_cover", "point_photo", "quote", "list", "cta"],
+    headingFont: null,
+    imageStyle:
+      "Foto editorial kelas majalah: close-up wajah/produk yang sangat tajam, studio dengan cahaya lembut, warna kulit natural, latar bersih (warna pastel/langit), komposisi simetris, terasa seperti cover majalah fashion/beauty.",
+    notes:
+      "Gaya EDITORIAL MAJALAH: cover = foto close-up penuh satu layar, logo kecil di tengah atas, judul pendek 2-5 kata di tengah bawah dengan 1 kata kunci ditandai *bintang* (jadi serif italic), tombol pil kecil di bawah (isi labelB, mis. 'Lihat selengkapnya'). Copy singkat, elegan, percaya diri; sedikit kata, banyak ruang.",
+  },
+  kreatif: {
+    label: "Kreatif 3D / AI",
+    short: "Kreatif",
+    desc: "Visual 3D/AI yang wow, judul putih raksasa + tulisan tangan neon & stiker. Untuk tech & anak muda.",
+    example: "Ala agensi kreatif & konten AI",
+    template: "creative",
+    layouts: ["creative_cover", "point_icon", "steps", "point_photo", "cta"],
+    headingFont: null,
+    imageStyle:
+      "Render 3D glossy yang imajinatif dan surreal: objek/produk raksasa melayang di langit biru cerah dengan awan lembut, material mengkilap seperti plastik/kaca, cahaya studio terang, warna jenuh, kesan 'wow' ala konten AI viral. Sisakan ruang kosong di sepertiga atas.",
+    notes:
+      "Gaya KREATIF 3D/AI: cover = visual 3D penuh, judul putih sangat besar 2-4 kata di atas dengan 1 kata ditandai *bintang* (jadi tulisan tangan neon), stiker miring kecil (kicker, mis. 'Part 2' / 'Gratis'). Copy playful, kekinian, singkat. Slide isi berupa tips/langkah yang praktis.",
+  },
+  promo: {
+    label: "Iklan promo",
+    short: "Promo",
+    desc: "Gaya iklan jualan: warna kontras, angka diskon dalam starburst, tombol CTA.",
+    example: "Ala iklan e-wallet & marketplace",
+    template: "promo",
+    layouts: ["promo_hero", "promo_offer", "list", "cta"],
+    headingFont: "archivo-black",
+    imageStyle:
+      "Key visual iklan: orang Indonesia ekspresif/tersenyum atau produk hero, pencahayaan studio terang, latar polos satu warna, terlihat seperti iklan resmi brand besar.",
+    notes:
+      "Gaya IKLAN PROMO: cover promo_hero (foto subjek + angka promo dalam starburst + tombol), slide penawaran promo_offer, lalu benefit & cara klaim. Copy jualan yang tegas: angka besar, manfaat jelas, urgensi, S&K singkat.",
+  },
+} as const satisfies Record<
+  string,
+  {
+    label: string;
+    short: string;
+    desc: string;
+    example: string;
+    template: TemplateKey;
+    layouts: readonly SlideLayout[];
+    headingFont: FontKey | null;
+    imageStyle: string;
+    notes: string;
+  }
+>;
+export type VisualStyleKey = keyof typeof VISUAL_STYLES;
+export const VISUAL_STYLE_KEYS = Object.keys(VISUAL_STYLES) as VisualStyleKey[];
+export const isVisualStyle = (v: unknown): v is VisualStyleKey => typeof v === "string" && v in VISUAL_STYLES;
+
+/**
+ * Gabungkan arah visual dengan referensi gambar (bila ada). Referensi gambar menang untuk
+ * warna & detail layout; arah visual menentukan template & gaya cover.
+ */
+export function withVisualStyle(ref: PostReference | null, style: VisualStyleKey | "auto" | null | undefined): PostReference | null {
+  if (!style || style === "auto" || !isVisualStyle(style)) return ref;
+  const s = VISUAL_STYLES[style];
+  if (!ref) {
+    return { urls: [], notes: s.notes, imageStyle: s.imageStyle, colors: null, headingFont: s.headingFont, template: s.template, layouts: [...s.layouts], style };
+  }
+  return {
+    ...ref,
+    notes: [ref.notes, `Arah visual pilihan owner — ${s.label}: ${s.notes}`].filter(Boolean).join("\n"),
+    imageStyle: ref.imageStyle || s.imageStyle,
+    headingFont: ref.headingFont ?? s.headingFont,
+    template: s.template,
+    layouts: ref.layouts.length ? [s.layouts[0], ...ref.layouts.slice(1)] : [...s.layouts],
+    style,
+  };
 }
 
 /** Brand Kit yang sudah disesuaikan dengan referensi (warna, font, gaya foto). Logo & nama tetap. */

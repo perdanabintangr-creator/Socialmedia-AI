@@ -17,7 +17,7 @@ import {
 import { analyzeReference, describeReference } from "./reference";
 import { metered } from "./cost";
 import { brandGaps, quotaOf } from "./plans";
-import type { Idea, Job, Post, PostFormat, PostReference } from "./types";
+import { VISUAL_STYLES, withVisualStyle, type Idea, type Job, type Post, type PostFormat, type PostReference, type VisualStyleKey } from "./types";
 
 /**
  * Studio: owner ngobrol dengan tim agen (Kata, Rupa, Siar).
@@ -36,6 +36,7 @@ export const userSays = (w: WorkspaceRepo, text: string, attachments: string[] =
 export interface Attach {
   urls: string[];
   useRefColors: boolean; // true: pakai palet referensi; false: tetap warna brand
+  style?: VisualStyleKey; // arah visual pilihan owner (tanpa gambar pun boleh)
 }
 
 const fmtWib = (iso: string | null) =>
@@ -179,6 +180,7 @@ type Task =
   | { type: "approve"; postId: string; scheduleAt: Date | null };
 
 const taskRef = (t: Task): Attach | undefined => ("ref" in t && t.ref?.urls.length ? t.ref : undefined);
+const taskStyle = (t: Task): VisualStyleKey | undefined => ("ref" in t ? t.ref?.style : undefined);
 
 const FIRST_AGENT: Record<Task["type"], [AgentId, string]> = {
   ideas: ["kata", "Kata sedang mencari ide…"],
@@ -232,6 +234,9 @@ async function runTask(w: WorkspaceRepo, job: Job, task: Task) {
       current = a;
       await w.updateJob(job.id, { agent: a, label: l });
     }
+    // Arah visual pilihan owner (Beranda) atau default Brand Kit.
+    const style = taskStyle(task) ?? (task.type === "ideas" || task.type === "create_post" ? (await w.getBrand()).visualStyle : undefined);
+    reference = withVisualStyle(reference, style);
     switch (task.type) {
       case "ideas": {
         const ideas = await createIdeas(w, task.brief, task.count, task.format, reference);
@@ -289,8 +294,9 @@ async function deliverPost(w: WorkspaceRepo, post: Post, revised = false) {
 
 /** Proses pesan owner. Mengembalikan job yang perlu dijalankan di latar belakang (bila ada). */
 export async function handleMessage(w: WorkspaceRepo, text: string, attach?: Attach): Promise<(() => Promise<void>) | null> {
-  const ref = attach?.urls.length ? attach : undefined;
-  await userSays(w, text, ref?.urls ?? []);
+  const ref = attach?.urls.length || attach?.style ? attach : undefined;
+  const hasImages = !!attach?.urls.length;
+  await userSays(w, text, attach?.urls ?? []);
   const running = await activeJob(w);
   if (running) {
     await say(w, running.agent, `Sebentar ya, aku masih ${running.label.replace(/^\w+ sedang /, "").replace(/…$/, "")}. Pesanmu kubaca setelah ini selesai.`);
@@ -301,7 +307,7 @@ export async function handleMessage(w: WorkspaceRepo, text: string, attach?: Att
   try {
     d = await decide(w, text, snap, ref?.urls.length ?? 0);
     // Pesan berlampiran selalu jadi pekerjaan desain, bukan obrolan.
-    if (ref && !["ideas", "create_post", "revise"].includes(d.action)) d = { ...d, action: "create_post", speaker: "rupa", brief: d.brief || text };
+    if (hasImages && !["ideas", "create_post", "revise"].includes(d.action)) d = { ...d, action: "create_post", speaker: "rupa", brief: d.brief || text };
   } catch (e) {
     await say(w, "kata", `Maaf, aku lagi kesulitan memahami pesan ini (${e instanceof Error ? e.message : "error"}). Coba lagi ya.`, { kind: "error" });
     return null;
@@ -315,7 +321,13 @@ export async function handleMessage(w: WorkspaceRepo, text: string, attach?: Att
       return startTask(w, { type: "ideas", brief: d.brief || text, count: Math.min(10, Math.max(1, Math.round(d.count) || 5)), format, ref });
     case "create_post":
       if (await gate(w)) return null;
-      await say(w, ref ? "rupa" : "kata", ref ? "Referensinya sudah kuterima! Aku pelajari dulu gayanya ya." : d.reply || "Siap, kukerjakan.");
+      await say(
+        w,
+        hasImages ? "rupa" : "kata",
+        hasImages
+          ? "Referensinya sudah kuterima! Aku pelajari dulu gayanya ya."
+          : `${d.reply || "Siap, kukerjakan."}${attach?.style ? ` Arah visualnya: ${VISUAL_STYLES[attach.style].label}.` : ""}`,
+      );
       return startTask(w, { type: "create_post", brief: d.brief || text, format, ref });
     case "revise": {
       const post = snap.review.find((p) => p.id === d.targetId) ?? snap.review[0];

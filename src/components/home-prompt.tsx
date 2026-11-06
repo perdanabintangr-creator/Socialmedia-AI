@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { ArrowUp, CalendarCheck, Images, Lightbulb, Loader2, Megaphone, Sparkles, TrendingUp } from "lucide-react";
 import { startChatAction } from "@/app/studio-actions";
 import { AttachButton, DropOverlay, RefTray, useReferences } from "@/components/reference-input";
+import { StylePicker, type StyleChoice } from "@/components/style-picker";
+import { VISUAL_STYLES } from "@/lib/types";
 
 const FORMATS = [
   { key: "carousel", label: "Carousel", hint: " (format carousel)" },
@@ -20,10 +22,11 @@ const ACTIONS = [
 ];
 
 /** Kotak perintah besar di Beranda: setiap kiriman membuka percakapan baru. */
-export function HomePrompt() {
+export function HomePrompt({ defaultStyle = "auto" }: { defaultStyle?: StyleChoice }) {
   const router = useRouter();
   const [text, setText] = useState("");
   const [format, setFormat] = useState<string | null>(null);
+  const [style, setStyle] = useState<StyleChoice>(defaultStyle);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -37,6 +40,7 @@ export function HomePrompt() {
     const fd = new FormData();
     fd.set("text", msg ? msg + hint : hint ? `Buatkan konten yang mirip dengan referensi ini${hint}` : "");
     refs.appendTo(fd);
+    if (style !== "auto") fd.set("style", style);
     start(async () => {
       const res = await startChatAction(fd);
       if (!res.ok || !res.chatId) return setError(res.error ?? "Gagal memulai percakapan");
@@ -104,6 +108,15 @@ export function HomePrompt() {
           </button>
         </div>
       </form>
+      <div className="mt-4">
+        <div className="mb-2 flex items-baseline justify-between gap-3 px-1">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Arah visual</p>
+          <p className="truncate text-xs text-slate-400">
+            {style === "auto" ? "AI pilihkan gaya terbaik" : VISUAL_STYLES[style].desc}
+          </p>
+        </div>
+        <StylePicker value={style} onChange={setStyle} compact />
+      </div>
       {error && (
         <p role="alert" className="mt-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700 ring-1 ring-red-200">
           {error}
