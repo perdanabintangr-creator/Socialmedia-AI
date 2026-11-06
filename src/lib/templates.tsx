@@ -906,7 +906,7 @@ function EditorialCover({ t, s, img, brand, logo }: CoverProps) {
         <BrandMark brand={brand} logo={logo} height={60} />
       </div>
       <div style={{ position: "absolute", left: 50, width: CANVAS.width - 100, bottom: cta ? 220 : 140, display: "flex" }}>
-        <Rich t={{ ...t, accent: "#FFFFFF" }} text={s.headline} size={fit(s.headline, 150, 84, 14)} align="center" lineHeight={0.98} color="#FFFFFF" letterSpacing={-4} shadow="0 4px 30px rgba(0,0,0,0.25)" />
+        <Rich t={{ ...t, accent: "#FFFFFF", hlFamily: t.hlFamily ?? "Serif" }} text={s.headline} size={fit(s.headline, 150, 84, 14)} align="center" lineHeight={0.98} color="#FFFFFF" letterSpacing={-4} shadow="0 4px 30px rgba(0,0,0,0.25)" />
       </div>
       {cta ? (
         <div style={{ position: "absolute", left: 0, width: CANVAS.width, bottom: 96, display: "flex", justifyContent: "center" }}>

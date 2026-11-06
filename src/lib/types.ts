@@ -355,11 +355,11 @@ export const VISUAL_STYLES = {
     desc: "Rapi & on-brand, warna dan logo brand dominan. Aman untuk semua bisnis.",
     example: "Gaya akun resmi brand",
     template: "mix",
-    layouts: ["cover_photo", "point_photo", "point_icon", "stat", "cta"],
+    layouts: ["cover_photo", "point_photo", "quote", "cta"],
     headingFont: null,
     imageStyle: "",
     notes:
-      "Gaya akun resmi brand: komposisi bersih, warna brand dominan, logo selalu terlihat, foto lifestyle/produk yang premium, copy jelas & meyakinkan.",
+      "Gaya akun resmi brand yang premium & VISUAL-FIRST: tiap slide dipimpin visual kuat (foto produk/lifestyle/key visual), logo selalu terlihat, warna brand dominan. Teks sangat hemat: judul maks 6-8 kata, body maks 1 kalimat pendek. Jangan buat carousel yang isinya paragraf/kartu ikon; lebih baik sedikit slide tapi mewah. Copy percaya diri, elegan, tidak bertele-tele.",
   },
   berita: {
     label: "Media berita",

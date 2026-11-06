@@ -38,7 +38,8 @@ const COVER_DIRECTION: Record<string, string> = {
 
 function aiPrompt(brand: Brand, req: ImageRequest) {
   const promo = req.layout === "promo_hero";
-  const cover = req.layout ? COVER_DIRECTION[req.layout] : undefined;
+  // Teaser punya arahan key visual sendiri (gelap & misterius): jangan ditimpa arahan cover gaya.
+  const cover = req.layout && !/teaser key visual/i.test(req.prompt) ? COVER_DIRECTION[req.layout] : undefined;
   return [
     req.prompt || req.query,
     promo

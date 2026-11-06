@@ -262,8 +262,21 @@ Campurkan format: kebanyakan carousel (lebih tinggi save & share), beberapa sing
   return out.ideas.slice(0, opts.count);
 }
 
+/** Konten teaser/pengumuman: harus terasa eksklusif & visual-first, bukan carousel edukasi. */
+export const TEASER_WORDS = /coming\s?soon|segera hadir|teaser|launch|peluncuran|countdown|sneak ?peek|bocoran|stay tuned|nantikan|rilis|grand opening|pre-?order|segera dibuka/i;
+export const isTeaser = (idea: Pick<Idea, "title" | "hook" | "angle">, extra = "") => TEASER_WORDS.test(`${idea.title} ${idea.hook} ${idea.angle} ${extra}`);
+
+const TEASER_GUIDE = `# KONTEN TEASER / COMING SOON (WAJIB)
+Ini konten teaser/pengumuman eksklusif, BUKAN edukasi. Target rasa: misterius, premium, bikin penasaran — seperti teaser peluncuran brand besar.
+- Maksimal 3 slide (single post lebih baik). Slide 1 = KEY VISUAL penuh satu layar: pakai layout editorial_cover (atau cover khas arah visual bila ada).
+- Judul sangat pendek 2-4 kata, mis. "Segera *hadir*." / "Sesuatu yang *baru*." Tandai 1 kata dengan *bintang*. labelB = teks tombol kecil, mis. "Nantikan 12.12" atau "Segera".
+- Tanpa paragraf, tanpa daftar, tanpa kartu ikon/clue berisi kalimat panjang. Bila ada slide 2-3, tiap slide dipimpin foto/visual dengan 1 baris teks saja, terakhir cta singkat.
+- image.prompt cover: key visual sinematik yang misterius dan mahal: produk/objek utama brand tersembunyi sebagian dalam bayangan, rim light dramatis berwarna brand, latar gelap bersih dengan glow halus, ruang kosong untuk judul, kualitas iklan peluncuran. Bila brand produk digital: perangkat (HP/laptop) dengan layar menyala samar di ruang gelap, siluet, partikel cahaya.
+- Caption singkat penuh rasa penasaran + ajakan nyalakan notifikasi/follow.`;
+
 export async function generatePost(brand: Brand, idea: Idea, ref?: RefContext | null): Promise<Draft> {
   if (!config.hasAI) return demoPost(brand, idea);
+  const teaser = isTeaser(idea);
   const prompt = `Buat konten lengkap (copy + art direction) dari ide yang sudah di-ACC berikut.
 
 Judul: ${idea.title}
@@ -273,7 +286,7 @@ Pilar: ${idea.pillar}
 
 ${formatRules(idea.format)}
 
-Pastikan alur slide enak dibaca berurutan, visualnya bervariasi, dan caption melengkapi (bukan mengulang persis) isi slide.${ref ? "\nKarena ada referensi: kemiripan dengan referensi lebih penting daripada aturan variasi layout." : ""}`;
+Pastikan alur slide enak dibaca berurutan, visualnya bervariasi, dan caption melengkapi (bukan mengulang persis) isi slide.${ref ? "\nKarena ada referensi: kemiripan dengan referensi lebih penting daripada aturan variasi layout." : ""}${teaser ? `\n\n${TEASER_GUIDE}` : ""}`;
   const out = await callStructured(brandSystemPrompt(brand), withRef(prompt, ref), PostSchema);
   return toDraft(out, idea.format);
 }

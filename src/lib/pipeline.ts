@@ -2,7 +2,7 @@ import "server-only";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
 import { accounts, type WorkspaceRepo } from "./db";
-import { generateIdeas, generatePost, reviewDesign, revisePost, type Draft, type RefContext } from "./ai";
+import { generateIdeas, generatePost, isTeaser, TEASER_WORDS, reviewDesign, revisePost, type Draft, type RefContext } from "./ai";
 import { setMeterPost } from "./cost";
 import { brandForPlan, planOf, visualConcept, type PlanRule } from "./plans";
 import { referenceImageBlocks, referenceImageBuffers, referencePrompt } from "./reference";
@@ -37,7 +37,16 @@ export async function createIdeas(
     recentTitles: recent,
     reference: reference ? [reference.notes, reference.layouts.length ? `Referensi berisi ${reference.layouts.length} slide.` : ""].filter(Boolean).join("\n") : undefined,
   });
-  return w.createIdeas(ideas.map((i) => ({ ...i, ...(format ? { format } : {}), reference })));
+  // Brief teaser/coming soon: tandai idenya supaya naskah & desain memakai resep teaser.
+  const teaserBrief = TEASER_WORDS.test(brief);
+  return w.createIdeas(
+    ideas.map((i) => ({
+      ...i,
+      angle: teaserBrief && !isTeaser(i) ? `[Teaser coming soon] ${i.angle}` : i.angle,
+      ...(format ? { format } : {}),
+      reference,
+    })),
+  );
 }
 
 /** Teks + gambar referensi untuk AI (hanya bila AI aktif; mode demo cukup palet & template). */
@@ -142,6 +151,31 @@ const STYLE_COVER: Record<string, Slide["layout"]> = {
   creative: "creative_cover",
 };
 
+/**
+ * Teaser / coming soon: maks 3 slide, cover = key visual penuh (editorial_cover atau cover khas
+ * arah visual), slide teks-berat dibuang. Paket penuh: cover pasti punya key visual sinematik.
+ */
+function teaserize(draft: Draft, plan: PlanRule, brand: Brand, ref: PostReference | null, template: string): Draft {
+  if (!draft.slides.length) return draft;
+  const styleCover = ref?.style && ref.style !== "brand" ? STYLE_COVER[template] : undefined;
+  const coverLayout = styleCover ?? "editorial_cover";
+  const TEXTY = new Set<Slide["layout"]>(["list", "steps", "compare", "point_icon", "stat"]);
+  const [first, ...rest] = draft.slides;
+  const last = rest.length ? rest[rest.length - 1] : null;
+  const middle = rest.slice(0, -1).filter((d) => !TEXTY.has(d.slide.layout)).slice(0, 1);
+  const tail = last && !TEXTY.has(last.slide.layout) ? [last] : [];
+  const headline = first.slide.headline.replace(/\*/g, "");
+  const prompt = `Cinematic mysterious teaser key visual for an upcoming launch by ${brand.name} (${brand.industry || brand.description}). ${visualConcept(brand)} Main subject partially hidden in shadow, dramatic rim light in brand color ${brand.colors.accent} and ${brand.colors.primary}, dark clean premium background with subtle glow and light particles, plenty of empty space, luxury launch-campaign quality. Theme: "${headline}".`.slice(0, 900);
+  const cover = {
+    slide: { ...first.slide, layout: coverLayout },
+    imageRequest:
+      first.imageRequest ? { ...first.imageRequest, prompt: `${prompt} Scene idea: ${first.imageRequest.prompt}`.slice(0, 1200), layout: coverLayout }
+      : plan.quality === "full" ? { assetId: "", query: `${brand.industry || brand.name} dark product launch`, prompt, layout: coverLayout }
+      : null,
+  };
+  return { ...draft, slides: [cover, ...middle, ...tail].slice(0, 3) };
+}
+
 /** Arah visual dipilih owner: cover wajib memakai cover khas gaya itu. */
 function styleCover(draft: Draft, ref: PostReference | null, template: string): Draft {
   const cover = STYLE_COVER[template];
@@ -160,12 +194,14 @@ function styleCover(draft: Draft, ref: PostReference | null, template: string): 
 export function ensureVisuals(draft: Draft, plan: PlanRule, brand: Brand, template: string): Draft {
   if (plan.quality !== "full" || !plan.minVisuals) return draft;
   let have = draft.slides.filter((d) => d.imageRequest || d.slide.image).length;
-  if (have >= plan.minVisuals) return draft;
+  const coverHasVisual = Boolean(draft.slides[0]?.imageRequest || draft.slides[0]?.slide.image);
+  // Paket penuh: cover WAJIB bervisual, plus minimal N visual total.
+  if (have >= plan.minVisuals && coverHasVisual) return draft;
   const concept = visualConcept(brand);
   const order = draft.slides.map((_, i) => i).filter((i) => i !== draft.slides.length - 1 || draft.slides.length === 1);
   const slides = [...draft.slides];
   for (const i of order) {
-    if (have >= plan.minVisuals) break;
+    if (have >= plan.minVisuals && (i !== 0 || coverHasVisual)) continue;
     const d = slides[i];
     if (d.imageRequest || d.slide.image) continue;
     const to = (i === 0 ? STYLE_COVER[template] : undefined) ?? PHOTO_OF[d.slide.layout];
@@ -204,7 +240,8 @@ export async function buildPostFromIdea(w: WorkspaceRepo, ideaId: string, progre
   const refImgs = await referenceImageBuffers(ref);
   const template = ref?.template ?? brand.defaultTemplate;
 
-  const draft = ensureVisuals(styleCover(await generatePost(brand, idea, ctx), ref, template), plan, brand, template);
+  const raw = styleCover(await generatePost(brand, idea, ctx), ref, template);
+  const draft = ensureVisuals(isTeaser(idea) ? teaserize(raw, plan, brand, ref, template) : raw, plan, brand, template);
   await progress(
     "kata",
     `Naskah ${draft.slides.length > 1 ? `${draft.slides.length} slide` : "single post"} + caption sudah jadi${ref ? " mengikuti gaya referensimu" : ""}. Hook-nya: “${firstHook(draft.slides.map((d) => d.slide))}”. Aku oper ke Rupa ya.`,
