@@ -142,6 +142,8 @@ export async function processBatchStep(w: WorkspaceRepo): Promise<boolean> {
 
 /** URL dasar untuk memanggil diri sendiri (domain produksi, bukan URL deployment yang terproteksi). */
 export function selfOrigin(fallback: string): string {
+  const app = process.env.APP_URL?.trim().replace(/\/+$/, "");
+  if (app && /^https?:\/\//.test(app)) return app;
   const prod = process.env.VERCEL_ENV === "production" && process.env.VERCEL_PROJECT_PRODUCTION_URL;
   return prod ? `https://${prod}` : fallback;
 }
