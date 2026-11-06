@@ -78,7 +78,7 @@ export function setMeterPost(postId: string) {
   if (m) m.postId = postId;
 }
 
-export type UsageKind = "ideas" | "create_post" | "build_post" | "revise" | "image" | "reference" | "other";
+export type UsageKind = "ideas" | "create_post" | "build_post" | "revise" | "image" | "reference" | "audit" | "other";
 
 /**
  * Jalankan pekerjaan sambil menghitung biayanya, lalu simpan ke log.

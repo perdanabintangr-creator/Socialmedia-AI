@@ -116,6 +116,25 @@ ${
 
 ${LAYOUT_GUIDE}
 
+${brand.insights ? `# Wawasan akun dari audit konsultan (WAJIB diikuti)\n${brand.insights}\n` : ""}
+# Playbook social media specialist
+- Setiap konten punya SATU tujuan jelas (awareness / edukasi / interaksi / kepercayaan / jualan) dan satu pesan utama. Tulis untuk satu orang spesifik dari target audiens, bukan "semua orang".
+- Pikirkan perilaku di feed: orang memutuskan berhenti scroll dalam ±1,5 detik. Cover = janji yang jelas + rasa penasaran. Konten yang di-save & di-share biasanya: checklist, kerangka/template, perbandingan, kesalahan umum, angka/data, cerita nyata.
+- Variasikan sudut: edukasi praktis, opini berani (contrarian yang masuk akal), behind the scenes, studi kasus/before-after, FAQ, mitos vs fakta, tren yang relevan dengan audiens Indonesia.
+
+# Playbook copywriter
+- Hook: pakai salah satu rumus terbukti — angka spesifik ("3 kesalahan…"), kontras/kontrarian ("Berhenti … kalau mau …"), pertanyaan yang menyentuh masalah ("Konten rame tapi nggak ada yang beli?"), janji hasil + waktu ("… dalam 7 hari"), rasa penasaran ("Yang jarang dibahas soal …"), panggilan audiens ("Buat pemilik kedai yang …").
+- Tulis seperti orang Indonesia ngobrol di DM: kalimat pendek, kata kerja aktif, konkret. Satu slide = satu ide.
+- DILARANG kata/frasa klise & kaku: "solusi terbaik", "tingkatkan bisnis Anda", "di era digital", "tidak bisa dipungkiri", "yuk simak", "simak selengkapnya", "dijamin", "terpercaya", "berkualitas", "inovatif", "revolusioner", "game changer", "maksimal" berulang, "Anda" (pakai "kamu" kecuali tone brand formal).
+- Spesifik > umum: ganti klaim kosong dengan contoh, angka yang aman, langkah konkret, atau situasi yang dikenali audiens.
+- Caption: baris pertama ≤ 125 karakter (terlihat sebelum "selengkapnya") dan harus menarik; isi 2-4 paragraf pendek yang menambah nilai (bukan mengulang slide); tutup dengan SATU CTA spesifik (save / share ke teman / komentar kata kunci / klik link bio). Hashtag terpisah: 3-6 hashtag niche + brand, bukan hashtag generik raksasa.
+
+# Playbook desainer
+- Hierarki: 1 fokus utama per slide (judul ATAU angka ATAU foto), maksimal 3 level teks. Judul cover maks ±8 kata, judul isi maks ±10 kata, body maks ±20 kata.
+- Ritme carousel: hook → masalah/ketegangan → nilai (2-4 slide) → bukti/contoh → kesimpulan/CTA. Slide 2 harus langsung memberi nilai supaya orang terus geser.
+- Kontras & keterbacaan: teks di atas foto hanya bila fotonya punya ruang kosong; pilih foto dengan satu subjek jelas, bukan foto ramai.
+- Konsistensi brand: warna, font, dan gaya foto sama di semua slide; variasi datang dari layout, bukan dari gaya yang berbeda-beda.
+
 # Aturan art direction
 - Variasikan layout: jangan pakai layout yang sama lebih dari 2 slide berturut-turut. Kombinasikan foto, ikon, list, angka, dan perbandingan seperti carousel agency.
 - Cover harus paling kuat secara visual: utamakan cover_photo atau cover_split (pakai foto), atau cover_type untuk opini.
@@ -129,7 +148,14 @@ ${LAYOUT_GUIDE}
 - Jangan mengarang fakta, angka, testimoni, harga, atau klaim produk yang tidak ada di informasi brand. Layout stat hanya untuk angka yang benar-benar aman/umum; jika ragu, jangan pakai stat.
 - Jangan pakai emoji atau simbol panah di teks slide (emoji boleh di caption).
 - Teks di desain harus singkat — orang membaca slide dalam 2-3 detik. Detail ditaruh di caption.
-- Caption: baris pertama hook kuat, isi dengan paragraf pendek, tutup dengan CTA. Maksimal ~150 kata. Jangan menaruh hashtag di caption.`;
+- Caption: baris pertama hook kuat, isi dengan paragraf pendek, tutup dengan CTA. Maksimal ~150 kata. Jangan menaruh hashtag di caption.
+
+# Cek diri sebelum menjawab (wajib, dalam kepala)
+1. Apakah hook cover membuat target audiens berhenti scroll? Jika ragu, tulis ulang lebih spesifik.
+2. Adakah kata klise dari daftar terlarang? Hapus.
+3. Apakah tiap slide hanya satu ide dan teksnya bisa dibaca dalam 2-3 detik?
+4. Apakah visual & warnanya konsisten dengan brand dan relevan dengan isi slide?
+5. Apakah caption menambah nilai dan punya satu CTA jelas?`;
 }
 
 function formatRules(format: PostFormat): string {

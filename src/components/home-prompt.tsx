@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowUp, CalendarCheck, CalendarRange, Images, Lightbulb, Loader2, Megaphone, Sparkles, TrendingUp } from "lucide-react";
+import { ArrowUp, CalendarCheck, CalendarRange, Stethoscope, Images, Lightbulb, Loader2, Megaphone, Sparkles, TrendingUp } from "lucide-react";
 import { startChatAction } from "@/app/studio-actions";
 import { AttachButton, DropOverlay, RefTray, useReferences } from "@/components/reference-input";
 import { StylePicker, type StyleChoice } from "@/components/style-picker";
@@ -154,6 +154,14 @@ export function HomePrompt({ defaultStyle = "auto" }: { defaultStyle?: StyleChoi
             </span>
           </span>
           <span className="text-xs font-semibold text-slate-600 group-hover:text-ink">Autopilot</span>
+        </Link>
+        <Link href="/audit" aria-label="Audit: konsultan AI menilai akun IG/TikTok kamu" className="group flex w-[72px] shrink-0 flex-col items-center gap-2">
+          <span className="story-ring transition group-hover:scale-105 group-active:scale-95">
+            <span className="grid h-16 w-16 place-items-center bg-gradient-to-br from-rose-100 to-orange-50 text-rose-600">
+              <Stethoscope size={24} />
+            </span>
+          </span>
+          <span className="text-xs font-semibold text-slate-600 group-hover:text-ink">Audit</span>
         </Link>
         <Link href="/performa" aria-label="Performa: cek likes dan komentar" className="group flex w-[72px] shrink-0 flex-col items-center gap-2">
           <span className="story-ring transition group-hover:scale-105 group-active:scale-95">

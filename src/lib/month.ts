@@ -112,6 +112,36 @@ export async function proposePlan(
   return { count: ideas.length };
 }
 
+/** Rencana dari ide yang sudah jadi (mis. hasil audit konsultan) — tanpa panggilan AI tambahan. */
+export async function proposeIdeas(
+  w: WorkspaceRepo,
+  ideas: { title: string; hook: string; format: "single" | "carousel"; pillar: string; why: string }[],
+): Promise<{ count: number }> {
+  const brand = await w.getBrand();
+  const all = await w.listIdeas();
+  const lastPlanned = all
+    .map((i) => i.batch?.plannedAt)
+    .filter((d): d is string => Boolean(d) && new Date(d!).getTime() > Date.now())
+    .sort()
+    .at(-1);
+  const slots = planSlots(ideas.length, brand.postingTime, Math.max(7, ideas.length * 2), lastPlanned ? new Date(lastPlanned) : new Date());
+  const reference = withVisualStyle(null, brand.visualStyle);
+  const batchId = randomUUID();
+  await w.createIdeas(
+    ideas.map((i, n) => ({
+      title: i.title,
+      hook: i.hook,
+      angle: i.why,
+      pillar: i.pillar,
+      format: i.format,
+      rationale: i.why,
+      reference,
+      batch: { id: batchId, plannedAt: slots[n], state: "proposed", startedAt: null, attempts: 0, error: null, auto: true } satisfies IdeaBatch,
+    })),
+  );
+  return { count: ideas.length };
+}
+
 /** ACC ide rencana → masuk antrean pembuatan + penjadwalan otomatis. */
 export async function acceptPlanIdeas(w: WorkspaceRepo, ids: string[]): Promise<{ accepted: number; skipped: number; message: string }> {
   const quota = await quotaOf(w);

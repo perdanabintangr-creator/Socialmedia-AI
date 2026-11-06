@@ -60,6 +60,8 @@ export interface Brand {
   goals: string[]; // tujuan konten
   socialRequested: boolean; // klien minta akun sosmed dihubungkan
   performance: boolean; // pemantauan performa (baca metrik dari link) aktif
+  insights?: string; // wawasan konsultan dari audit akun (dipakai di semua prompt)
+  audit?: AccountAudit | null; // hasil audit akun terakhir
 }
 
 export type ImageSourceMode = "auto" | "ai" | "stock" | "brand" | "none";
@@ -522,4 +524,26 @@ export interface PostStory {
   publish_refs: string[];
   error: string | null;
   updated_at: string;
+}
+
+// ---------------------------------------------------------------- Audit akun (konsultan)
+
+export interface AccountAudit {
+  createdAt: string;
+  links: string[];
+  screenshots: string[];
+  goal: string;
+  profile: { platform: string; handle: string; followers?: number; likes?: number; posts?: number; bio?: string }[];
+  overall: number; // 0-100
+  verdict: string;
+  scores: { area: string; score: number; note: string }[];
+  strengths: string[];
+  problems: { title: string; why: string; fix: string }[];
+  bio: string;
+  actions: { when: string; action: string }[];
+  ideas: { title: string; hook: string; format: "single" | "carousel"; pillar: string; why: string }[];
+  posting: { perWeek: number; bestTimes: string };
+  brandUpdates: { tone: string; pillars: string[]; imageStyle: string; styleNotes: string; doDont: string; visualStyle: string };
+  insights: string; // ringkasan untuk "otak" AI
+  appliedAt?: string | null;
 }

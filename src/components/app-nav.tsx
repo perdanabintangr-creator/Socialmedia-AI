@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, CheckCheck, Home, LayoutGrid, Lightbulb, MessageSquareText, Palette, Plus, Settings2, TrendingUp } from "lucide-react";
+import { CalendarDays, CheckCheck, Home, Stethoscope, LayoutGrid, Lightbulb, MessageSquareText, Palette, Plus, Settings2, TrendingUp } from "lucide-react";
 
 export const NAV = [
   { href: "/beranda", label: "Beranda", short: "Beranda", icon: Home, mobile: true },
@@ -11,6 +11,7 @@ export const NAV = [
   { href: "/ideas", label: "Bank ide", short: "Ide", icon: Lightbulb, mobile: false },
   { href: "/kalender", label: "Kalender konten", short: "Kalender", icon: CalendarDays, mobile: true },
   { href: "/performa", label: "Performa", short: "Performa", icon: TrendingUp, mobile: true },
+  { href: "/audit", label: "Audit akun", short: "Audit", icon: Stethoscope, mobile: false },
   { href: "/brand", label: "Brand Kit", short: "Brand", icon: Palette, mobile: false },
 ] as const;
 
