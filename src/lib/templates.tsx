@@ -878,19 +878,17 @@ function FolkCover({ s, img, brand, logo }: CoverProps) {
     <>
       <img src={img.src} width={img.w} height={img.h} style={{ position: "absolute", left: 0, top: 0 }} />
       <div style={{ position: "absolute", left: 0, top, width: CANVAS.width, height: CANVAS.height - top, background: "#FFFFFF" }} />
-      <div style={{ position: "absolute", left: 48, top: 48, width: 150, height: 150, borderRadius: 9999, background: "#FFFFFF", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 12px 36px rgba(0,0,0,0.25)", border: "8px solid #FFFFFF", overflow: "hidden" }}>
-        {logo ? (
+      {logo ? (
+        <div style={{ position: "absolute", left: 48, top: 48, width: 150, height: 150, borderRadius: 9999, background: "#FFFFFF", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 12px 36px rgba(0,0,0,0.25)", border: "8px solid #FFFFFF", overflow: "hidden" }}>
           <img src={logo.src} width={Math.min(110, Math.round((logo.width / logo.height) * 80))} height={Math.round(Math.min(110, Math.round((logo.width / logo.height) * 80)) * (logo.height / logo.width))} />
-        ) : (
-          <div style={{ fontFamily: "Heading", fontWeight: 800, fontSize: 64, color: brand.colors.primary }}>{brand.name.slice(0, 1).toUpperCase()}</div>
-        )}
-      </div>
+        </div>
+      ) : null}
       <div style={{ position: "absolute", left: 56, width: CANVAS.width - 112, top: top + 36, height: CANVAS.height - top - 156, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div style={{ display: "flex", width: CANVAS.width - 112, fontFamily: "Body", fontWeight: 500, fontSize: fit(s.headline, 84, 54, 60), lineHeight: 1.12, letterSpacing: -1.5, color: "#111111" }}>
+        <div style={{ display: "flex", width: CANVAS.width - 112, fontFamily: "Body", fontWeight: 500, fontSize: fit(s.headline, 104, 66, 60), lineHeight: 1.12, letterSpacing: -1.5, color: "#111111" }}>
           {plain(s.headline)}
         </div>
       </div>
-      <div style={{ position: "absolute", right: 56, bottom: 52, display: "flex", fontFamily: "Heading", fontWeight: 800, fontSize: 40, letterSpacing: 1, color: "#111111", textTransform: "uppercase" }}>
+      <div style={{ position: "absolute", left: 56, width: CANVAS.width - 112, bottom: 52, display: "flex", justifyContent: "flex-end", fontFamily: "Heading", fontWeight: 800, fontSize: 40, letterSpacing: 1, color: "#111111", textTransform: "uppercase" }}>
         {brand.name}
       </div>
     </>

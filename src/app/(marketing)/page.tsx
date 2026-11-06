@@ -120,6 +120,7 @@ export default async function LandingPage() {
               ["#proses", "Proses"],
               ["#tim", "Tim AI"],
               ["#hasil", "Hasil"],
+              ["#gaya", "Gaya"],
               ["#performa", "Performa"],
               ["#harga", "Harga"],
             ].map(([h, l]) => (
@@ -272,7 +273,7 @@ export default async function LandingPage() {
         <div className="group relative mt-10 h-[340px] [--r:190px] [perspective:1200px] sm:h-[420px] sm:[--r:380px]" role="img" aria-label="Contoh slide desain berputar">
           <div className="absolute top-8 left-1/2 h-0 w-0 [transform-style:preserve-3d]">
             <div className="animate-spin-y [transform-style:preserve-3d] group-hover:[animation-play-state:paused]">
-              {[1, 2, 3, 4, 5, 6, 1, 3].map((n, i) => (
+              {[1, 4, 5, 7, 9, 10, 8, 6].map((n, i) => (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   key={i}
@@ -287,6 +288,28 @@ export default async function LandingPage() {
           </div>
         </div>
         <p className="relative hidden text-center text-sm text-white/50 sm:block">Arahkan kursor untuk menghentikan putaran</p>
+      </section>
+
+      {/* Arah visual */}
+      <section id="gaya" className="scroll-mt-24 px-5 py-24 sm:py-28">
+        <SectionHead
+          eyebrow="Arah visual"
+          title="Pilih gayanya, hasilnya selevel designer"
+          sub="Dari gaya media berita yang viral sampai editorial majalah. Pilih di awal, tim AI mengikuti struktur, tipografi, dan foto khas gaya itu."
+        />
+        <div className="mx-auto mt-12 grid max-w-6xl grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 [perspective:1400px]">
+          {STYLE_SHOWCASE.map((g, i) => (
+            <figure key={g.label} className="group" style={{ animationDelay: `${-i * 0.7}s` }}>
+              <div className="relative overflow-hidden rounded-3xl shadow-[0_30px_60px_-24px_rgb(15_18_34/0.45)] ring-1 ring-black/5 transition duration-500 ease-out [transform-style:preserve-3d] group-hover:[transform:rotateX(6deg)_rotateY(-6deg)_translateY(-6px)]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/showcase/${g.img}.webp`} alt={`Contoh gaya ${g.label}`} loading="lazy" className="aspect-[4/5] w-full object-cover transition duration-700 group-hover:scale-[1.04]" />
+                <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,transparent_35%,rgb(255_255_255/0.28)_50%,transparent_65%)] bg-[length:250%_100%] bg-[position:150%_0] transition-[background-position] duration-1000 group-hover:bg-[position:-50%_0]" />
+                <span className="absolute top-3 left-3 rounded-full bg-white/90 px-3 py-1 text-[11px] font-bold text-ink shadow-soft backdrop-blur">{g.label}</span>
+              </div>
+              <figcaption className="mt-3 px-1 text-sm leading-snug text-slate-500">{g.desc}</figcaption>
+            </figure>
+          ))}
+        </div>
       </section>
 
       {/* Performa */}
@@ -433,10 +456,19 @@ function SectionHead({ eyebrow, title, sub, dark }: { eyebrow: string; title: Re
   );
 }
 
+const STYLE_SHOWCASE = [
+  { img: 9, label: "Media berita", desc: "Foto liputan + judul kapital menyala. Gaya homeless media yang paling sering viral." },
+  { img: 4, label: "Editorial majalah", desc: "Close-up kelas majalah dengan aksen serif italic. Cocok untuk beauty & fashion." },
+  { img: 5, label: "Kreatif 3D / AI", desc: "Visual 3D yang wow, judul raksasa & tulisan tangan neon." },
+  { img: 6, label: "Info cepat", desc: "Satu fakta, foto + panel putih. Ringkas dan gampang dibagikan." },
+  { img: 7, label: "Iklan promo", desc: "Angka diskon dalam starburst, warna kontras, tombol beli." },
+  { img: 12, label: "Brand profesional", desc: "Rapi & on-brand untuk testimoni, tips, dan edukasi." },
+];
+
 const MOCK_ROWS = [
-  { img: 1, t: "Promo beli 2 gratis 1", v: "48,2 rb", l: "6,1 rb", c: "312", w: "92%" },
-  { img: 3, t: "3 kesalahan seduh kopi", v: "21,7 rb", l: "2,4 rb", c: "148", w: "54%" },
-  { img: 5, t: "Behind the scenes roasting", v: "9,8 rb", l: "1,1 rb", c: "61", w: "26%" },
+  { img: 1, t: "Kopi 8 ribuan bikin antre", v: "48,2 rb", l: "6,1 rb", c: "312", w: "92%" },
+  { img: 7, t: "Flash sale diskon 50%", v: "21,7 rb", l: "2,4 rb", c: "148", w: "54%" },
+  { img: 4, t: "Glow alami tanpa filter", v: "9,8 rb", l: "1,1 rb", c: "61", w: "26%" },
 ];
 const MOCK_KPI = [
   { icon: Eye, l: "Views", v: "79,7 rb" },

@@ -194,7 +194,7 @@ function SceneIdeas({ t }: { t: number }) {
 function SceneDesign({ t }: { t: number }) {
   const fan = t > 700;
   const pct = Math.min(100, Math.round((t / 3200) * 100));
-  const slides = [1, 2, 3, 4, 5];
+  const slides = [1, 2, 3, 11, 13];
   return (
     <div className="flex w-full flex-col items-center">
       <AgentChip icon={Palette} name="Rupa" tone="from-brand-400 to-brand-600" text={pct < 100 ? `mendesain carousel… ${pct}%` : "selesai: 5 slide + caption"} />

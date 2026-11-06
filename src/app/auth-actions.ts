@@ -88,7 +88,7 @@ export async function registerAction(_: ActionState, fd: FormData): Promise<Acti
 
 export async function logoutAction() {
   await endSession();
-  redirect("/login");
+  redirect("/");
 }
 
 // ------------------------------------------------------------------ kelola pengguna (admin)

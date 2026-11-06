@@ -4,14 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import { Heart, MessageCircle, Repeat2, UserPlus } from "lucide-react";
 import { PhoneFrame, SocialPost } from "./social-post";
 
+const DECK = ["/showcase/1.webp", "/showcase/2.webp", "/showcase/3.webp", "/showcase/11.webp", "/showcase/13.webp"];
+
 const fmt = (n: number) => new Intl.NumberFormat("id-ID").format(n);
 
 /** Kartu postingan yang melayang di ruang 3D di sekitar HP. */
 const CARDS = [
-  { src: "/showcase/1.webp", pos: "-left-[3%] top-[6%]", t: "rotateY(30deg) rotateZ(-5deg) translateZ(-150px)", w: "w-40", delay: "0s" },
-  { src: "/showcase/3.webp", pos: "left-0 top-[52%]", t: "rotateY(24deg) rotateZ(3deg) translateZ(-70px)", w: "w-36", delay: "-2s" },
+  { src: "/showcase/4.webp", pos: "-left-[3%] top-[6%]", t: "rotateY(30deg) rotateZ(-5deg) translateZ(-150px)", w: "w-40", delay: "0s" },
+  { src: "/showcase/7.webp", pos: "left-0 top-[52%]", t: "rotateY(24deg) rotateZ(3deg) translateZ(-70px)", w: "w-36", delay: "-2s" },
   { src: "/showcase/5.webp", pos: "right-[1%] top-[4%]", t: "rotateY(-30deg) rotateZ(5deg) translateZ(-150px)", w: "w-40", delay: "-4s" },
-  { src: "/showcase/2.webp", pos: "right-[3%] top-[48%]", t: "rotateY(-24deg) rotateZ(-3deg) translateZ(-70px)", w: "w-36", delay: "-1s" },
+  { src: "/showcase/9.webp", pos: "right-[3%] top-[48%]", t: "rotateY(-24deg) rotateZ(-3deg) translateZ(-70px)", w: "w-36", delay: "-1s" },
 ];
 
 const HEARTS = [
@@ -86,7 +88,7 @@ export function HeroStage() {
                   </span>
                 ))}
               </div>
-              <SocialPost image="/showcase/1.webp" likes={fmt(likes)} liked comments="186" />
+              <SocialPost image="/showcase/1.webp" images={DECK} likes={fmt(likes)} liked comments="186" />
             </PhoneFrame>
             {/* hati melayang dari tombol suka */}
             {!reduced && (
