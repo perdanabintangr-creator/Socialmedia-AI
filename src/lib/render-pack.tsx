@@ -4,7 +4,8 @@ import path from "path";
 import { ImageResponse } from "next/og";
 import sharp from "sharp";
 import { readMedia } from "./media";
-import { PACK_CANVAS, PACK_FONTS, PackSlide, packWantsImage, type PackAssets, type PackImg, type PackKey, type PackLogo } from "./packs";
+import { PACK_CANVAS, PACK_DEFAULT_PAIR, PackSlide, packWantsImage, type Density, type PackAssets, type PackImg, type PackKey, type PackLogo } from "./packs";
+import { pairFonts, type FontPairKey } from "./font-pairs";
 import type { Brand, Slide } from "./types";
 
 const FONT_DIR = path.join(process.cwd(), "assets", "fonts");
@@ -17,7 +18,7 @@ async function fontData(file: string) {
   }
   return d;
 }
-const loadFonts = () => Promise.all(PACK_FONTS.map(async (f) => ({ name: f.name, data: await fontData(f.file), weight: f.weight, style: f.style })));
+const loadFonts = (pair: FontPairKey) => Promise.all(pairFonts(pair).map(async (f) => ({ name: f.name, data: await fontData(f.file), weight: f.weight, style: f.style })));
 
 const memo = new Map<string, Promise<unknown>>();
 function once<T>(key: string, fn: () => Promise<T>): Promise<T> {
@@ -98,11 +99,13 @@ function packLogo(url: string | null): Promise<PackLogo> {
   });
 }
 
-export async function renderPackPng(brand: Brand, slides: Slide[], index: number, pack: PackKey) {
+export async function renderPackPng(brand: Brand, slides: Slide[], index: number, pack: PackKey, opts: { pair?: FontPairKey | null; density?: Density } = {}) {
+  const pair = opts.pair ?? PACK_DEFAULT_PAIR[pack];
+  const density = opts.density ?? "visual";
   const slide = slides[index];
   if (!slide) throw new Error("Slide tidak ditemukan");
   const url = packWantsImage(pack, slide.layout) ? slide.image?.url : undefined;
-  const [fonts, assets, img, logo] = await Promise.all([loadFonts(), packAssets(), url ? packImage(url, brand.colors.primary) : null, packLogo(brand.logoUrl)]);
-  const res = new ImageResponse(<PackSlide pack={pack} brand={brand} slide={slide} index={index} total={slides.length} img={img} logo={logo} assets={assets} />, { ...PACK_CANVAS, fonts });
+  const [fonts, assets, img, logo] = await Promise.all([loadFonts(pair), packAssets(), url ? packImage(url, brand.colors.primary) : null, packLogo(brand.logoUrl)]);
+  const res = new ImageResponse(<PackSlide pack={pack} pair={pair} density={density} brand={brand} slide={slide} index={index} total={slides.length} img={img} logo={logo} assets={assets} />, { ...PACK_CANVAS, fonts });
   return Buffer.from(await res.arrayBuffer());
 }
