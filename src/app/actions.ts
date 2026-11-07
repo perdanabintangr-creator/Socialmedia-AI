@@ -1,5 +1,8 @@
 "use server";
 
+import { isDensity, isPack, PACK_DEFAULT_PAIR, type Density, type PackChoice, type PackKey, type PostDesign } from "@/lib/design";
+import { isFontPair, type FontPairKey } from "@/lib/font-pairs";
+
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { headers } from "next/headers";
@@ -13,12 +16,31 @@ import { sourceImage } from "@/lib/images";
 import { metered } from "@/lib/cost";
 import { brandGaps, quotaOf } from "@/lib/plans";
 import { importBrandFromWebsite } from "@/lib/brand-import";
-import { approveAndPublish, publishStoryFor, buildPostFromIdea, createIdeas, parseWib, publishTarget, revisePostWith } from "@/lib/pipeline";
+import { withDesign, approveAndPublish, publishStoryFor, buildPostFromIdea, createIdeas, parseWib, publishTarget, revisePostWith } from "@/lib/pipeline";
 import { readMedia } from "@/lib/media";
 import { colorsFromLogo } from "@/lib/reference";
 import { randomUUID } from "crypto";
 import { getPublishStatus } from "@/lib/publisher";
 import { DEFAULT_BRAND, BODY_FONT_KEYS, FONT_KEYS, SLIDE_LAYOUTS, isVisualStyle, type VisualStyleKey, TEMPLATE_KEYS, normalizeSlide, type Brand, type FontKey, type ImageSourceMode, type Platform, type Post, type Slide, type SlideLayout, type TemplateKey } from "@/lib/types";
+
+/** Ganti desain satu konten (pack / huruf / kepadatan) — render ulang tanpa biaya AI. */
+export async function setPostDesignAction(postId: string, v: { pack: PackKey | "classic"; pair: string; density: string }): Promise<{ ok?: string; error?: string }> {
+  try {
+    const { w } = await workspaceOrThrow();
+    const post = await w.getPost(postId);
+    if (!post) return { error: "Konten tidak ditemukan" };
+    if (!["review", "failed", "approved"].includes(post.status)) return { error: "Konten yang sudah dijadwalkan/terbit tidak bisa diganti desainnya" };
+    const design: PostDesign | null =
+      v.pack === "classic" || !isPack(v.pack)
+        ? null
+        : { pack: v.pack, pair: isFontPair(v.pair) ? v.pair : PACK_DEFAULT_PAIR[v.pack], density: isDensity(v.density) ? v.density : "visual" };
+    await w.updatePost(postId, { reference: withDesign(post.reference, design), ...(post.status === "approved" ? { status: "review" as const, media_urls: [] } : {}) });
+    revalidatePath(`/posts/${postId}`);
+    return { ok: design ? "Desain diganti." : "Kembali ke template klasik." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Gagal mengganti desain" };
+  }
+}
 
 export type ActionState = { error?: string; ok?: string } | undefined;
 
@@ -75,6 +97,9 @@ export async function saveBrandAction(_: ActionState, fd: FormData): Promise<Act
       bodyFont: BODY_FONT_KEYS.includes(bodyFont) ? bodyFont : current.bodyFont,
       defaultTemplate: TEMPLATES.includes(template) ? template : current.defaultTemplate,
       visualStyle: fd.has("visualStyle") ? (isVisualStyle(str(fd, "visualStyle")) ? (str(fd, "visualStyle") as VisualStyleKey) : "auto") : current.visualStyle,
+      designPack: fd.has("designPack") ? (isPack(str(fd, "designPack")) || ["auto", "classic"].includes(str(fd, "designPack")) ? (str(fd, "designPack") as PackChoice) : "auto") : current.designPack,
+      fontPair: fd.has("fontPair") ? (isFontPair(str(fd, "fontPair")) ? (str(fd, "fontPair") as FontPairKey) : "auto") : current.fontPair,
+      density: fd.has("density") && isDensity(str(fd, "density")) ? (str(fd, "density") as Density) : current.density,
       colors: {
         primary: color("primary"),
         secondary: color("secondary"),

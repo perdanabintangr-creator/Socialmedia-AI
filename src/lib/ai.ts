@@ -1,4 +1,6 @@
 import "server-only";
+import { DENSITIES, PACK_GUIDE, PACK_KEYS, FONT_PAIR_GUIDE, densityGuide, isDensity, isPack, type Density, type PostDesign } from "./design";
+import { FONT_PAIR_KEYS, isFontPair } from "./font-pairs";
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
@@ -56,6 +58,17 @@ const PostSchema = z.object({
   hashtags: z.array(z.string()).describe("3-5 hashtag relevan, tanpa simbol #"),
 });
 type GeneratedPost = z.infer<typeof PostSchema>;
+
+const ChooseDesign = {
+  designPack: z.enum(PACK_KEYS).describe("Sistem desain yang paling cocok untuk brand & isi konten ini"),
+  fontPair: z.enum(FONT_PAIR_KEYS).describe("Pasangan huruf yang paling cocok dengan karakter brand (lihat daftar)"),
+};
+const PostChooseSchema = PostSchema.extend(ChooseDesign);
+const ReviseSchema = PostSchema.extend({
+  designPack: z.enum([...PACK_KEYS, "same"]).describe("Ganti sistem desain HANYA bila owner meminta gaya/desain lain; selain itu 'same'"),
+  fontPair: z.enum([...FONT_PAIR_KEYS, "same"]).describe("Ganti pasangan huruf HANYA bila owner meminta font/huruf lain (mis. 'lebih mewah', 'lebih tebal'); selain itu 'same'"),
+  density: z.enum([...(Object.keys(DENSITIES) as Density[]), "same"]).describe("Ganti kepadatan teks HANYA bila owner minta tulisan lebih sedikit/banyak; selain itu 'same'"),
+});
 
 const ReviewSchema = z.object({
   verdict: z.enum(["approve", "revise"]),
@@ -215,6 +228,7 @@ export interface Draft {
   slides: DraftSlide[];
   caption: string;
   hashtags: string[];
+  design?: { pack?: string | null; pair?: string | null; density?: string | null } | null; // pilihan desain dari AI
 }
 
 function toDraftSlides(out: SlideOutT[], format: PostFormat, previous?: Slide[]): DraftSlide[] {
@@ -243,8 +257,11 @@ function toDraftSlides(out: SlideOutT[], format: PostFormat, previous?: Slide[])
   });
 }
 
-function toDraft(p: GeneratedPost, format: PostFormat, previous?: Slide[]): Draft {
+function toDraft(p: GeneratedPost & { designPack?: string; fontPair?: string; density?: string }, format: PostFormat, previous?: Slide[]): Draft {
+  const pick = (v?: string) => (v && v !== "same" ? v : null);
+  const design = p.designPack || p.fontPair || p.density ? { pack: pick(p.designPack), pair: pick(p.fontPair), density: pick(p.density) } : null;
   return {
+    design,
     title: p.title,
     slides: toDraftSlides(p.slides, format, previous),
     caption: p.caption.trim(),
@@ -309,7 +326,19 @@ Ini teaser eksklusif yang SIMPEL: SINGLE POST, 1 slide saja, layout logo_reveal 
 - Kosongkan image.prompt & image.query (visualnya logo brand).
 - Caption singkat penuh rasa penasaran + ajakan nyalakan notifikasi/follow.`;
 
-export async function generatePost(brand: Brand, idea: Idea, ref?: RefContext | null): Promise<Draft> {
+/** Arahan desain untuk copywriter (Design Pack). */
+function designPrompt(design: PostDesign | null | undefined, choose: boolean) {
+  if (!design) return "";
+  return `\n\n# SISTEM DESAIN
+Konten dirender dengan Design Pack (komposisi ala desainer, tiap slide divariasikan otomatis). Pakai layout inti saja: cover_photo (slide 1), point_photo / point_icon, list / steps, compare, stat, quote, cta. Jangan pakai layout klasik (news_cover, folk_cover, editorial_cover, creative_cover, promo_*).
+${densityGuide(design.density)}${
+    choose
+      ? `\n\nPilih juga designPack & fontPair yang paling cocok dengan brand, audiens, dan isi konten ini.\nDesign Pack:\n${PACK_GUIDE}\nPasangan huruf:\n${FONT_PAIR_GUIDE}`
+      : ""
+  }`;
+}
+
+export async function generatePost(brand: Brand, idea: Idea, ref?: RefContext | null, opts: { design?: PostDesign | null; choose?: boolean } = {}): Promise<Draft> {
   requireAI();
   const teaser = isTeaser(idea);
   const prompt = `Buat konten lengkap (copy + art direction) dari ide yang sudah di-ACC berikut.
@@ -321,20 +350,33 @@ Pilar: ${idea.pillar}
 
 ${formatRules(idea.format)}
 
-Pastikan alur slide enak dibaca berurutan, visualnya bervariasi, dan caption melengkapi (bukan mengulang persis) isi slide.${ref ? "\nKarena ada referensi: kemiripan dengan referensi lebih penting daripada aturan variasi layout." : ""}${teaser ? `\n\n${TEASER_GUIDE}` : ""}`;
+Pastikan alur slide enak dibaca berurutan, visualnya bervariasi, dan caption melengkapi (bukan mengulang persis) isi slide.${ref ? "\nKarena ada referensi: kemiripan dengan referensi lebih penting daripada aturan variasi layout." : ""}${teaser ? `\n\n${TEASER_GUIDE}` : designPrompt(opts.design, Boolean(opts.choose))}`;
+  if (opts.choose && opts.design && !teaser) {
+    const out = await callStructured(brandSystemPrompt(brand), withRef(prompt, ref), PostChooseSchema);
+    return toDraft(out, idea.format);
+  }
   const out = await callStructured(brandSystemPrompt(brand), withRef(prompt, ref), PostSchema);
   return toDraft(out, idea.format);
 }
 
 export async function revisePost(brand: Brand, post: Post, instruction: string, ref?: RefContext | null): Promise<Draft> {
   requireAI();
+  const design = post.reference?.design ?? null;
   const prompt = `Ini konten yang sudah kamu buat sebelumnya (JSON):
 ${JSON.stringify({ title: post.title, slides: slidesForPrompt(post.slides), caption: post.caption, hashtags: post.hashtags }, null, 2)}
 
 Owner meminta revisi: "${instruction}"
 
 Terapkan revisi tersebut. Pertahankan bagian yang tidak diminta untuk diubah. Hemat biaya: JANGAN mengganti foto kecuali owner memintanya secara eksplisit (mis. "ganti foto", "bedakan orangnya") atau slide baru memang butuh foto. Untuk slide yang fotonya tetap, isi image.query/prompt seperti semula dan image.change = false. Set image.change = true hanya bila foto perlu diganti (atau slide baru butuh foto).
-${formatRules(post.format)}`;
+${formatRules(post.format)}${
+    design
+      ? `${designPrompt(design, false)}\n\nDesain sekarang: pack=${design.pack}, fontPair=${design.pair}, density=${design.density}. Bila owner minta ganti gaya/font/kepadatan teks, isi designPack/fontPair/density dengan pilihan baru dari daftar ini:\nDesign Pack:\n${PACK_GUIDE}\nPasangan huruf:\n${FONT_PAIR_GUIDE}\nKepadatan: visual / seimbang / edukatif. Selain itu isi "same".`
+      : ""
+  }`;
+  if (design) {
+    const out = await callStructured(brandSystemPrompt(brand), withRef(prompt, ref), ReviseSchema);
+    return toDraft(out, post.format, post.slides);
+  }
   const out = await callStructured(brandSystemPrompt(brand), withRef(prompt, ref), PostSchema);
   return toDraft(out, post.format, post.slides);
 }

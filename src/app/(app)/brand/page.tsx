@@ -3,6 +3,7 @@ import Link from "next/link";
 import { config } from "@/lib/config";
 import { ActionForm, Submit } from "@/components/forms";
 import { StylePickerField } from "@/components/style-picker";
+import { DesignPickerField } from "@/components/design-picker";
 import { Card, Field, PageTitle, inputCls } from "@/components/ui";
 import { analyzeExamplesAction, colorsFromLogoAction, importWebsiteAction, saveBrandAction } from "@/app/actions";
 import { FONT_KEYS, FONT_OPTIONS, TEMPLATE_KEYS, type Brand, type FontKey } from "@/lib/types";
@@ -112,6 +113,14 @@ export default async function BrandPage({ searchParams }: { searchParams: Promis
           </div>
         </Card>
 
+        <Card className="scroll-mt-24 space-y-4">
+          <div id="desain" className="scroll-mt-24">
+            <h2 className="font-semibold">Desain konten</h2>
+            <p className="mt-1 text-sm text-slate-500">Sistem desain ala desainer sosmed profesional. Pilih gaya, karakter huruf, dan seberapa banyak tulisan di slide — atau biarkan AI memilih yang paling cocok untuk brand kamu.</p>
+          </div>
+          <DesignPickerField defaults={{ pack: brand.designPack ?? "auto", pair: brand.fontPair ?? "auto", density: brand.density ?? "visual" }} />
+        </Card>
+
         <Card className="space-y-4">
           <h2 className="font-semibold">Visual</h2>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
@@ -123,10 +132,11 @@ export default async function BrandPage({ searchParams }: { searchParams: Promis
           </div>
           <div>
             <p className="mb-1.5 text-sm font-semibold text-slate-700">Arah visual default</p>
+            <p className="mb-2 text-xs text-slate-500">Editorial & Promo memakai Design Pack (Editorial / Poster). Berita, Info cepat & Kreatif 3D memakai template khususnya sendiri.</p>
             <StylePickerField name="visualStyle" defaultValue={brand.visualStyle ?? "auto"} />
           </div>
           <div className="grid gap-4 md:grid-cols-3">
-            <Field label="Font judul">
+            <Field label="Font judul" hint="Untuk template klasik. Design Pack memakai pasangan huruf di atas.">
               <select name="headingFont" defaultValue={brand.headingFont} className={inputCls}>
                 {FONTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
               </select>

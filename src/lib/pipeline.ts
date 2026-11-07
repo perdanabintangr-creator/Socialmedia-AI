@@ -3,6 +3,8 @@ import { randomUUID } from "crypto";
 import sharp from "sharp";
 import { accounts, db, type WorkspaceRepo } from "./db";
 import { publishFeed } from "./instagram";
+import { isDensity, isPack, resolveDesign, type PostDesign } from "./design";
+import { isFontPair } from "./font-pairs";
 import { hasUploadPost, publishTiktokPhotos } from "./uploadpost";
 import { generateIdeas, generatePost, isTeaser, TEASER_WORDS, reviewDesign, revisePost, type Draft, type RefContext } from "./ai";
 import { setMeterPost } from "./cost";
@@ -100,7 +102,7 @@ export async function materialize(
 async function artDirector(
   w: WorkspaceRepo,
   brand: Brand,
-  post: Pick<Post, "slides" | "format" | "caption" | "template">,
+  post: Pick<Post, "slides" | "format" | "caption" | "template"> & { reference?: PostReference | null },
   key: string,
   ref: RefContext | null = null,
   refImgs: Buffer[] = [],
@@ -210,6 +212,41 @@ export function ensureVisuals(draft: Draft, plan: PlanRule, brand: Brand, templa
   return { ...draft, slides };
 }
 
+/**
+ * Design Pack visual-first: cover + setiap slide poin dipimpin foto (sebatas kuota visual paket).
+ * Layout ikon/grafis diubah ke versi foto supaya feed terasa seperti hasil desainer, bukan kartu teks.
+ */
+export function ensurePackVisuals(draft: Draft, plan: PlanRule, brand: Brand): Draft {
+  if (plan.quality !== "full" || !plan.maxVisuals) return draft;
+  const concept = visualConcept(brand);
+  let have = draft.slides.filter((d) => d.imageRequest || d.slide.image).length;
+  const slides = draft.slides.map((d, i) => {
+    const isCover = i === 0;
+    const isPoint = d.slide.layout === "point_photo" || d.slide.layout === "point_icon";
+    if (!(isCover || isPoint) || d.imageRequest || d.slide.image || have >= plan.maxVisuals) return d;
+    have++;
+    const layout = isCover ? "cover_photo" : "point_photo";
+    const headline = d.slide.headline.replace(/\*/g, "");
+    const asset = brand.assets[have % Math.max(1, brand.assets.length)];
+    return {
+      slide: { ...d.slide, layout },
+      imageRequest: {
+        assetId: asset?.id ?? "",
+        query: brand.industry || brand.name,
+        prompt: `${concept} The scene visually supports this message: "${headline}". For brand ${brand.name}: ${brand.description}`.slice(0, 900),
+        layout,
+      },
+    } satisfies Draft["slides"][number];
+  });
+  return { ...draft, slides };
+}
+
+/** Referensi konten dengan desain terpasang (dibuat bila konten belum punya referensi). */
+export function withDesign(ref: PostReference | null, design: PostDesign | null): PostReference | null {
+  if (!design) return ref ? { ...ref, design: null } : null;
+  return { ...(ref ?? { urls: [], notes: "", imageStyle: "", colors: null, headingFont: null, template: null, layouts: [] }), design };
+}
+
 const sameColors = (a: Brand["colors"], b: Brand["colors"]) =>
   (Object.keys(b) as (keyof Brand["colors"])[]).every((k) => a[k]?.toLowerCase() === b[k]?.toLowerCase());
 
@@ -250,8 +287,14 @@ export async function buildPostFromIdea(w: WorkspaceRepo, ideaId: string, progre
   const template = ref?.template ?? brand.defaultTemplate;
 
   const teaser = isTeaser(idea);
-  const raw = styleCover(await generatePost(brand, idea, ctx), ref, template);
-  const draft = teaser ? teaserize(raw) : ensureVisuals(raw, plan, brand, template);
+  // Sistem desain: pack/huruf dari Brand Kit, atau AI yang memilih ("auto").
+  const pre = resolveDesign(baseBrand, { style: ref?.style, teaser });
+  const choose = Boolean(pre) && ((baseBrand.designPack ?? "auto") === "auto" || (baseBrand.fontPair ?? "auto") === "auto");
+  const generated = await generatePost(brand, idea, ctx, { design: pre, choose });
+  const design = pre ? resolveDesign(baseBrand, { style: ref?.style, teaser, ai: generated.design }) : null;
+  const raw = design ? generated : styleCover(generated, ref, template);
+  const draft = teaser ? teaserize(raw) : design ? ensurePackVisuals(raw, plan, brand) : ensureVisuals(raw, plan, brand, template);
+  const postRef = teaser ? ref : withDesign(ref, design);
   await progress(
     "kata",
     `Naskah ${draft.slides.length > 1 ? `${draft.slides.length} slide` : "single post"} + caption sudah jadi${ref?.urls.length ? " mengikuti gaya referensimu" : ref?.style ? " dengan arah visual pilihanmu" : ""}. Hook-nya: “${firstHook(draft.slides.map((d) => d.slide))}”. Aku oper ke Rupa ya.`,
@@ -268,7 +311,7 @@ export async function buildPostFromIdea(w: WorkspaceRepo, ideaId: string, progre
   // Teaser logo: desainnya sudah pasti (logo + warna brand), tidak perlu putaran art director.
   const reviewed = teaser
     ? { slides, notes: "Teaser simpel: logo brand besar di tengah, latar warna brand." }
-    : await artDirector(w, brand, { slides, format: idea.format, caption: draft.caption, template }, key, ctx, refImgs);
+    : await artDirector(w, brand, { slides, format: idea.format, caption: draft.caption, template, reference: postRef }, key, ctx, refImgs);
   const post = await w.createPost({
     idea_id: idea.id,
     title: draft.title || idea.title,
@@ -280,7 +323,7 @@ export async function buildPostFromIdea(w: WorkspaceRepo, ideaId: string, progre
     template,
     status: "review",
     design_notes: reviewed.notes,
-    reference: ref,
+    reference: postRef,
   });
   setMeterPost(post.id);
   await w.updateIdea(ideaId, { status: "approved", post_id: post.id });
@@ -304,6 +347,15 @@ export async function revisePostWith(
   const draft = await revisePost(brand, post, instruction, await refContext(ref));
   await progress("kata", `Revisi naskah sudah kuterapkan${newRef ? " mengikuti referensi baru" : ""}. Rupa, tolong sesuaikan visualnya.`);
   const slides = await materialize(w, brand, draft, `${post.id}-r${post.revision_count + 1}`, await referenceImageBuffers(ref), Math.min(MAX_NEW_IMAGES, plan.maxVisuals));
+  const cur = ref?.design ?? post.reference?.design ?? null;
+  const ask = draft.design;
+  const design: PostDesign | null = cur
+    ? {
+        pack: isPack(ask?.pack) ? ask.pack : cur.pack,
+        pair: isFontPair(ask?.pair) ? ask.pair : isPack(ask?.pack) && ask.pack !== cur.pack ? cur.pair : cur.pair,
+        density: isDensity(ask?.density) ? ask.density : cur.density,
+      }
+    : null;
   const patch = {
     title: draft.title,
     caption: draft.caption,
@@ -311,7 +363,7 @@ export async function revisePostWith(
     slides,
     status: "review" as const,
     revision_count: post.revision_count + 1,
-    reference: ref,
+    reference: design ? withDesign(ref, design) : ref,
     template: newRef?.template ?? post.template,
   };
   await w.updatePost(postId, patch);

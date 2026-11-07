@@ -1,3 +1,4 @@
+import type { Density, PackChoice, PairChoice, PostDesign } from "./design";
 export type Platform = "instagram" | "tiktok";
 export type PostFormat = "single" | "carousel";
 
@@ -50,6 +51,9 @@ export interface Brand {
   styleNotes: string; // hasil analisis contoh post oleh AI
   defaultTemplate: TemplateKey;
   visualStyle?: VisualStyleKey | "auto"; // arah visual default (auto = sesuai template & AI)
+  designPack?: PackChoice; // sistem desain: pack tertentu, "auto" (AI memilih), atau "classic" (template lama)
+  fontPair?: PairChoice; // pasangan huruf: tertentu atau "auto"
+  density?: Density; // kepadatan teks di slide
   postingTime: string; // "19:00" WIB default jadwal
   imageSource: ImageSourceMode;
   imageStyle: string; // art direction untuk foto/ilustrasi
@@ -370,6 +374,7 @@ export interface PostReference {
   template: TemplateKey | null;
   layouts: SlideLayout[]; // layout paling mirip untuk tiap gambar referensi
   style?: VisualStyleKey | null; // arah visual pilihan owner
+  design?: PostDesign | null; // Design Pack yang dipakai konten ini (null = template klasik)
 }
 
 // ---------------------------------------------------------------- Arah visual

@@ -8,7 +8,9 @@ import { notFound } from "next/navigation";
 import { ActionForm, Disclosure, Submit } from "@/components/forms";
 import { Card, Field, Pill, StatusBadge, formatWIB, inputCls } from "@/components/ui";
 import { DeletePostButton } from "@/components/delete-post";
-import { approvePostAction, checkStatusAction, rejectPostAction, removeSlideImageAction, replaceImageAction, revisePostAction, updatePostAction, uploadSlideImageAction } from "@/app/actions";
+import { PostDesignSwitcher } from "@/components/design-picker";
+import { designLabel, isPostDesign } from "@/lib/design";
+import { approvePostAction, setPostDesignAction, checkStatusAction, rejectPostAction, removeSlideImageAction, replaceImageAction, revisePostAction, updatePostAction, uploadSlideImageAction } from "@/app/actions";
 import { ICON_NAMES } from "@/lib/icons";
 import { PHOTO_LAYOUTS, SLIDE_LAYOUTS, type Post, type SlideLayout } from "@/lib/types";
 
@@ -46,6 +48,8 @@ const STORY_STATUS = {
 const SOURCE_LABEL = { ai: "AI image", stock: "Stok foto", brand: "Foto brand", upload: "Upload", demo: "Contoh" } as const;
 
 const PRESETS = [
+  "Kurangi tulisan, biar lebih visual",
+  "Ganti huruf jadi lebih mewah",
   "Visualnya kurang wow, buat lebih eye-catching",
   "Ganti foto cover dengan yang lebih relevan",
   "Buat hook di slide pertama lebih nendang",
@@ -86,6 +90,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
             <Pill tone="indigo">{post.slides.length > 1 ? `Carousel • ${post.slides.length} slide` : "Single post"}</Pill>
             {post.platforms.map((p) => <Pill key={p}>{p === "instagram" ? "Instagram" : "TikTok"}</Pill>)}
             {post.revision_count > 0 && <Pill tone="amber">Revisi ke-{post.revision_count}</Pill>}
+            {isPostDesign(post.reference?.design) ? <Pill tone="indigo">{designLabel(post.reference.design)}</Pill> : <Pill>Template klasik</Pill>}
           </div>
         </div>
       </div>
@@ -144,6 +149,21 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                     ))}
                   </div>
                 </ActionForm>
+              </Card>
+
+              <Card>
+                <Disclosure title="Ganti gaya, huruf & banyaknya tulisan (gratis)">
+                  <div className="mt-4">
+                    <PostDesignSwitcher
+                      initial={
+                        isPostDesign(post.reference?.design)
+                          ? { pack: post.reference.design.pack, pair: post.reference.design.pair, density: post.reference.design.density }
+                          : { pack: "classic", pair: "auto", density: brand.density ?? "visual" }
+                      }
+                      action={setPostDesignAction.bind(null, post.id)}
+                    />
+                  </div>
+                </Disclosure>
               </Card>
 
               <ActionForm action={rejectPostAction.bind(null, post.id)}>

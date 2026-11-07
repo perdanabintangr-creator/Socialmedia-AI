@@ -2,6 +2,7 @@
 import type React from "react";
 import type { Brand, Slide, SlideLayout } from "./types";
 import { FONT_PAIRS, type FontPair, type FontPairKey } from "./font-pairs";
+import type { Density, PackKey } from "./design";
 
 /**
  * Design Pack: sistem komposisi ala desainer sosmed (bukan sekadar ganti warna).
@@ -10,13 +11,8 @@ import { FONT_PAIRS, type FontPair, type FontPairKey } from "./font-pairs";
  * dua slide yang terasa sama.
  */
 
-export const PACKS = {
-  editorial: { label: "Editorial Magazine", desc: "Serif besar ala majalah, foto full-bleed, garis tipis, nuansa premium." },
-  poster: { label: "Bold Poster", desc: "Tipografi raksasa kapital, foto duotone, stiker & pita teks — berani, viral." },
-  scrapbook: { label: "Scrapbook", desc: "Kertas bertekstur, foto polaroid + selotip, catatan tulisan tangan — hangat & personal." },
-} as const;
-export type PackKey = keyof typeof PACKS;
-export const PACK_KEYS = Object.keys(PACKS) as PackKey[];
+export { PACKS, PACK_KEYS, DENSITIES, PACK_DEFAULT_PAIR } from "./design";
+export type { PackKey, Density } from "./design";
 
 export const PACK_CANVAS = { width: 1080, height: 1350 };
 const W = PACK_CANVAS.width;
@@ -25,16 +21,6 @@ const H = PACK_CANVAS.height;
 export type PackImg = { src: string; duo: string; w: number; h: number };
 export type PackLogo = { src: string; width: number; height: number } | null;
 export type PackAssets = { grain: string; paper: string };
-
-export const DENSITIES = {
-  visual: { label: "Visual", desc: "Judul pendek saja, foto dominan, detail di caption." },
-  seimbang: { label: "Seimbang", desc: "Judul + 1 kalimat pendek per slide." },
-  edukatif: { label: "Edukatif", desc: "Lebih banyak penjelasan (tips, tutorial)." },
-} as const;
-export type Density = keyof typeof DENSITIES;
-
-/** Pasangan huruf bawaan tiap pack (dipakai bila customer/AI belum memilih). */
-export const PACK_DEFAULT_PAIR: Record<PackKey, FontPairKey> = { editorial: "majalah", poster: "poster", scrapbook: "grotesk" };
 
 export interface PackProps {
   pack: PackKey;

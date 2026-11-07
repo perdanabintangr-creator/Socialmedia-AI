@@ -5,6 +5,8 @@ import { ImageResponse } from "next/og";
 import sharp from "sharp";
 import { CANVAS, IMAGE_BOX, SlideView, effectiveLayout, type Img, type LogoImg } from "./templates";
 import { readMedia } from "./media";
+import { renderPackPng } from "./render-pack";
+import { isPostDesign } from "./design";
 import { FONT_OPTIONS, styledBrand, type Brand, type FontKey, type Post, type PostReference, type Slide } from "./types";
 
 const FONT_DIR = path.join(process.cwd(), "assets", "fonts");
@@ -108,6 +110,11 @@ export async function renderSlidePng(baseBrand: Brand, post: Renderable, index: 
   const brand = styledBrand(baseBrand, post.reference);
   const slide = post.slides[index];
   if (!slide) throw new Error("Slide tidak ditemukan");
+  // Design Pack (kecuali teaser logo yang punya desain khusus)
+  const design = post.reference?.design;
+  if (isPostDesign(design) && slide.layout !== "logo_reveal") {
+    return renderPackPng(brand, post.slides, index, design.pack, { pair: design.pair, density: design.density });
+  }
   const [fonts, onDark, onLight, img, big] = await Promise.all([
     loadFonts(brand),
     loadLogo(brand.logoUrl),
