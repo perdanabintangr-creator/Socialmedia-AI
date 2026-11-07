@@ -19,6 +19,6 @@ export async function GET() {
     const m = e instanceof Error ? e.message : "";
     if (/sesi berakhir/i.test(m)) return Response.redirect(`${config.appUrl}/login`, 302);
     console.error("Mulai hubungkan TikTok gagal:", m);
-    return back(`tt=gagal&m=${encodeURIComponent(m.slice(0, 160))}`);
+    return back(`tt=gagal&m=${encodeURIComponent(m.slice(0, 240))}`);
   }
 }
