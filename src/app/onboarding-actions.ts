@@ -112,3 +112,15 @@ export async function requestSocialAction(): Promise<{ ok?: string; error?: stri
   revalidatePath("/", "layout");
   return { ok: "Permintaan terkirim. Tim kami akan memandu kamu." };
 }
+
+/** Putuskan akun Instagram dari workspace (konten terjadwal kembali menunggu sampai terhubung lagi). */
+export async function disconnectInstagramAction(): Promise<{ ok?: string; error?: string }> {
+  try {
+    const { w } = await workspaceOrThrow();
+    await w.deleteSocial("instagram");
+    revalidatePath("/", "layout");
+    return { ok: "Instagram diputus. Konten tidak akan diposting otomatis sampai dihubungkan lagi." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Gagal memutus" };
+  }
+}

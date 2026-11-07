@@ -298,6 +298,17 @@ export interface User {
 }
 export type PublicUser = Omit<User, "password_hash">;
 
+/** Akun sosmed yang dihubungkan langsung (token hanya di server). */
+export interface SocialAccount {
+  workspace_id: string;
+  platform: "instagram" | "tiktok";
+  account_id: string;
+  username: string | null;
+  token: string;
+  expires_at: string | null;
+  updated_at: string;
+}
+
 export interface Workspace {
   id: string;
   name: string;

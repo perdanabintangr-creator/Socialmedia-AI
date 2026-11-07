@@ -1,7 +1,8 @@
 import "server-only";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
-import { accounts, type WorkspaceRepo } from "./db";
+import { accounts, db, type WorkspaceRepo } from "./db";
+import { publishFeed } from "./instagram";
 import { generateIdeas, generatePost, isTeaser, TEASER_WORDS, reviewDesign, revisePost, type Draft, type RefContext } from "./ai";
 import { setMeterPost } from "./cost";
 import { brandForPlan, planOf, visualConcept, type PlanRule } from "./plans";
@@ -344,6 +345,7 @@ export async function autoRevisePost(w: WorkspaceRepo, postId: string): Promise<
 export async function reopenPost(w: WorkspaceRepo, post: Post): Promise<Post> {
   if (post.status === "review" || post.status === "failed") return post;
   if (post.status === "published" || post.status === "rejected") throw new Error("Konten yang sudah terbit tidak bisa direvisi");
+  if (post.status === "scheduled" && post.publish_ref?.startsWith("ig:")) throw new Error("Konten ini sedang diposting ke Instagram");
   if (post.status === "scheduled" && post.publish_ref) {
     const target = await publishTarget(w.id);
     const res = await unpublish(post.publish_ref, target.profileKey);
@@ -407,6 +409,17 @@ export async function approveAndPublish(w: WorkspaceRepo, postId: string, schedu
   const text = [post.caption, post.hashtags.map((h) => `#${h}`).join(" ")].filter(Boolean).join("\n\n");
 
   const target = await publishTarget(w.id);
+  if (target.via === "instagram") {
+    if (!mediaUrls.every((u) => u.startsWith("https://"))) throw new Error("Gambar harus punya URL publik https (pakai Supabase Storage di produksi)");
+    // Instagram resmi: dijadwalkan di sistem kita sendiri, cron memposting saat jatuh tempo.
+    const patch = { status: "scheduled" as const, media_urls: mediaUrls, scheduled_at: (scheduleAt ?? new Date()).toISOString(), publish_ref: null, publish_result: null, error: null };
+    await w.updatePost(postId, patch);
+    if (!scheduleAt) {
+      const done = await publishDuePost(w, { ...post, ...patch });
+      return { post: done.post, ok: done.ok, message: done.ok ? "Terbit di Instagram." : `Gagal posting ke Instagram: ${done.post.error}` };
+    }
+    return { post: { ...post, ...patch }, ok: true, message: `Terjadwal, akan terbit otomatis di Instagram @${target.username}.` };
+  }
   if (!target.connected) {
     const patch = { status: "approved" as const, media_urls: mediaUrls, scheduled_at: scheduleAt?.toISOString() ?? null, error: null };
     await w.updatePost(postId, patch);
@@ -442,13 +455,38 @@ export async function approveAndPublish(w: WorkspaceRepo, postId: string, schedu
  * - Workspace milik admin/owner aplikasi: boleh memakai akun Ayrshare utama.
  * Tanpa itu, konten TIDAK diposting — supaya konten klien tidak pernah masuk ke akun orang lain.
  */
-export async function publishTarget(workspaceId: string): Promise<{ connected: boolean; profileKey: string | null; reason: string }> {
-  if (!config.hasPublisher) return { connected: false, profileKey: null, reason: "Auto-posting belum aktif di aplikasi ini." };
+export type PublishTarget = { connected: boolean; via: "instagram" | "ayrshare" | null; profileKey: string | null; username: string | null; reason: string };
+
+export async function publishTarget(workspaceId: string): Promise<PublishTarget> {
+  const ig = await db(workspaceId).getSocial("instagram");
+  if (ig) return { connected: true, via: "instagram", profileKey: null, username: ig.username, reason: "" };
+  const none = (reason: string): PublishTarget => ({ connected: false, via: null, profileKey: null, username: null, reason });
+  if (!config.hasPublisher) return none("Hubungkan Instagram di menu Akun supaya konten terbit otomatis.");
   const ws = await accounts().getWorkspace(workspaceId);
-  if (ws?.publish_key) return { connected: true, profileKey: ws.publish_key, reason: "" };
+  if (ws?.publish_key) return { connected: true, via: "ayrshare", profileKey: ws.publish_key, username: null, reason: "" };
   const owner = ws?.owner_id ? await accounts().getUserById(ws.owner_id) : null;
-  if (owner?.role === "admin") return { connected: true, profileKey: null, reason: "" };
-  return { connected: false, profileKey: null, reason: "Akun Instagram/TikTok workspace ini belum dihubungkan." };
+  if (owner?.role === "admin") return { connected: true, via: "ayrshare", profileKey: null, username: null, reason: "" };
+  return none("Akun Instagram/TikTok workspace ini belum dihubungkan.");
+}
+
+/**
+ * Posting satu konten terjadwal ke Instagram resmi (dipanggil cron saat jatuh tempo, atau langsung saat "posting sekarang").
+ * Dikunci dulu (publish_ref) supaya tidak pernah terposting dua kali.
+ */
+export async function publishDuePost(w: WorkspaceRepo, post: Post): Promise<{ ok: boolean; post: Post }> {
+  if (!(await accounts().claimDuePost(post.id, "ig:publishing"))) return { ok: false, post: { ...post, error: "Sedang diposting" } };
+  const ig = await w.getSocial("instagram");
+  let patch: Partial<Post>;
+  try {
+    if (!ig) throw new Error("Akun Instagram belum terhubung / sudah diputus");
+    const text = [post.caption, post.hashtags.map((h) => `#${h}`).join(" ")].filter(Boolean).join("\n\n").slice(0, 2200);
+    const res = await publishFeed(ig.account_id, ig.token, post.media_urls, text);
+    patch = { status: "published", publish_ref: `ig:${res.id}`, publish_result: { platform: "instagram", id: res.id, permalink: res.permalink }, error: null };
+  } catch (e) {
+    patch = { status: "failed", publish_ref: null, error: e instanceof Error ? e.message : "Gagal posting ke Instagram" };
+  }
+  await w.updatePost(post.id, patch);
+  return { ok: patch.status === "published", post: { ...post, ...patch } };
 }
 
 /**
@@ -475,9 +513,10 @@ export async function publishStoryFor(
   }
   const base = { frames: list, media_urls: media, updated_at: new Date().toISOString(), scheduled_at: scheduleAt?.toISOString() ?? null };
   const target = await publishTarget(w.id);
-  if (!target.connected) {
+  if (target.via !== "ayrshare") {
+    // Instagram API resmi belum dipakai untuk Story: frame bisa diunduh & diunggah manual.
     await w.updatePost(post.id, { story: { ...base, status: "approved", publish_refs: [], error: null } });
-    return { ok: true, message: `${list.length} frame Story siap diunduh. ${target.reason}` };
+    return { ok: true, message: `${list.length} frame Story siap diunduh.${target.via === "instagram" ? " Upload Story otomatis menyusul — untuk sekarang unggah manual." : ` ${target.reason}`}` };
   }
   const refs: string[] = [];
   const errors: string[] = [];

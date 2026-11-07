@@ -4,7 +4,8 @@ import { publicUser, requireAdmin, requireWorkspace } from "@/lib/session";
 import { publishTarget } from "@/lib/pipeline";
 import { ActionForm, Submit } from "@/components/forms";
 import { Card, Field, PageTitle, formatWIB, inputCls } from "@/components/ui";
-import { requestSocialAction } from "@/app/onboarding-actions";
+import { disconnectInstagramAction, requestSocialAction } from "@/app/onboarding-actions";
+import { hasInstagramApp } from "@/lib/instagram";
 import { changePasswordAction, deleteUserAction, setPublishKeyAction, setUserRoleAction, setUserStatusAction, setWorkspacePlanAction } from "@/app/auth-actions";
 import { PLAN_RULES, quotaOf } from "@/lib/plans";
 import { PLANS } from "@/lib/pricing";
@@ -18,9 +19,18 @@ const STATUS = {
   disabled: ["Nonaktif", "bg-slate-200 text-slate-600"],
 } as const;
 
-export default async function UsersPage() {
+const IG_MSG: Record<string, [string, boolean]> = {
+  ok: ["Instagram terhubung! Konten yang kamu ACC akan terbit otomatis sesuai jadwal.", true],
+  batal: ["Menghubungkan Instagram dibatalkan.", false],
+  gagal: ["Instagram gagal dihubungkan.", false],
+  "belum-siap": ["Koneksi Instagram belum diaktifkan oleh admin aplikasi (INSTAGRAM_APP_ID/SECRET).", false],
+};
+
+export default async function UsersPage({ searchParams }: { searchParams: Promise<{ ig?: string; u?: string; m?: string }> }) {
   const { user: me, w } = await requireWorkspace();
-  const [brand, target, quota] = await Promise.all([w.getBrand(), publishTarget(w.id), quotaOf(w)]);
+  const sp = await searchParams;
+  const [brand, target, quota, ig] = await Promise.all([w.getBrand(), publishTarget(w.id), quotaOf(w), w.getSocial("instagram")]);
+  const igMsg = sp.ig ? IG_MSG[sp.ig] : undefined;
   const support = process.env.SUPPORT_EMAIL;
   const isAdmin = me.role === "admin";
   const [allUsers, workspaces] = isAdmin ? await Promise.all([accounts().listUsers(), accounts().listWorkspaces()]) : [[], []];
@@ -84,19 +94,45 @@ export default async function UsersPage() {
       <Card className="scroll-mt-24" >
         <div id="sosmed" className="scroll-mt-24" />
         <h2 className="font-semibold">Akun sosmed</h2>
-        <p className="mt-1 text-sm text-slate-500">Instagram (Business/Creator) dan TikTok untuk posting otomatis setelah kamu ACC.</p>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold ${target.connected ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" : "bg-slate-100 text-slate-600"}`}>
-            <span className={`h-2 w-2 rounded-full ${target.connected ? "bg-emerald-500" : "bg-slate-400"}`} />
-            {target.connected ? "Terhubung" : brand.socialRequested ? "Menunggu dihubungkan oleh tim kami" : "Belum terhubung"}
-          </span>
-          {!target.connected && !brand.socialRequested && (
-            <ActionForm action={requestSocialAction}>
-              <Submit variant="primary" pendingText="Mengirim…" className="py-2 text-xs">Minta dihubungkan</Submit>
+        <p className="mt-1 text-sm text-slate-500">Hubungkan Instagram (Business/Creator) supaya konten yang kamu ACC terbit otomatis sesuai jadwal — gratis, lewat API resmi Instagram.</p>
+        {igMsg && (
+          <p className={`mt-3 rounded-xl px-3 py-2 text-sm font-semibold ${igMsg[1] ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
+            {igMsg[0]} {sp.m ? <span className="font-normal">({sp.m})</span> : null}
+          </p>
+        )}
+        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl p-4 ring-1 ring-line">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-[linear-gradient(45deg,#f9ce34,#ee2a7b,#6228d7)] text-sm font-black text-white">IG</span>
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold">Instagram</div>
+            <div className="text-xs text-slate-500">
+              {ig ? (
+                <>Terhubung sebagai <b className="text-ink">@{ig.username}</b>{ig.expires_at ? ` · token diperpanjang otomatis (berlaku s/d ${formatWIB(ig.expires_at)})` : ""}</>
+              ) : hasInstagramApp() ? (
+                "Belum terhubung. Login dengan akun Instagram Business/Creator."
+              ) : (
+                "Belum tersedia — admin perlu memasang INSTAGRAM_APP_ID & INSTAGRAM_APP_SECRET."
+              )}
+            </div>
+          </div>
+          {ig ? (
+            <ActionForm action={disconnectInstagramAction}>
+              <Submit variant="ghost" pendingText="Memutus…" className="py-2 text-xs">Putuskan</Submit>
             </ActionForm>
+          ) : (
+            hasInstagramApp() && (
+              <a href="/api/auth/instagram" className="inline-flex rounded-xl bg-ink px-4 py-2 text-sm font-semibold text-white hover:bg-ink/90">
+                Hubungkan Instagram
+              </a>
+            )
           )}
         </div>
-        {!target.connected && <p className="mt-3 text-xs text-slate-500">Sambil menunggu, desain final tetap bisa dibuat dan diunduh untuk diposting manual.</p>}
+        {!ig && target.via === "ayrshare" && <p className="mt-3 text-xs text-emerald-700">Saat ini auto-posting memakai layanan Ayrshare.</p>}
+        {!ig && !target.connected && !brand.socialRequested && !hasInstagramApp() && (
+          <ActionForm action={requestSocialAction} className="mt-3">
+            <Submit variant="primary" pendingText="Mengirim…" className="py-2 text-xs">Minta dihubungkan</Submit>
+          </ActionForm>
+        )}
+        {!target.connected && <p className="mt-3 text-xs text-slate-500">Selama belum terhubung, desain final tetap dibuat dan bisa diunduh untuk diposting manual. TikTok menyusul.</p>}
       </Card>
 
       <Card>

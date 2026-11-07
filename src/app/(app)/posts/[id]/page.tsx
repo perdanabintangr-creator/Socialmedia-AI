@@ -160,6 +160,9 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                 <div className="flex justify-between gap-3"><dt className="text-slate-500">Status</dt><dd><StatusBadge status={post.status} /></dd></div>
                 <div className="flex justify-between gap-3"><dt className="text-slate-500">Jadwal</dt><dd>{formatWIB(post.scheduled_at)}</dd></div>
                 {post.publish_ref && <div className="flex justify-between gap-3"><dt className="text-slate-500">ID publisher</dt><dd className="truncate font-mono text-xs">{post.publish_ref}</dd></div>}
+                {(post.publish_result as { permalink?: string } | null)?.permalink && (
+                  <div className="flex justify-between gap-3"><dt className="text-slate-500">Postingan</dt><dd><a href={(post.publish_result as { permalink: string }).permalink} target="_blank" rel="noreferrer" className="font-semibold text-brand-600 hover:underline">Lihat di Instagram ↗</a></dd></div>
+                )}
               </dl>
               {post.error && <p className="mt-3 rounded-lg bg-red-50 p-2 text-sm text-red-700">{post.error}</p>}
               {post.media_urls.length > 0 && (

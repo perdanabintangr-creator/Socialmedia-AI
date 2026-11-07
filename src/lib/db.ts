@@ -4,7 +4,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { config } from "./config";
-import { DEFAULT_BRAND, type Brand, type Chat, type ChatMessage, type Idea, type Job, type Post, type PlanKey, type TrackedLink, type UsageLog, type User, type Workspace } from "./types";
+import { DEFAULT_BRAND, type Brand, type Chat, type ChatMessage, type Idea, type Job, type Post, type PlanKey, type SocialAccount, type TrackedLink, type UsageLog, type User, type Workspace } from "./types";
 
 /**
  * Lapisan data. Dua mode:
@@ -74,6 +74,9 @@ export interface WorkspaceRepo {
   deleteLink(id: string): Promise<void>;
   addUsage(u: NewUsage): Promise<void>;
   listUsage(since: string, limit?: number): Promise<UsageLog[]>; // terbaru dulu
+  getSocial(platform: SocialAccount["platform"]): Promise<SocialAccount | null>;
+  saveSocial(a: Omit<SocialAccount, "workspace_id" | "updated_at">): Promise<void>;
+  deleteSocial(platform: SocialAccount["platform"]): Promise<void>;
 }
 
 export interface AccountRepo {
@@ -95,6 +98,14 @@ export interface AccountRepo {
   listStaleLinks(before: string, limit: number): Promise<TrackedLink[]>;
   /** Log biaya semua workspace sejak tanggal tertentu (untuk admin). */
   listUsageAll(since: string, limit?: number): Promise<UsageLog[]>;
+  /** Konten terjadwal yang sudah jatuh tempo, lintas workspace (untuk penjadwal posting). */
+  listDuePosts(now: string, limit: number): Promise<Post[]>;
+  /** Akun sosmed yang token-nya perlu diperpanjang sebelum `before`. */
+  listExpiringSocial(before: string, limit: number): Promise<SocialAccount[]>;
+  /** Kunci konten jatuh tempo supaya tidak diposting dua kali (true = berhasil dikunci). */
+  claimDuePost(id: string, ref: string): Promise<boolean>;
+  /** Kunci cron posting yang dibuat & disimpan di Supabase Vault (null bila tidak ada). */
+  publishCronKey(): Promise<string | null>;
 }
 
 const JOB_STALE_MS = 6 * 60_000; // job lebih lama dari ini dianggap macet
@@ -304,6 +315,15 @@ class SupabaseWorkspace implements WorkspaceRepo {
     ) as UsageLog[];
     return rows.map(numUsage);
   }
+  async getSocial(platform: SocialAccount["platform"]) {
+    return check(await sb().from("social_accounts").select("*").eq("workspace_id", this.id).eq("platform", platform).maybeSingle()) as SocialAccount | null;
+  }
+  async saveSocial(a: Omit<SocialAccount, "workspace_id" | "updated_at">) {
+    check(await sb().from("social_accounts").upsert({ ...a, workspace_id: this.id, updated_at: new Date().toISOString() }));
+  }
+  async deleteSocial(platform: SocialAccount["platform"]) {
+    check(await sb().from("social_accounts").delete().eq("workspace_id", this.id).eq("platform", platform));
+  }
 }
 
 class SupabaseAccounts implements AccountRepo {
@@ -359,6 +379,22 @@ class SupabaseAccounts implements AccountRepo {
   async listUsageAll(since: string, limit = 2000) {
     return (check(await sb().from("usage_logs").select("*").gte("created_at", since).order("created_at", { ascending: false }).limit(limit)) as UsageLog[]).map(numUsage);
   }
+  async listDuePosts(now: string, limit: number) {
+    return check(
+      await sb().from("posts").select("*").eq("status", "scheduled").is("deleted_at", null).is("publish_ref", null).lte("scheduled_at", now).order("scheduled_at").limit(limit),
+    ) as Post[];
+  }
+  async listExpiringSocial(before: string, limit: number) {
+    return check(await sb().from("social_accounts").select("*").lt("expires_at", before).limit(limit)) as SocialAccount[];
+  }
+  async publishCronKey() {
+    const { data, error } = await sb().rpc("publish_cron_key");
+    return error || typeof data !== "string" ? null : data;
+  }
+  async claimDuePost(id: string, ref: string) {
+    const rows = check(await sb().from("posts").update({ publish_ref: ref }).eq("id", id).eq("status", "scheduled").is("publish_ref", null).select("id")) as { id: string }[];
+    return rows.length > 0;
+  }
   async listStaleLinks(before: string, limit: number) {
     return check(
       await sb()
@@ -384,6 +420,7 @@ interface LocalData {
   workspaces?: Workspace[];
   links?: TrackedLink[];
   usage?: UsageLog[];
+  social?: SocialAccount[];
 }
 
 export const LOCAL_DIR = path.join(process.cwd(), ".data");
@@ -626,6 +663,19 @@ class LocalWorkspace implements WorkspaceRepo {
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
       .slice(0, limit);
   }
+  async getSocial(platform: SocialAccount["platform"]) {
+    return ((await readLocal()).social ?? []).find((x) => x.workspace_id === this.id && x.platform === platform) ?? null;
+  }
+  async saveSocial(a: Omit<SocialAccount, "workspace_id" | "updated_at">) {
+    await mutateLocal((d) => {
+      d.social = [...(d.social ?? []).filter((x) => !(x.workspace_id === this.id && x.platform === a.platform)), { ...a, workspace_id: this.id, updated_at: new Date().toISOString() }];
+    });
+  }
+  async deleteSocial(platform: SocialAccount["platform"]) {
+    await mutateLocal((d) => {
+      d.social = (d.social ?? []).filter((x) => !(x.workspace_id === this.id && x.platform === platform));
+    });
+  }
 }
 
 class LocalAccounts implements AccountRepo {
@@ -634,6 +684,29 @@ class LocalAccounts implements AccountRepo {
       .filter((u) => u.created_at >= since)
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
       .slice(0, limit);
+  }
+  async listDuePosts(now: string, limit: number) {
+    return (await readLocal()).posts
+      .filter((p) => p.status === "scheduled" && !p.deleted_at && !p.publish_ref && p.scheduled_at && p.scheduled_at <= now)
+      .sort((a, b) => (a.scheduled_at ?? "").localeCompare(b.scheduled_at ?? ""))
+      .slice(0, limit);
+  }
+  async listExpiringSocial(before: string, limit: number) {
+    return ((await readLocal()).social ?? []).filter((x) => x.expires_at && x.expires_at < before).slice(0, limit);
+  }
+  async publishCronKey() {
+    return null;
+  }
+  async claimDuePost(id: string, ref: string) {
+    let ok = false;
+    await mutateLocal((d) => {
+      const p = d.posts.find((x) => x.id === id && x.status === "scheduled" && !x.publish_ref);
+      if (p) {
+        p.publish_ref = ref;
+        ok = true;
+      }
+    });
+    return ok;
   }
   async listStaleLinks(before: string, limit: number) {
     return ((await readLocal()).links ?? [])
