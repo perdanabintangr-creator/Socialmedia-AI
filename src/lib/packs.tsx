@@ -504,14 +504,14 @@ function Poster({ brand, slide: s, index, total, img, logo, assets, pair, densit
     return (
       <Frame bg={p.field}>
         {grain}
-        <div style={Abs({ left: 64, right: 64, top: 170, bottom: 130, flexDirection: "column" })}>
+        <div style={Abs({ left: 64, right: 64, top: 150, bottom: 130, flexDirection: "column", justifyContent: "center" })}>
           {role === "stat" ? <div style={{ display: "flex", fontFamily: "Head", fontSize: 340, color: p.pop, lineHeight: 0.9 }}>{plain(s.stat)}</div> : null}
           <Words k={k} text={s.headline} size={posterSize(s.headline, W - 128, 120, pw)} upper={up} style={{ fontFamily: "Head", color: p.onField, lineHeight: 0.95 }} hl={hlBox(p.pop, p.onPop)} gap={0.2} />
-          <div style={{ display: "flex", flexDirection: "column", gap: 18, marginTop: 40 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: items.length > 4 ? 18 : 24, marginTop: 48 }}>
             {items.slice(0, 5).map((it, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 22, background: i % 2 ? rgba(p.onField, 0.1) : p.pop, color: i % 2 ? p.onField : p.onPop, paddingLeft: 26, paddingRight: 26, paddingTop: 18, paddingBottom: 18 }}>
-                <div style={{ display: "flex", fontFamily: "Head", fontSize: 48 }}>{two(i + 1)}</div>
-                <div style={{ display: "flex", flex: 1, fontFamily: "BodyB", fontWeight: 900, fontSize: fit(it, 32, 24, 44), lineHeight: 1.2 }}>{plain(it)}</div>
+                <div style={{ display: "flex", fontFamily: "Head", fontSize: 60 }}>{two(i + 1)}</div>
+                <div style={{ display: "flex", flex: 1, fontFamily: "BodyB", fontWeight: 900, fontSize: fit(it, items.length > 4 ? 36 : 42, 26, 32), lineHeight: 1.2 }}>{plain(it)}</div>
               </div>
             ))}
           </div>
@@ -688,16 +688,18 @@ function Scrapbook({ brand, slide: s, index, total, img, logo, assets, pair, den
     return (
       <Frame bg="#EFE6D6">
         {paper}
-        <div style={Abs({ left: 80, right: 80, top: 180, bottom: 140, flexDirection: "column" })}>
+        <div style={Abs({ left: 80, right: 80, top: 180, bottom: 150, flexDirection: "column", justifyContent: "center" })}>
           {role === "stat" ? <div style={{ display: "flex", fontFamily: "Hand", fontSize: 260, color: p.red, lineHeight: 0.9 }}>{plain(s.stat)}</div> : null}
-          {head(s.headline, fit(s.headline, 84, 56, 30))}
-          <div style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 40 }}>
+          {head(s.headline, fit(s.headline, 96, 60, 26))}
+          <div style={{ display: "flex", flexDirection: "column", gap: items.length > 4 ? 26 : 36, marginTop: 56, background: "rgba(255,255,255,0.55)", padding: 40, borderRadius: 6, boxShadow: "0 14px 34px rgba(40,30,10,0.14)", transform: "rotate(-0.8deg)" }}>
             {items.slice(0, 5).map((it, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 22 }}>
-                <div style={{ display: "flex", width: 56, height: 56, border: `4px solid ${p.ink}`, borderRadius: 10, alignItems: "center", justifyContent: "center", transform: `rotate(${i % 2 ? 4 : -3}deg)` }}>
-                  <div style={{ display: "flex", fontFamily: "Hand", fontSize: 54, color: p.red, lineHeight: 1, marginTop: -8 }}>✓</div>
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 26 }}>
+                <div style={{ display: "flex", width: 64, height: 64, border: `4px solid ${p.ink}`, borderRadius: 12, alignItems: "center", justifyContent: "center", transform: `rotate(${i % 2 ? 4 : -3}deg)` }}>
+                  <svg width={46} height={46} viewBox="0 0 24 24" fill="none" stroke={p.red} strokeWidth={3.4} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 13.5 9.5 19 20 5" />
+                  </svg>
                 </div>
-                <div style={{ display: "flex", flex: 1, fontFamily: "Body", fontWeight: 700, fontSize: fit(it, 34, 26, 44), color: p.ink, lineHeight: 1.25 }}>{plain(it)}</div>
+                <div style={{ display: "flex", flex: 1, fontFamily: "Body", fontWeight: 700, fontSize: fit(it, items.length > 4 ? 40 : 46, 28, 30), color: p.ink, lineHeight: 1.2 }}>{plain(it)}</div>
               </div>
             ))}
           </div>
