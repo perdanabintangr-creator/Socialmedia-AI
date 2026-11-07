@@ -142,7 +142,8 @@ function Arrow({ size = 40, color, stroke = 3 }: { size?: number; color: string;
 /** Faktor ukuran judul: font lebar dikecilkan, font sempit dibesarkan (dibatasi). */
 function scaleK(pair: FontPairKey, designedWf: number) {
   const wf: number = (FONT_PAIRS[pair] as FontPair).wf;
-  return Math.max(0.62, Math.min(1.2, designedWf / wf));
+  // Akar rasio: font lebar cukup dikecilkan sedikit (sisanya ditangani pindah baris), supaya judul tetap dominan.
+  return Math.max(0.78, Math.min(1.15, Math.sqrt(designedWf / wf)));
 }
 
 // ================================================================= EDITORIAL
@@ -499,7 +500,7 @@ function Poster({ brand, slide: s, index, total, img, logo, assets, pair, densit
   }
 
   if (role === "list" || role === "compare" || role === "stat") {
-    const items = role === "compare" ? [...s.items, ...s.itemsB] : s.items;
+    const items = role === "compare" ? [...s.items.map((x) => `${plain(s.labelA) || "Sebelum"}: ${x}`), ...s.itemsB.map((x) => `${plain(s.labelB) || "Sesudah"}: ${x}`)] : s.items;
     return (
       <Frame bg={p.field}>
         {grain}
@@ -683,7 +684,7 @@ function Scrapbook({ brand, slide: s, index, total, img, logo, assets, pair, den
   }
 
   if (role === "list" || role === "compare" || role === "stat") {
-    const items = role === "compare" ? [...s.items, ...s.itemsB] : s.items;
+    const items = role === "compare" ? [...s.items.map((x) => `${plain(s.labelA) || "Sebelum"}: ${x}`), ...s.itemsB.map((x) => `${plain(s.labelB) || "Sesudah"}: ${x}`)] : s.items;
     return (
       <Frame bg="#EFE6D6">
         {paper}
