@@ -124,3 +124,17 @@ export async function disconnectInstagramAction(): Promise<{ ok?: string; error?
     return { error: e instanceof Error ? e.message : "Gagal memutus" };
   }
 }
+
+/** Putuskan TikTok (di Upload-Post & di workspace). */
+export async function disconnectTiktokAction(): Promise<{ ok?: string; error?: string }> {
+  try {
+    const { w } = await workspaceOrThrow();
+    const { disconnectTiktok, hasUploadPost } = await import("@/lib/uploadpost");
+    if (hasUploadPost()) await disconnectTiktok(w.id).catch((e) => console.error("Putus TikTok di Upload-Post gagal:", e));
+    await w.deleteSocial("tiktok");
+    revalidatePath("/", "layout");
+    return { ok: "TikTok diputus." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Gagal memutus" };
+  }
+}

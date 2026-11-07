@@ -389,7 +389,7 @@ export async function checkStatusAction(id: string): Promise<ActionState> {
   try {
     const post = await w.getPost(id);
     if (!post?.publish_ref) return { error: "Belum ada referensi posting" };
-    if (post.publish_ref.startsWith("ig:")) return { ok: post.status === "published" ? "Sudah terbit di Instagram." : "Sedang diposting ke Instagram…" };
+    if (post.publish_ref.startsWith("direct:")) return { ok: post.status === "published" ? "Sudah terbit." : "Sedang diposting…" };
     const target = await publishTarget(w.id);
     const raw = await getPublishStatus(post.publish_ref, target.profileKey);
     if (!raw) return { error: "Tidak bisa mengambil status" };

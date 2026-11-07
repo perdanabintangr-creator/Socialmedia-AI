@@ -4,7 +4,8 @@ import { publicUser, requireAdmin, requireWorkspace } from "@/lib/session";
 import { publishTarget } from "@/lib/pipeline";
 import { ActionForm, Submit } from "@/components/forms";
 import { Card, Field, PageTitle, formatWIB, inputCls } from "@/components/ui";
-import { disconnectInstagramAction, requestSocialAction } from "@/app/onboarding-actions";
+import { disconnectInstagramAction, disconnectTiktokAction, requestSocialAction } from "@/app/onboarding-actions";
+import { hasUploadPost } from "@/lib/uploadpost";
 import { hasInstagramApp } from "@/lib/instagram";
 import { changePasswordAction, deleteUserAction, setPublishKeyAction, setUserRoleAction, setUserStatusAction, setWorkspacePlanAction } from "@/app/auth-actions";
 import { PLAN_RULES, quotaOf } from "@/lib/plans";
@@ -25,12 +26,18 @@ const IG_MSG: Record<string, [string, boolean]> = {
   gagal: ["Instagram gagal dihubungkan.", false],
   "belum-siap": ["Koneksi Instagram belum diaktifkan oleh admin aplikasi (INSTAGRAM_APP_ID/SECRET).", false],
 };
+const TT_MSG: Record<string, [string, boolean]> = {
+  ok: ["TikTok terhubung! Konten yang kamu ACC juga terbit di TikTok (mode foto/slideshow).", true],
+  batal: ["TikTok belum terhubung — selesaikan login TikTok di halaman tadi, lalu klik “Cek koneksi”.", false],
+  gagal: ["TikTok gagal dihubungkan.", false],
+  "belum-siap": ["Koneksi TikTok belum diaktifkan oleh admin aplikasi (UPLOAD_POST_API_KEY).", false],
+};
 
-export default async function UsersPage({ searchParams }: { searchParams: Promise<{ ig?: string; u?: string; m?: string }> }) {
+export default async function UsersPage({ searchParams }: { searchParams: Promise<{ ig?: string; tt?: string; u?: string; m?: string }> }) {
   const { user: me, w } = await requireWorkspace();
   const sp = await searchParams;
-  const [brand, target, quota, ig] = await Promise.all([w.getBrand(), publishTarget(w.id), quotaOf(w), w.getSocial("instagram")]);
-  const igMsg = sp.ig ? IG_MSG[sp.ig] : undefined;
+  const [brand, target, quota, ig, tt] = await Promise.all([w.getBrand(), publishTarget(w.id), quotaOf(w), w.getSocial("instagram"), w.getSocial("tiktok")]);
+  const igMsg = sp.ig ? IG_MSG[sp.ig] : sp.tt ? TT_MSG[sp.tt] : undefined;
   const support = process.env.SUPPORT_EMAIL;
   const isAdmin = me.role === "admin";
   const [allUsers, workspaces] = isAdmin ? await Promise.all([accounts().listUsers(), accounts().listWorkspaces()]) : [[], []];
@@ -94,7 +101,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
       <Card className="scroll-mt-24" >
         <div id="sosmed" className="scroll-mt-24" />
         <h2 className="font-semibold">Akun sosmed</h2>
-        <p className="mt-1 text-sm text-slate-500">Hubungkan Instagram (Business/Creator) supaya konten yang kamu ACC terbit otomatis sesuai jadwal — gratis, lewat API resmi Instagram.</p>
+        <p className="mt-1 text-sm text-slate-500">Hubungkan Instagram (Business/Creator) dan TikTok supaya konten yang kamu ACC terbit otomatis sesuai jadwal.</p>
         {igMsg && (
           <p className={`mt-3 rounded-xl px-3 py-2 text-sm font-semibold ${igMsg[1] ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
             {igMsg[0]} {sp.m ? <span className="font-normal">({sp.m})</span> : null}
@@ -126,13 +133,44 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
             )
           )}
         </div>
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-2xl p-4 ring-1 ring-line">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-ink text-sm font-black text-white">
+            <span className="[text-shadow:2px_0_#25F4EE,-2px_0_#FE2C55]">TT</span>
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold">TikTok</div>
+            <div className="text-xs text-slate-500">
+              {tt ? (
+                <>Terhubung sebagai <b className="text-ink">@{tt.username}</b> · diposting sebagai foto/slideshow dengan musik otomatis</>
+              ) : hasUploadPost() ? (
+                "Belum terhubung. Login TikTok lewat halaman aman Upload-Post."
+              ) : (
+                "Belum tersedia — admin perlu memasang UPLOAD_POST_API_KEY."
+              )}
+            </div>
+          </div>
+          {tt ? (
+            <ActionForm action={disconnectTiktokAction}>
+              <Submit variant="ghost" pendingText="Memutus…" className="py-2 text-xs">Putuskan</Submit>
+            </ActionForm>
+          ) : (
+            hasUploadPost() && (
+              <div className="flex items-center gap-2">
+                <a href="/api/auth/tiktok/callback" className="text-xs font-semibold text-slate-500 hover:text-ink">Cek koneksi</a>
+                <a href="/api/auth/tiktok" className="inline-flex rounded-xl bg-ink px-4 py-2 text-sm font-semibold text-white hover:bg-ink/90">
+                  Hubungkan TikTok
+                </a>
+              </div>
+            )
+          )}
+        </div>
         {!ig && target.via === "ayrshare" && <p className="mt-3 text-xs text-emerald-700">Saat ini auto-posting memakai layanan Ayrshare.</p>}
-        {!ig && !target.connected && !brand.socialRequested && !hasInstagramApp() && (
+        {!target.connected && !brand.socialRequested && !hasInstagramApp() && !hasUploadPost() && (
           <ActionForm action={requestSocialAction} className="mt-3">
             <Submit variant="primary" pendingText="Mengirim…" className="py-2 text-xs">Minta dihubungkan</Submit>
           </ActionForm>
         )}
-        {!target.connected && <p className="mt-3 text-xs text-slate-500">Selama belum terhubung, desain final tetap dibuat dan bisa diunduh untuk diposting manual. TikTok menyusul.</p>}
+        {!target.connected && <p className="mt-3 text-xs text-slate-500">Selama belum terhubung, desain final tetap dibuat dan bisa diunduh untuk diposting manual.</p>}
       </Card>
 
       <Card>
