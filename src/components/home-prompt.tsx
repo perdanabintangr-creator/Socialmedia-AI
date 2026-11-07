@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowUp, CalendarCheck, CalendarRange, Stethoscope, Images, Lightbulb, Loader2, Megaphone, Sparkles, TrendingUp } from "lucide-react";
 import { startChatAction } from "@/app/studio-actions";
-import { AttachButton, DropOverlay, RefTray, useReferences } from "@/components/reference-input";
+import { AttachButton, DropOverlay, PinHint, RefTray, useReferences } from "@/components/reference-input";
 import { StylePicker, type StyleChoice } from "@/components/style-picker";
 import { VISUAL_STYLES } from "@/lib/types";
 
@@ -77,7 +77,7 @@ export function HomePrompt({ defaultStyle = "auto" }: { defaultStyle?: StyleChoi
             rows={2}
             autoFocus
             aria-label="Ceritakan kebutuhan kontenmu"
-            placeholder="Ceritakan kebutuhan kontenmu, mis. “buatkan carousel promo beli 2 gratis 1”. Punya contoh desain? Tempel (Ctrl+V) atau seret gambarnya ke sini."
+            placeholder="Ceritakan kebutuhan kontenmu, mis. “buatkan carousel promo beli 2 gratis 1”. Punya contoh desain? Tempel gambar (Ctrl+V), seret ke sini, atau tempel link Pinterest."
             className="min-h-[60px] flex-1 resize-none bg-transparent py-1.5 text-[15px] leading-relaxed outline-none placeholder:text-slate-400 focus-visible:outline-none"
           />
         </div>
@@ -86,6 +86,9 @@ export function HomePrompt({ defaultStyle = "auto" }: { defaultStyle?: StyleChoi
             <RefTray refs={refs} />
           </div>
         )}
+        <div className="pl-12 empty:hidden">
+          <PinHint text={text} />
+        </div>
         <div className="mt-2 flex flex-wrap items-center gap-2 pl-12">
           <AttachButton refs={refs} />
           {FORMATS.map((f) => (

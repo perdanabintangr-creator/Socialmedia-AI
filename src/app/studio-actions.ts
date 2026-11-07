@@ -4,7 +4,8 @@ import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { inChat, type WorkspaceRepo } from "@/lib/db";
 import { approveIdeaFromChat, approvePostFromChat, handleMessage, type Attach } from "@/lib/studio";
-import { uploadReferences } from "@/lib/reference";
+import { MAX_REFS, uploadReferenceBuffers, uploadReferences } from "@/lib/reference";
+import { boardLinks, fetchPinImage, pinLinks } from "@/lib/pinterest";
 import { parseWib } from "@/lib/pipeline";
 import { workspaceOrThrow } from "@/lib/session";
 import { isVisualStyle } from "@/lib/types";
@@ -43,7 +44,19 @@ const DEFAULT_REF_TEXT = "Buatkan konten yang mirip dengan referensi ini.";
 async function readMessage(w: WorkspaceRepo, fd: FormData): Promise<{ msg: string; attach?: Attach }> {
   const files = fd.getAll("refs").filter((f): f is File => f instanceof File && f.size > 0);
   const urls = files.length ? await uploadReferences(w, files) : [];
-  const text = String(fd.get("text") ?? "").trim().slice(0, 2000);
+  let text = String(fd.get("text") ?? "").trim().slice(0, 2000);
+  // Link Pinterest di pesan → gambar pin jadi referensi desain.
+  const pins = pinLinks(text, Math.max(0, MAX_REFS - urls.length));
+  if (pins.length) {
+    const got = await Promise.all(pins.map((l) => fetchPinImage(l).catch((e) => (console.error("Pinterest gagal:", l, e instanceof Error ? e.message : e), null))));
+    const ok = got.filter((b): b is Buffer => Boolean(b));
+    if (!ok.length) throw new Error("Link Pinterest-nya tidak bisa dibuka (mungkin pin privat/dihapus). Coba link pin lain, atau simpan gambarnya lalu upload di sini.");
+    urls.push(...(await uploadReferenceBuffers(w, ok)));
+    for (const l of pins) text = text.replace(l, "").trim();
+    text = text.replace(/\s{2,}/g, " ").trim();
+  } else if (boardLinks(text).length) {
+    throw new Error("Itu link board/profil Pinterest. Buka satu pin yang kamu suka, lalu salin link pin-nya (pinterest.com/pin/… atau pin.it/…).");
+  }
   const rawStyle = fd.get("style");
   const style = isVisualStyle(rawStyle) ? rawStyle : undefined;
   return {

@@ -66,8 +66,10 @@ export function guessDesign(b: { industry?: string; tone?: string; description?:
  */
 export function resolveDesign(
   brand: { designPack?: PackChoice; fontPair?: PairChoice; density?: Density; industry?: string; tone?: string; description?: string },
-  opts: { style?: string | null; teaser?: boolean; ai?: { pack?: string | null; pair?: string | null } | null } = {},
+  opts: { style?: string | null; teaser?: boolean; ai?: { pack?: string | null; pair?: string | null } | null; ref?: PostDesign | null } = {},
 ): PostDesign | null {
+  // Referensi dari owner (upload / Pinterest) paling menentukan: owner sudah menunjukkan gaya yang dia mau.
+  if (!opts.teaser && opts.ref && isPostDesign(opts.ref)) return opts.ref;
   const choice = brand.designPack ?? "auto";
   if (opts.teaser || choice === "classic") return null;
   if (opts.style && CLASSIC_ONLY_STYLES.includes(opts.style)) return null;

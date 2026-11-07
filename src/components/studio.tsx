@@ -4,7 +4,7 @@ import Link from "next/link";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, useTransition } from "react";
 import { ArrowUp, Check, Clock, ExternalLink, Loader2, Palette, PenLine, Send, Smartphone, Sparkles, X } from "lucide-react";
 import { PhonePreview } from "./phone-preview";
-import { AttachButton, DropOverlay, RefTray, useReferences } from "./reference-input";
+import { AttachButton, DropOverlay, PinHint, RefTray, useReferences } from "./reference-input";
 import { AGENTS, AGENT_LIST, type AgentId } from "@/lib/agents";
 import type { ChatView, IdeaCard, PostCard, StudioState } from "@/lib/studio-view";
 import { chatApproveIdeaAction, chatApprovePostAction, chatRejectIdeaAction, sendChatAction, type StudioResult } from "@/app/studio-actions";
@@ -199,6 +199,9 @@ export function ChatRoom({ chatId, title, initial }: { chatId: string; title: st
                   <RefTray refs={refs} />
                 </div>
               )}
+              <div className="px-2 pb-1 empty:hidden">
+                <PinHint text={text} />
+              </div>
               <div className="flex items-end gap-1">
               <AttachButton refs={refs} compact />
               <textarea
@@ -213,7 +216,7 @@ export function ChatRoom({ chatId, title, initial }: { chatId: string; title: st
                   }
                 }}
                 rows={1}
-                placeholder="Balas, kasih arahan, atau tempel gambar referensi…"
+                placeholder="Balas, kasih arahan, tempel gambar atau link Pinterest…"
                 aria-label="Pesan untuk tim"
                 className="max-h-40 min-h-[44px] flex-1 resize-none bg-transparent px-3 py-2.5 text-[15px] outline-none placeholder:text-slate-400 focus-visible:outline-none"
               />
@@ -222,7 +225,7 @@ export function ChatRoom({ chatId, title, initial }: { chatId: string; title: st
               </button>
               </div>
             </form>
-            <p className="mt-2 text-center text-[11px] text-slate-400">Enter untuk kirim · Shift + Enter baris baru · Tempel / seret gambar untuk referensi</p>
+            <p className="mt-2 text-center text-[11px] text-slate-400">Enter untuk kirim · Shift + Enter baris baru · Tempel gambar / link Pinterest untuk referensi</p>
           </div>
         </div>
       </div>

@@ -1,4 +1,6 @@
 import "server-only";
+import { DENSITY_KEYS, FONT_PAIR_GUIDE, PACK_GUIDE, PACK_KEYS } from "./design";
+import { FONT_PAIR_KEYS } from "./font-pairs";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
 import { z } from "zod";
@@ -24,11 +26,20 @@ const MAX_BYTES = 8 * 1024 * 1024;
 /** Simpan file referensi dari form (validasi + kompres). Mengembalikan URL. */
 export async function uploadReferences(w: WorkspaceRepo, files: File[]): Promise<string[]> {
   const imgs = files.filter((f) => f && f.size > 0).slice(0, MAX_REFS);
-  const urls: string[] = [];
+  const buffers: Buffer[] = [];
   for (const f of imgs) {
     if (!f.type.startsWith("image/")) throw new Error(`${f.name || "File"} bukan gambar`);
     if (f.size > MAX_BYTES) throw new Error(`${f.name || "Gambar"} terlalu besar (maks 8 MB)`);
-    const jpg = await sharp(Buffer.from(await f.arrayBuffer()), { failOn: "none" })
+    buffers.push(Buffer.from(await f.arrayBuffer()));
+  }
+  return uploadReferenceBuffers(w, buffers);
+}
+
+/** Normalisasi (JPEG ≤1600px) lalu simpan gambar referensi. */
+export async function uploadReferenceBuffers(w: WorkspaceRepo, buffers: Buffer[]): Promise<string[]> {
+  const urls: string[] = [];
+  for (const b of buffers.slice(0, MAX_REFS)) {
+    const jpg = await sharp(b, { failOn: "none" })
       .rotate()
       .resize(1600, 1600, { fit: "inside", withoutEnlargement: true })
       .flatten({ background: "#ffffff" })
@@ -176,6 +187,9 @@ const RefSchema = z.object({
     .describe("promo: iklan/jualan dengan warna kontras, starburst, stiker, angka diskon; bold: latar warna solid/gelap berganti; clean: latar terang minimalis; mix: cover gelap, isi terang"),
   headingFont: z.enum(FONT_KEYS as [FontKey, ...FontKey[]]).describe("Font judul tersedia yang paling mirip dengan tipografi judul referensi"),
   bodyFont: z.enum(BODY_FONT_KEYS as [FontKey, ...FontKey[]]).describe("Font isi tersedia yang paling mirip dengan teks kecil di referensi"),
+  designPack: z.enum(PACK_KEYS).describe(`Design Pack yang paling mendekati gaya referensi. ${PACK_GUIDE.replace(/\n/g, "; ")}`),
+  fontPair: z.enum(FONT_PAIR_KEYS).describe("Pasangan huruf tersedia yang paling mirip dengan tipografi referensi (lihat daftar di prompt)"),
+  density: z.enum(DENSITY_KEYS).describe("Kepadatan teks referensi: visual (hampir tanpa teks, foto dominan), seimbang, edukatif (banyak teks/info)"),
   palette: z.object({
     primary: z.string().describe("Hex warna utama/panel (latar cover/slide berwarna)"),
     secondary: z.string().describe("Hex warna kedua"),
@@ -215,7 +229,9 @@ export async function analyzeReference(brand: Brand, urls: string[], useRefColor
 - Layout tersedia di sistem kami: ${LAYOUT_NAMES}. Petakan tiap gambar ke layout paling mirip (iklan promo dengan foto orang/produk + angka diskon → promo_hero; poster diskon tanpa foto → promo_offer).
 - Font tersedia: ${FONT_KEYS.map((k) => `${k} (${FONT_OPTIONS[k].style})`).join("; ")}.
 - Palet dari analisis piksel (sebagai acuan): utama ${roles.colors.primary}, kedua ${roles.colors.secondary}, aksen ${roles.colors.accent}, latar ${roles.colors.background}, teks ${roles.colors.text}. Koreksi bila perannya kurang tepat.
-- Fokus pada hal yang bisa ditiru: komposisi, hierarki teks, kepadatan, dekorasi, gaya foto, gaya copy.`,
+- Fokus pada hal yang bisa ditiru: komposisi, hierarki teks, kepadatan, dekorasi, gaya foto, gaya copy.
+- Sistem desain kami (Design Pack): ${PACK_GUIDE.replace(/\n/g, "; ")}.
+- Pasangan huruf tersedia: ${FONT_PAIR_GUIDE.replace(/\n/g, "; ")}. Pilih yang karakter judulnya paling mirip (serif/sans, tebal/tipis, sempit/lebar, kapital, tulisan tangan).`,
   });
   try {
     const out = await callStructured(brandSystemPrompt(brand), content, RefSchema, "medium");
@@ -232,6 +248,7 @@ export async function analyzeReference(brand: Brand, urls: string[], useRefColor
       bodyFont: out.bodyFont,
       template: out.template,
       layouts: out.layouts.slice(0, 10) as SlideLayout[],
+      suggest: { pack: out.designPack, pair: out.fontPair, density: out.density },
     };
   } catch (e) {
     console.error("Analisis referensi AI gagal, pakai palet saja:", e);

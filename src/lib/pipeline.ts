@@ -288,10 +288,11 @@ export async function buildPostFromIdea(w: WorkspaceRepo, ideaId: string, progre
 
   const teaser = isTeaser(idea);
   // Sistem desain: pack/huruf dari Brand Kit, atau AI yang memilih ("auto").
-  const pre = resolveDesign(baseBrand, { style: ref?.style, teaser });
-  const choose = Boolean(pre) && ((baseBrand.designPack ?? "auto") === "auto" || (baseBrand.fontPair ?? "auto") === "auto");
+  const fromRef = ref?.urls.length ? ref.suggest ?? null : null;
+  const pre = resolveDesign(baseBrand, { style: ref?.style, teaser, ref: fromRef });
+  const choose = Boolean(pre) && !fromRef && ((baseBrand.designPack ?? "auto") === "auto" || (baseBrand.fontPair ?? "auto") === "auto");
   const generated = await generatePost(brand, idea, ctx, { design: pre, choose });
-  const design = pre ? resolveDesign(baseBrand, { style: ref?.style, teaser, ai: generated.design }) : null;
+  const design = pre ? resolveDesign(baseBrand, { style: ref?.style, teaser, ai: generated.design, ref: fromRef }) : null;
   const raw = design ? generated : styleCover(generated, ref, template);
   const draft = teaser ? teaserize(raw) : design ? ensurePackVisuals(raw, plan, brand) : ensureVisuals(raw, plan, brand, template);
   const postRef = teaser ? ref : withDesign(ref, design);
@@ -347,7 +348,8 @@ export async function revisePostWith(
   const draft = await revisePost(brand, post, instruction, await refContext(ref));
   await progress("kata", `Revisi naskah sudah kuterapkan${newRef ? " mengikuti referensi baru" : ""}. Rupa, tolong sesuaikan visualnya.`);
   const slides = await materialize(w, brand, draft, `${post.id}-r${post.revision_count + 1}`, await referenceImageBuffers(ref), Math.min(MAX_NEW_IMAGES, plan.maxVisuals));
-  const cur = ref?.design ?? post.reference?.design ?? null;
+  // Referensi baru (upload / Pinterest) di revisi: pakai saran desainnya.
+  const cur = (newRef?.urls.length ? newRef.suggest : null) ?? ref?.design ?? post.reference?.design ?? null;
   const ask = draft.design;
   const design: PostDesign | null = cur
     ? {

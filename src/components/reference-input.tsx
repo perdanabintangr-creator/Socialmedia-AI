@@ -1,5 +1,7 @@
 "use client";
 
+import { boardLinks, pinLinks } from "@/lib/pin-link";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ImagePlus, X } from "lucide-react";
 
@@ -203,5 +205,20 @@ export function DropOverlay({ show }: { show: boolean }) {
         <ImagePlus size={18} /> Lepas gambar referensi di sini
       </span>
     </div>
+  );
+}
+
+/** Penanda: link Pinterest di pesan akan dipakai sebagai referensi desain. */
+export function PinHint({ text }: { text: string }) {
+  const n = pinLinks(text).length;
+  const board = !n && boardLinks(text).length > 0;
+  if (!n && !board) return null;
+  return (
+    <p className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${board ? "bg-amber-50 text-amber-800" : "bg-red-50 text-[#E60023]"}`}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+        <path d="M12 2a10 10 0 0 0-3.64 19.31c-.09-.79-.17-2 .03-2.86l1.2-5.08s-.3-.61-.3-1.5c0-1.41.82-2.46 1.83-2.46.87 0 1.29.65 1.29 1.43 0 .87-.56 2.18-.85 3.39-.24 1.01.51 1.84 1.51 1.84 1.81 0 3.2-1.91 3.2-4.66 0-2.44-1.75-4.14-4.25-4.14-2.9 0-4.6 2.17-4.6 4.42 0 .87.34 1.81.76 2.32a.3.3 0 0 1 .07.29l-.28 1.15c-.05.18-.15.22-.34.13-1.27-.59-2.06-2.44-2.06-3.93 0-3.2 2.33-6.14 6.71-6.14 3.52 0 6.26 2.51 6.26 5.86 0 3.5-2.2 6.31-5.26 6.31-1.03 0-2-.53-2.33-1.17l-.63 2.42c-.23.88-.85 1.98-1.26 2.65A10 10 0 1 0 12 2Z" />
+      </svg>
+      {board ? "Itu link board — salin link satu pin (pinterest.com/pin/… atau pin.it/…)" : `${n} pin Pinterest akan jadi referensi desain`}
+    </p>
   );
 }

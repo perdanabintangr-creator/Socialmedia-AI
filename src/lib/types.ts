@@ -375,6 +375,7 @@ export interface PostReference {
   layouts: SlideLayout[]; // layout paling mirip untuk tiap gambar referensi
   style?: VisualStyleKey | null; // arah visual pilihan owner
   design?: PostDesign | null; // Design Pack yang dipakai konten ini (null = template klasik)
+  suggest?: PostDesign | null; // saran desain dari analisis referensi (gaya/huruf/kepadatan paling mirip)
 }
 
 // ---------------------------------------------------------------- Arah visual
