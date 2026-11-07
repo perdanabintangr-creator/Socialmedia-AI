@@ -36,7 +36,7 @@ export async function ensureProfile(workspaceId: string, displayName: string) {
       const n = e.message.match(/limit of (\d+)/i)?.[1] ?? "2";
       throw new UploadPostError(`Kuota profil Upload-Post penuh (paket sekarang: ${n} profil, 1 profil = 1 brand). Hapus profil yang tidak dipakai di app.upload-post.com → Manage Users, atau upgrade paket Upload-Post.`);
     }
-    if (!(e instanceof UploadPostError) || !/exist|409/i.test(e.message)) throw e;
+    if (!(e instanceof UploadPostError) || !/exist|already in use|409/i.test(e.message)) throw e;
   }
 }
 
