@@ -1,0 +1,7 @@
+{"slug":"test-prompt","slides":[
+{"type":"cover","title":"Prompt kamu\nterlalu pendek?","accent":"Pakai 4 bagian ini.","sub":"Biar hasil AI marketing nggak generik dan langsung bisa dipakai."},
+{"type":"point","label":"BAGIAN #1","title":"Siapa","accent":"targetnya","body":"Tulis umur, kota, dan masalah utamanya. Bukan cuma 'anak muda'.","num":"01"},
+{"type":"poll","title":"Marketer,","accent":"kamu tim mana?","options":["Prompt satu kalimat, lalu edit","Brief lengkap dulu, sekali jadi"],"tag":"Jawab di komentar","cta":"Tulis A atau B"},
+{"type":"list","label":"RANGKUMAN","title":"Brief 4 bagian","items":["Siapa targetnya","Apa produknya","Tujuan kontennya","Gaya bahasanya"]},
+{"type":"cta","title":"Simpan dulu,","accent":"pakai besok pagi.","sub":"Marqthink rilis 1 Desember. Nyalakan notifikasi biar nggak ketinggalan.","button":"Follow @marqthink.ai"}
+]}
