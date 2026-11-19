@@ -6,7 +6,7 @@ set -euo pipefail
 MSG="$1"; shift
 WORK="${MQ_MEDIA_DIR:-$(mktemp -d)/media}"
 if [ ! -d "$WORK/.git" ]; then
-  git clone -q --depth 1 -b marqthink-media https://github.com/perdanabintangr-creator/socialmedia-ai "$WORK"
+  git clone -q --depth 1 -b marqthink-media https://github.com/perdanabintangr-creator/Socialmedia-AI.git "$WORK"
 fi
 cd "$WORK"
 git pull -q --rebase origin marqthink-media || true
