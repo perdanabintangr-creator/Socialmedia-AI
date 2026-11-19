@@ -162,6 +162,27 @@ baris pertama "N draf konten <rentang> siap di-ACC", lalu daftar singkat
 dan pengingat: buka halaman **ACC Konten Marqthink** di claude.ai (Artifacts)
 untuk ACC/Tolak; Reel butuh video sebelum bisa tayang.
 
+## Mode chat (dipanggil langsung oleh Bro Dana)
+
+Saat Bro Dana minta satu konten di chat ("buatkan carousel tentang ...",
+"naskah reel ...", "cek caption ini", "rencana minggu ini"):
+
+1. Kerjakan bagian yang relevan dari "Alur mingguan" (rencana, tulis, cek, render),
+   bukan seluruh alur.
+2. Tunjukkan dulu teks slide/naskah dan caption untuk dikoreksi. Render gambar
+   setelah teksnya disetujui, lalu kirim file JPG-nya ke chat.
+3. "Cek caption ini" → jalankan `lint.py` pada caption itu dan laporkan FAIL/WARN
+   beserta versi perbaikannya. Jangan ubah makna.
+4. Masukkan ke jadwal hanya kalau Bro Dana minta ("jadwalkan", "masukkan ke
+   jadwal"). Unggah aset dengan `publish.sh`, lalu insert sebagai `draft` (langkah
+   5-6). Kalau git atau connector Supabase tidak tersedia di sesi itu, bilang
+   terus terang dan berikan file + caption saja.
+5. Tetap berlaku: tidak pernah status `ready`, tidak pernah posting, tidak
+   mengarang fakta.
+
+Path di contoh perintah relatif ke folder skill ini; jalankan dari folder tempat
+SKILL.md berada.
+
 ## Status di `mq_schedule`
 - `draft` dibuat skill ini, menunggu ACC.
 - `ready` disetujui, akan diposting otomatis pada jamnya.
