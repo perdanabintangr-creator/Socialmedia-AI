@@ -4,6 +4,7 @@
 # Output: satu URL per baris, urutan sama dengan argumen.
 set -euo pipefail
 MSG="$1"; shift
+FILES=(); for f in "$@"; do FILES+=("$(realpath "$f")"); done
 WORK="${MQ_MEDIA_DIR:-$(mktemp -d)/media}"
 if [ ! -d "$WORK/.git" ]; then
   git clone -q --depth 1 -b marqthink-media https://github.com/perdanabintangr-creator/Socialmedia-AI.git "$WORK"
@@ -11,7 +12,7 @@ fi
 cd "$WORK"
 git pull -q --rebase origin marqthink-media || true
 NAMES=()
-for f in "$@"; do
+for f in "${FILES[@]}"; do
   n="$(basename "$f")"
   if [ -e "$n" ] && ! cmp -s "$f" "$n"; then echo "FAIL: $n sudah ada dengan isi berbeda; ganti nama" >&2; exit 1; fi
   cp "$f" "$n"; NAMES+=("$n")
