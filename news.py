@@ -56,8 +56,22 @@ def hsize(t):
     return 80 if n <= 50 else 72 if n <= 70 else 64 if n <= 95 else 56 if n <= 125 else 50
 
 slides = spec['slides']; tot = len(slides); S = []
+LIGHT = spec.get('theme') == 'light'
+LABEL = spec.get('label', 'NEWS')
+if LIGHT:
+    CSS = CSS.replace('background:#05070F;color:#fff', 'background:#F5F6FB;color:#0A0F24') \
+      .replace('rgba(5,7,15,0) 0%,rgba(5,7,15,.9) 42%,#05070F 70%', 'rgba(245,246,251,0) 0%,rgba(245,246,251,.92) 40%,#F5F6FB 68%') \
+      .replace('.cat{{font-size:21px;font-weight:700;letter-spacing:.16em;color:#00E5FF}}'.replace('{{','{').replace('}}','}'), '.cat{font-size:21px;font-weight:700;letter-spacing:.16em;color:#0A3DFF}') \
+      .replace('color:#9FB4E8', 'color:#5B6478') \
+      .replace('color:rgba(255,255,255,.45)', 'color:rgba(10,15,36,.45)') \
+      .replace('mark{background:#00E5FF;color:#05070F', 'mark{background:#0A3DFF;color:#fff') \
+      .replace('rgba(0,0,0,.55)', 'rgba(10,30,90,.22)') \
+      .replace('background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1)', 'background:#fff;border:1px solid #E3E8F2') \
+      .replace('.item b{flex:0 0 auto;width:52px;height:52px;border-radius:50%;background:#00E5FF;color:#05070F', '.item b{flex:0 0 auto;width:52px;height:52px;border-radius:50%;background:#0A3DFF;color:#fff') \
+      .replace('background:linear-gradient(160deg,#fff 10%,#00E5FF 55%,#6A3BFF)', 'background:linear-gradient(160deg,#0A3DFF 10%,#6A3BFF 60%,#00BEFF)')
+    GLOWS = ['#9FB8FF', '#C9B8FF', '#A8E6FF', '#B8C8FF', '#D4C8FF', '#A8E6FF']
 reg = spec.get('region', 'INDONESIA').upper()
-regpill = (f'<span class="pill" style="background:#fff;color:#05070F">{reg}</span>' if reg == 'INDONESIA'
+regpill = '' if not reg else (f'<span class="pill" style="background:{"#0A0F24" if LIGHT else "#fff"};color:{"#fff" if LIGHT else "#05070F"}">{reg}</span>' if reg == 'INDONESIA'
            else f'<span class="pill" style="border:2px solid rgba(255,255,255,.6);padding:5px 12px">{reg}</span>')
 for i, s in enumerate(slides, 1):
     t = s['type']; g = GLOWS[(i - 1) % len(GLOWS)]
@@ -73,9 +87,9 @@ for i, s in enumerate(slides, 1):
         body += f'<div class="big" id="p{i}" style="font-size:{fs}px">{html.escape(s["big"])}</div>'
     body += '<div class="fade"></div>'
     pg = f'{i}/{tot}'
-    body += (f'<div class="top"><div class="pills"><img src="{F("brand/logo-dark.png")}" style="height:52px">'
-             f'<span class="pill" style="background:#00E5FF;color:#05070F">NEWS</span>{regpill}</div>'
-             f'<div style="color:rgba(255,255,255,.55)">{pg}</div></div>')
+    body += (f'<div class="top"><div class="pills"><img src="{F("brand/logo-light.png" if LIGHT else "brand/logo-dark.png")}" style="height:52px">'
+             f'<span class="pill" style="background:{"#0A3DFF" if LIGHT else "#00E5FF"};color:{"#fff" if LIGHT else "#05070F"}">{LABEL}</span>{regpill}</div>'
+             f'<div style="color:{"rgba(10,15,36,.5)" if LIGHT else "rgba(255,255,255,.55)"}">{pg}</div></div>')
     if t == 'artinya':
         items = ''.join(f'<div class="item"><b>{k}</b><div>{mk(x)}</div></div>' for k, x in enumerate(s['items'], 1))
         body += (f'<div class="txt" id="t{i}" style="bottom:130px"><div class="cat">ARTINYA BUAT KAMU</div>'
@@ -84,12 +98,12 @@ for i, s in enumerate(slides, 1):
         right = 'Geser →'
     elif t == 'cta':
         body += (f'<img class="prop" id="p{i}" src="{F("props/logo_q.png")}" style="left:330px;top:190px;width:420px">'
-                 f'<div class="txt" id="t{i}"><div class="cat">UPDATE MARKETING TIAP PAGI, JAM 7</div>'
+                 f'<div class="txt" id="t{i}"><div class="cat">{html.escape(s.get("cat", "UPDATE MARKETING TIAP PAGI, JAM 7"))}</div>'
                  f'<div class="hl" style="font-size:{hsize(s["hl"])}px">{mk(s["hl"])}</div>'
                  f'<div class="nx">{mk(s.get("q", "Jawab di komentar ya."))}</div></div>')
         right = 'Follow @marqthink.ai'
     else:
-        date = f'<div style="font-size:22px;font-weight:700;color:rgba(255,255,255,.6);margin-bottom:14px">{html.escape(spec.get("date_label", ""))}</div>' if t == 'cover' else ''
+        date = f'<div style="font-size:22px;font-weight:700;color:{"#5B6478" if LIGHT else "rgba(255,255,255,.6)"};margin-bottom:14px">{html.escape(spec.get("date_label", ""))}</div>' if t == 'cover' else ''
         body += (f'<div class="txt" id="t{i}">{date}<div class="cat">{html.escape(s.get("cat", ""))}</div>'
                  f'<div class="hl" style="font-size:{hsize(s["hl"])}px">{mk(s["hl"])}</div>'
                  + (f'<div class="nx">{mk(s["nx"])}</div>' if s.get('nx') else '') + '</div>')
